@@ -48,7 +48,7 @@ global {
     float step <- 0.5;
     int max_cycles <- 500;
     
-    // mean absolute error
+    // mean absolute error (ref for later)
     float mae <- 0.0;
     
     // Population parameters
@@ -375,4 +375,41 @@ experiment social_influence type: gui {
             opinion_agent where (each.group_type = 3) collect each.opinion : [];
         monitor "Model Fit MAE" value: mae;
     }
+}
+
+/* batch exp, might need to re-write to accomodate for multiple debates instead of per debate exploration
+ * */
+
+experiment Batch_deb_1 type: batch repeat: 1 keep_seed: true until: cycle = max_cycles {
+	// selecting debate 1
+	parameter "Selected Debate" var: selected_debate_id <- 1;
+	
+	// model type and parameters
+	parameter "Model Type" var: model_type among: ["consensus", "clustering", "bipolarization"];
+	
+	// parameter variation
+	parameter "Convergence Rate" var: convergence_rate among: [0.1, 0.3, 0.5, 0.7, 0.9];
+	parameter "Confidence Threshold" var: confidence_threshold among: [0.2, 0.4, 0.6, 0.8];
+	parameter "Repulsion Threshold" var: repulsion_threshold among: [0, 0.2, 0.5, 0.8];
+	parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3];
+	
+	/* float convergence_rate <- 0.2 min: 0.0 max: 1.0;
+    float confidence_threshold <- 0.5 min: 0.0 max: 1.0;
+    float repulsion_threshold <- 0.6 min: 0.0 max: 1.0;
+    float repulsion_strength <- 0.1 min: 0.0 max: 0.5;
+	*/
+	
+	// outputs to save
+	float mae <- 0.0;
+	float opinion_variance <- 0.0;
+	float polarization_index <- 0.0;
+	
+	// save to csv / could try and save individual initial and final attitude (simul and real)
+	reflex save_results {
+		ask simulations {
+			save [convergence_rate, confidence_threshold, repulsion_threshold, repulsion_strength, mae, opinion_variance, polarization_index]
+			to: "results.csv" header: true;
+		}
+	}
+	
 }

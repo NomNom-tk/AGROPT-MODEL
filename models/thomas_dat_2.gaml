@@ -31,6 +31,8 @@
 model thomasdat1
 
 global {
+	bool end_sim <- false;
+	bool mode_batch <- false;
     // Model selection
     string model_type <- "consensus" among: ["consensus", "clustering", "bipolarization"];
 
@@ -199,7 +201,7 @@ global {
     }
 
     // Stop simulation after max_cycles
-    reflex stop_simulation when: cycle >= max_cycles {
+    reflex stop_simulation when: not mode_batch and cycle >= max_cycles  {
         do pause;
     }
     
@@ -220,7 +222,9 @@ global {
     	
     	// mean absolute error calc
     	mae <- mean(errors);
+    	
     	write "Mean Absolute Error: " + mae;
+    	end_sim <- true;
     }
     
 }
@@ -380,7 +384,7 @@ experiment social_influence type: gui {
 /* batch exp, might need to re-write to accomodate for multiple debates instead of per debate exploration
  * */
 
-experiment Batch_deb_1 type: batch repeat: 1 keep_seed: true until: cycle = max_cycles {
+experiment Batch_deb_1 type: batch repeat: 2 keep_seed: true until: end_sim {
 	// selecting debate 1
 	parameter "Selected Debate" var: selected_debate_id <- 1;
 	
@@ -393,22 +397,24 @@ experiment Batch_deb_1 type: batch repeat: 1 keep_seed: true until: cycle = max_
 	parameter "Repulsion Threshold" var: repulsion_threshold <- 0.0 among: [0.0, 0.2, 0.5, 0.8];
 	parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3];
 	
+
+ 		method genetic pop_dim: 10 crossover_prob: 0.7 mutation_prob: 0.1 improve_sol: true stochastic_sel: false
+	nb_prelim_gen: 1 max_gen: 1000  minimize: mae  ;
+	
 	/* float convergence_rate <- 0.2 min: 0.0 max: 1.0;
     float confidence_threshold <- 0.5 min: 0.0 max: 1.0;
     float repulsion_threshold <- 0.6 min: 0.0 max: 1.0;
     float repulsion_strength <- 0.1 min: 0.0 max: 0.5;
 	*/
 	
-	// outputs to save
-	float mae <- 0.0;
-	float opinion_variance <- 0.0;
-	float polarization_index <- 0.0;
-	
+	init {
+		mode_batch <- true;
+	}
 	// save to csv / could try and save individual initial and final attitude (simul and real)
 	reflex save_results {
 		ask simulations {
-			save [convergence_rate, confidence_threshold, repulsion_threshold, repulsion_strength, mae, opinion_variance, polarization_index]
-			to: "results.csv" header: true;
+			save [self.convergence_rate, self.confidence_threshold, self.repulsion_threshold, self.repulsion_strength,self.index, self.seed, self.mae, self.opinion_variance, self.polarization_index]
+			to: "results.csv" header: true rewrite: false;
 		}
 	}
 	

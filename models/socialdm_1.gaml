@@ -263,7 +263,7 @@ experiment social_influence type: gui {
         }
         
         // Opinion distribution over time
-        display opinion_timeline refresh: every(5#cycles) {
+        display opinion_timeline refresh: every(5#cycles)type:2d  {
             chart "Opinion Distribution" type: series {
                 loop i from: 0 to: 9 {
                     data "Bin " + i value: opinion_agent count (each.opinion >= i/10.0 and each.opinion < (i+1)/10.0) color: rgb(i*25.5, 0, 255 - i*25.5);
@@ -272,7 +272,7 @@ experiment social_influence type: gui {
         }
         
         // Opinion histogram
-        display opinion_histogram refresh: every(5#cycles) {
+        display opinion_histogram refresh: every(5#cycles) type:2d {
             chart "Current Opinion Distribution" type: histogram {
                 loop i from: 0 to: 9 {
                     data "Bin " + i value: opinion_agent count (each.opinion >= i/10.0 and each.opinion < (i+1)/10.0) color: rgb(i*25.5, 0, 255 - i*25.5);
@@ -281,7 +281,7 @@ experiment social_influence type: gui {
         }
         
         // Aggregate statistics
-        display statistics refresh: every(1#cycles) {
+        display statistics refresh: every(1#cycles)type:2d  {
             chart "Opinion Dynamics Measures" type: series {
                 data "Opinion Variance" value: opinion_variance color: #blue;
                 data "Polarization Index" value: polarization_index * 10 color: #red; // scaled for visibility

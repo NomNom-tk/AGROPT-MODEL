@@ -10,12 +10,13 @@ model DOGRAT
 
 global {
     // Environment files 
-    file shape_file_buildings <- file("/opt/gama-platform/configuration/org.eclipse.osgi/29/0/.cp/models/Tutorials/Road Traffic/includes/building.shp");
-	file shape_file_roads <- file("/opt/gama-platform/configuration/org.eclipse.osgi/29/0/.cp/models/Tutorials/Road Traffic/includes/road.shp");
-	file shape_file_bounds <- file("/opt/gama-platform/configuration/org.eclipse.osgi/29/0/.cp/models/Tutorials/Road Traffic/includes/bounds.shp");
+    file shape_file_buildings <- file("../data/GIS//building.shp");
+	file shape_file_roads <- file("../data/GIS/road.shp");
+	file shape_file_bounds <- file("../data/GIS/bounds.shp");
     // Simulation parameters
     int nb_rats <- 100;
     int nb_dogs <- 10;
+	
     float step <- 1#s;
     
     // Environment parameters

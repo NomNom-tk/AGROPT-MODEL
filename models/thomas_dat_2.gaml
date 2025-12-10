@@ -31,8 +31,6 @@
 model thomasdat1
 
 global {
-	bool end_sim <- false;
-	bool mode_batch <- false;
     // Model selection
     string model_type <- "consensus" among: ["consensus", "clustering", "bipolarization"];
 
@@ -46,27 +44,32 @@ global {
     string network_type <- "complete" among: ["complete", "random", "small_world"];
     float connection_probability <- 0.3 min: 0.0 max: 1.0;
     
+    // batch bool for later exp
+    bool mode_batch <- false;
+    
     // Simulation control
     float step <- 0.5;
     int max_cycles <- 500;
     
     // mean absolute error (ref for later)
     float mae <- 0.0;
-    
     // Population parameters
     float world_size <- 100.0;
     
     // CSV data parameters
     int selected_debate_id <- 1; // Which debate to simulate
     
-	
     // Import values from CSV
-    matrix dat_matx <- matrix(csv_file("../data/test_csv_1.csv", ",", true));
-    list<int> debate_id_list <- list<int>(dat_matx column_at 0);
-    list<int> agent_id_list <- list<int>(dat_matx column_at 1);
-    list<int> initial_attitude_list <- list<int>(dat_matx column_at 2);
-    list<int> final_attitude_list <- list<int>(dat_matx column_at 3);
-    list<int> group_type_list <- list<int>(dat_matx column_at 4);
+    file opin_data <- csv_file("/home/alfajor/AGROTECH/test_csv_1.csv", ",", true); // true = skip header
+    matrix dat_matx <- matrix(opin_data);
+    list<int> debate_id_list <- dat_matx column_at 0;
+    list<int> agent_id_list <- dat_matx column_at 1;
+    list<int> initial_attitude_list <- dat_matx column_at 2;
+    list<int> final_attitude_list <- dat_matx column_at 3;
+    list<int> group_type_list <- dat_matx column_at 4;
+    
+        // mae tracking for individual debates
+    map<int, float> mae_per_debate <- map([]);
     
     // Analysis variables
     float opinion_variance <- 0.0;
@@ -75,10 +78,15 @@ global {
     
     // Simulation setup
     init {
-        // Create agents from CSV for selected debate
-        do initialize_agents_for_debate(selected_debate_id);
+        // auto create debates from csv
+        list<int> unique_debates <- remove_duplicates(debate_id_list);
         
-        // Create network structure
+        // load all agents from debates
+        loop debate over: unique_debates {
+        	do initialize_agents_for_debate(debate);
+        }
+        
+        // Create network structure -- should handle debate isolation through uniqueness
         do create_network;
     }
     
@@ -201,7 +209,7 @@ global {
     }
 
     // Stop simulation after max_cycles
-    reflex stop_simulation when: not mode_batch and cycle >= max_cycles  {
+    reflex stop_simulation when: cycle >= max_cycles {
         do pause;
     }
     
@@ -223,8 +231,28 @@ global {
     	// mean absolute error calc
     	mae <- mean(errors);
     	
-    	write "Mean Absolute Error: " + mae;
-    	end_sim <- true;
+		// MAE per debate calculation
+		list<int> unique_debates <- remove_duplicates(opinion_agent collect each.debate_id);
+		loop debate over: unique_debates {
+			// get agents from specified debate
+			list<opinion_agent> debate_agents <- opinion_agent where (each.debate_id = debate);
+			
+			if length(debate_agents) > 0 {
+				list<float> debate_simulated <- debate_agents collect each.opinion;
+				list<float> debate_real <- debate_agents collect ((each.final_attitude - 1) / 6.0);
+				
+				list<float> debate_errors <- [];
+				loop j from: 0 to: length(debate_simulated) - 1 {
+					debate_errors <- debate_errors + abs(debate_simulated[j] - debate_real[j]);
+				}
+				
+				mae_per_debate[] <- mean(debate_errors);
+			}
+		}
+		
+		write "Overall Mean Absolute Error: " + mae;
+		write "per debate MAE:" + mae_per_debate;
+		// end_sim <- true; 	
     }
     
 }
@@ -337,8 +365,8 @@ experiment social_influence type: gui {
         }
         
         // Opinion distribution over time
-        display opinion_timeline refresh: every(5#cycles) type:2d {
-            chart "Opinion Distribution" type: series  {
+        display opinion_timeline refresh: every(5#cycles) {
+            chart "Opinion Distribution" type: series {
                 loop i from: 0 to: 9 {
                     data "Bin " + i value: opinion_agent count (
                         each.opinion >= i/10.0 and each.opinion < (i+1)/10.0
@@ -348,7 +376,7 @@ experiment social_influence type: gui {
         }
         
         // Opinion histogram
-        display opinion_histogram refresh: every(5#cycles) type:2d {
+        display opinion_histogram refresh: every(5#cycles) {
             chart "Current Opinion Distribution" type: histogram {
                 loop i from: 0 to: 9 {
                     data "Bin " + i value: opinion_agent count (
@@ -359,7 +387,7 @@ experiment social_influence type: gui {
         }
         
         // Aggregate statistics
-        display statistics refresh: every(1#cycles) type:2d {
+        display statistics refresh: every(1#cycles) {
             chart "Opinion Dynamics Measures" type: series {
                 data "Opinion Variance" value: opinion_variance color: #blue;
                 data "Polarization Index" value: polarization_index * 10 color: #red;
@@ -384,38 +412,41 @@ experiment social_influence type: gui {
 /* batch exp, might need to re-write to accomodate for multiple debates instead of per debate exploration
  * */
 
-experiment Batch_deb_1 type: batch repeat: 2 keep_seed: true until: end_sim {
-	// selecting debate 1
-	parameter "Selected Debate" var: selected_debate_id <- 1;
-	
-	// model type and parameters
-	parameter "Model Type" var: model_type among: ["consensus", "clustering", "bipolarization"];
-	
-	// parameter variation
-	parameter "Convergence Rate" var: convergence_rate <- 0.1 among: [0.1, 0.3, 0.5, 0.7, 0.9];
-	parameter "Confidence Threshold" var: confidence_threshold <- 0.2 among: [0.2, 0.4, 0.6, 0.8];
-	parameter "Repulsion Threshold" var: repulsion_threshold <- 0.0 among: [0.0, 0.2, 0.5, 0.8];
-	parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3];
-	
-
- 		method genetic pop_dim: 10 crossover_prob: 0.7 mutation_prob: 0.1 improve_sol: true stochastic_sel: false
-	nb_prelim_gen: 1 max_gen: 1000  minimize: mae  ;
-	
-	/* float convergence_rate <- 0.2 min: 0.0 max: 1.0;
-    float confidence_threshold <- 0.5 min: 0.0 max: 1.0;
-    float repulsion_threshold <- 0.6 min: 0.0 max: 1.0;
-    float repulsion_strength <- 0.1 min: 0.0 max: 0.5;
-	*/
-	
-	init {
-		mode_batch <- true;
-	}
-	// save to csv / could try and save individual initial and final attitude (simul and real)
-	reflex save_results {
-		ask simulations {
-			save [self.convergence_rate, self.confidence_threshold, self.repulsion_threshold, self.repulsion_strength,self.index, self.seed, self.mae, self.opinion_variance, self.polarization_index]
-			to: "results.csv" header: true rewrite: false;
-		}
-	}
-	
+experiment Batch_all_debates type: batch repeat: 2 keep_seed: true until: cycle >= max_cycles {
+    // REMOVE this line - no longer needed
+    // parameter "Selected Debate" var: selected_debate_id <- 1;
+    
+    // Model type and parameters (keep as is)
+    parameter "Model Type" var: model_type among: ["consensus", "clustering", "bipolarization"];
+    parameter "Convergence Rate" var: convergence_rate among: [0.1, 0.3, 0.5, 0.7, 0.9];
+    parameter "Confidence Threshold" var: confidence_threshold among: [0.2, 0.4, 0.6, 0.8];
+    parameter "Repulsion Threshold" var: repulsion_threshold among: [0.0, 0.2, 0.5, 0.8];
+    parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3];
+    
+    method genetic pop_dim: 10 crossover_prob: 0.7 mutation_prob: 0.1 improve_sol: true 
+        stochastic_sel: false nb_prelim_gen: 1 max_gen: 1000 minimize: mae;
+    
+    init {
+        mode_batch <- true;
+    }
+    
+    // Save results - ENHANCED to include per-debate MAE
+    reflex save_results {
+        ask simulations {
+            // Basic metrics
+            save [
+                self.model_type,
+                self.convergence_rate, 
+                self.confidence_threshold, 
+                self.repulsion_threshold, 
+                self.repulsion_strength,
+                self.index, 
+                self.seed, 
+                self.mae, 
+                self.opinion_variance, 
+                self.polarization_index,
+                self.mae_per_debate  // Per-debate breakdown
+            ] to: "results_all_debates.csv" header: true rewrite: false;
+        }
+    }
 }

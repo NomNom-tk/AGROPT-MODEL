@@ -303,7 +303,7 @@ global {
         loop debate_id over: mae_per_debate.keys {
             save [model_type, convergence_rate, confidence_threshold,
                   repulsion_threshold, repulsion_strength,
-                  seed, debate_id, mae_per_debate[debate_id]]
+                  seed, debate_id, mae_per_debate[debate_id]] format:"csv"
             to: "outputs/batch_debate_details.csv" rewrite: false;
         }
         end_simulation <- true;

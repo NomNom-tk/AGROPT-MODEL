@@ -226,7 +226,7 @@ global {
                 polarization_index <- variance_distance / (length(pairwise_distances) * (1.0 ^ 2));
             } 
         }
-    }   
+    }     
     
     // reflex compute fit of simualted final and real final
     action compute_fit  {
@@ -237,7 +237,7 @@ global {
     	write "Max cycles: " + max_cycles;
     	
     	// get final simul values
-    	list<float> simulated_finals <- opinion_agent collect each.opinion;
+    /* list<float> simulated_finals <- opinion_agent collect each.opinion;
     	
     	// get real final values
     	list<float> real_finals <- opinion_agent collect ((each.final_attitude -1) / 6.0);
@@ -246,13 +246,12 @@ global {
     	write "Number of agents: " + length(simulated_finals);
     	write "simualted finals sample: " + simulated_finals;
     	write "Real Finals sample: " + real_finals;
-    	
+    	*/
     	
     	// get and compute errors
     	list<float> errors <- [];
-    	loop i from: 0 to: length(simulated_finals) - 1 {
-    		float error <- abs(simulated_finals[i] - real_finals[i]);
-    		errors <- errors + error;
+    	ask opinion_agent {
+    		errors << abs(opinion- ((final_attitude -1) / 6.0));
     	}
     	
     	mae <- length(errors) > 0 ? mean(errors) : 0.0;

@@ -27,7 +27,7 @@
  *    - Set repulsion_strength = 0.1
  *    - Expected: Two extreme camps at 0.0 and 1.0
  */ 
-
+ 
 model thomasdat2
 
 global {
@@ -39,11 +39,11 @@ global {
 //  file opin_data <- csv_file("/home/agropt/AGROMOD/test_debates_30.csv", ",", true); // true = skip header
     
     matrix dat_matx <- matrix(opin_data);
-    list<int> debate_id_list <- dat_matx column_at 0;
-    list<int> agent_id_list <- dat_matx column_at 1;
-    list<int> initial_attitude_list <- dat_matx column_at 2;
-    list<int> final_attitude_list <- dat_matx column_at 3;
-    list<int> group_type_list <- dat_matx column_at 4;
+    list<int> debate_id_list <- list<int>(dat_matx column_at 0);
+    list<int> agent_id_list <- list<int>(dat_matx column_at 1);
+    list<int> initial_attitude_list <- list<int>(dat_matx column_at 2);
+    list<int> final_attitude_list <- list<int>(dat_matx column_at 3);
+    list<int> group_type_list <- list<int>(dat_matx column_at 4);
     
     // CSV data parameters
     int selected_debate_id <- 1; // Which debate to simulate
@@ -64,6 +64,8 @@ global {
     
     // bool for fit computation
     bool fit_computed <- false;
+    
+    bool end_simulation <- false;
 
     // Opinion dynamics parameters
     float convergence_rate <- 0.2 min: 0.0 max: 1.0;
@@ -83,7 +85,7 @@ global {
     }
     
     // mae tracking for individual debates
-    map<int, float> mae_per_debate <- map([]);
+    map<int, float> mae_per_debate <- map<int, float>(map([]));
     
     // Analysis variables
     float opinion_variance <- 0.0;
@@ -225,7 +227,7 @@ global {
     }   
     
     // reflex compute fit of simualted final and real final
-    reflex compute_fit when: cycle = max_cycles - 1 {
+    action compute_fit  {
     	// debug trial
     	write "=== COMPUTE_FIT TRIGG ===";
     	write "Mode batch: " + mode_batch;
@@ -254,7 +256,7 @@ global {
     	mae <- length(errors) > 0 ? mean(errors) : 0.0;
     	
     	// per debate mae (one debate in batch mode)
-    	mae_per_debate <- map([]);
+    	mae_per_debate <- map<int, float>(map([]));
     	list<int> unique_debates <- remove_duplicates(opinion_agent collect each.debate_id);
     	loop debate over: unique_debates {
 			// get agents from specified debate
@@ -282,6 +284,8 @@ global {
     
     reflex save_batch_results when: (cycle > max_cycles or fit_computed) and mode_batch {
         // debug trial
+       	do compute_fit;
+       	
         write ">>> save reflex triggered <<<";
         write "MAE = " + mae;
         write "debates = " + mae_per_debate.keys;
@@ -302,6 +306,7 @@ global {
                   seed, debate_id, mae_per_debate[debate_id]]
             to: "outputs/batch_debate_details.csv" rewrite: false;
         }
+        end_simulation <- true;
     }  
         // Stop simulation after max_cycles
     reflex stop_simulation when: cycle >= max_cycles and !mode_batch {
@@ -474,11 +479,11 @@ experiment social_influence type: gui {
 
 
 // BATCH: CONSENSUS -- reupdate after clustering works
-experiment Batch_consensus type: batch repeat: 1 keep_seed: true until: cycle >= max_cycles {
+experiment Batch_consensus type: batch repeat: 1 keep_seed: true until: end_simulation {
     // Parameters
-    parameter "Convergence Rate" var: convergence_rate among: [0.1, 0.3, 0.5, 0.7, 0.9];
-    parameter "Confidence Threshold" var: confidence_threshold among: [0.2, 0.4, 0.6, 0.8];
-    parameter "Repulsion Threshold" var: repulsion_threshold among: [0.0, 0.2, 0.5, 0.8];
+    parameter "Convergence Rate" var: convergence_rate  <- 0.1 among: [0.1, 0.3, 0.5, 0.7, 0.9];
+    parameter "Confidence Threshold" var: confidence_threshold <- 0.2  among: [0.2, 0.4, 0.6, 0.8];
+    parameter "Repulsion Threshold" var: repulsion_threshold <- 0.0 among: [0.0, 0.2, 0.5, 0.8];
     parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3];
     
     method genetic pop_dim: 5 crossover_prob: 0.7 mutation_prob: 0.1 improve_sol: true 
@@ -492,12 +497,12 @@ experiment Batch_consensus type: batch repeat: 1 keep_seed: true until: cycle >=
 }
 
 // BATCH: CLUSTERING // focus on this first to test
-experiment Batch_clustering type: batch repeat: length(remove_duplicates(debate_id_list)) keep_seed: true until: cycle > max_cycles {
+experiment Batch_clustering type: batch repeat: length(remove_duplicates(debate_id_list)) keep_seed: true until: end_simulation {
     // Parameters
     parameter "Selected debate id" var: selected_debate_id among: remove_duplicates(debate_id_list);
-    parameter "Convergence Rate" var: convergence_rate among: [0.1, 0.3, 0.5, 0.7, 0.9];
-    parameter "Confidence Threshold" var: confidence_threshold among: [0.2, 0.4, 0.6, 0.8];
-    parameter "Repulsion Threshold" var: repulsion_threshold among: [0.0, 0.2, 0.5, 0.8];
+    parameter "Convergence Rate" var: convergence_rate <- 0.1  among: [0.1, 0.3, 0.5, 0.7, 0.9];
+    parameter "Confidence Threshold" var: confidence_threshold <- 0.2 among: [0.2, 0.4, 0.6, 0.8];
+    parameter "Repulsion Threshold" var: repulsion_threshold <- 0.0 among: [0.0, 0.2, 0.5, 0.8];
     parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3];
     
     

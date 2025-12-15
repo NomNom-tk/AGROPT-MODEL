@@ -65,14 +65,14 @@ global {
 	// home extension
 //  file opin_data <- csv_file("/home/agropt/AGROMOD/test_debates_30.csv", ",", true); // true = skip header
     matrix dat_matx <- matrix(opin_data);
-    list<int> debate_id_list <- dat_matx column_at 0;
-    list<int> agent_id_list <- dat_matx column_at 1;
-    list<int> initial_attitude_list <- dat_matx column_at 2;
-    list<int> final_attitude_list <- dat_matx column_at 3;
-    list<int> group_type_list <- dat_matx column_at 4;
+    list<int> debate_id_list <- list<int>(dat_matx column_at 0);
+    list<int> agent_id_list <- list<int>(dat_matx column_at 1);
+    list<int> initial_attitude_list <- list<int>(dat_matx column_at 2);
+    list<int> final_attitude_list <- list<int>(dat_matx column_at 3);
+    list<int> group_type_list <- list<int>(dat_matx column_at 4);
     
         // mae tracking for individual debates
-    map<int, float> mae_per_debate <- map([]);
+    map<int, float> mae_per_debate <- map<int, float>(map([]));
     
     // Analysis variables
     float opinion_variance <- 0.0;
@@ -443,9 +443,9 @@ experiment Batch_all_debates type: batch repeat: 1 keep_seed: true until: cycle 
     // Model type and parameters
     parameter "Model Type" var: model_type among: ["consensus"];
     // parameter "Model Code" var: model_code among: [0,1,2];
-    parameter "Convergence Rate" var: convergence_rate among: [0.1, 0.3, 0.5, 0.7, 0.9];
-    parameter "Confidence Threshold" var: confidence_threshold among: [0.2, 0.4, 0.6, 0.8];
-    parameter "Repulsion Threshold" var: repulsion_threshold among: [0.0, 0.2, 0.5, 0.8];
+    parameter "Convergence Rate" <- 0.1 var: convergence_rate among: [0.1, 0.3, 0.5, 0.7, 0.9];
+    parameter "Confidence Threshold" <- 0.2 var: confidence_threshold among: [0.2, 0.4, 0.6, 0.8];
+    parameter "Repulsion Threshold" <- 0.0 var: repulsion_threshold among: [0.0, 0.2, 0.5, 0.8];
     parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3];
     
     

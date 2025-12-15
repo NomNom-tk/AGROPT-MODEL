@@ -62,14 +62,14 @@ global {
     // Import values from CSV
     file opin_data <- csv_file("/home/alfajor/AGROTECH/test_csv_1.csv", ",", true); // true = skip header
     matrix dat_matx <- matrix(opin_data);
-    list<int> debate_id_list <- dat_matx column_at 0;
-    list<int> agent_id_list <- dat_matx column_at 1;
-    list<int> initial_attitude_list <- dat_matx column_at 2;
-    list<int> final_attitude_list <- dat_matx column_at 3;
-    list<int> group_type_list <- dat_matx column_at 4;
+    list<int> debate_id_list <- list<int>(dat_matx column_at 0);
+    list<int> agent_id_list <- list<int>(dat_matx column_at 1);
+    list<int> initial_attitude_list <- list<int>(dat_matx column_at 2);
+    list<int> final_attitude_list <- list<int>(dat_matx column_at 3);
+    list<int> group_type_list <- list<int>(dat_matx column_at 4);
     
         // mae tracking for individual debates
-    map<int, float> mae_per_debate <- map([]);
+    map<int, float> mae_per_debate <- map<int, float>(map([]));
     
     // Analysis variables
     float opinion_variance <- 0.0;
@@ -173,7 +173,7 @@ global {
             }
         }
     }
-
+ 
     // Compute statistics reflex 
     reflex compute_statistics {
         list<float> opinions <- opinion_agent collect each.opinion;
@@ -365,7 +365,7 @@ experiment social_influence type: gui {
         }
         
         // Opinion distribution over time
-        display opinion_timeline refresh: every(5#cycles) {
+        display opinion_timeline refresh: every(5#cycles) type: 2d {
             chart "Opinion Distribution" type: series {
                 loop i from: 0 to: 9 {
                     data "Bin " + i value: opinion_agent count (
@@ -376,7 +376,7 @@ experiment social_influence type: gui {
         }
         
         // Opinion histogram
-        display opinion_histogram refresh: every(5#cycles) {
+        display opinion_histogram refresh: every(5#cycles) type: 2d{
             chart "Current Opinion Distribution" type: histogram {
                 loop i from: 0 to: 9 {
                     data "Bin " + i value: opinion_agent count (
@@ -387,7 +387,7 @@ experiment social_influence type: gui {
         }
         
         // Aggregate statistics
-        display statistics refresh: every(1#cycles) {
+        display statistics refresh: every(1#cycles) type: 2d{
             chart "Opinion Dynamics Measures" type: series {
                 data "Opinion Variance" value: opinion_variance color: #blue;
                 data "Polarization Index" value: polarization_index * 10 color: #red;
@@ -418,9 +418,9 @@ experiment Batch_all_debates type: batch repeat: 2 keep_seed: true until: cycle 
     
     // Model type and parameters (keep as is)
     parameter "Model Type" var: model_type among: ["consensus", "clustering", "bipolarization"];
-    parameter "Convergence Rate" var: convergence_rate among: [0.1, 0.3, 0.5, 0.7, 0.9];
-    parameter "Confidence Threshold" var: confidence_threshold among: [0.2, 0.4, 0.6, 0.8];
-    parameter "Repulsion Threshold" var: repulsion_threshold among: [0.0, 0.2, 0.5, 0.8];
+    parameter "Convergence Rate" var: convergence_rate <- 0.1 among: [0.1, 0.3, 0.5, 0.7, 0.9];
+    parameter "Confidence Threshold" var: confidence_threshold <- 0.2 among: [0.2, 0.4, 0.6, 0.8];
+    parameter "Repulsion Threshold" var: repulsion_threshold <- 0.0 among: [0.0, 0.2, 0.5, 0.8];
     parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3];
     
     method genetic pop_dim: 10 crossover_prob: 0.7 mutation_prob: 0.1 improve_sol: true 

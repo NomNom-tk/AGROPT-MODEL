@@ -33,8 +33,10 @@ model thomasdat2
 global {
     // Import values from CSV
 	// work extension
-    file opin_data <- csv_file("/home/agropt/AGROMOD/test_debates_10.csv", ",", true); // true = skip header // work extension
+//    file opin_data <- csv_file("/home/agropt/AGROMOD/test_debates_10.csv", ",", true); // true = skip header // work extension
 	
+	csv_file opin_data <- csv_file("../data/test_debates_30.csv",",", true);
+
 	// home extension
 //  file opin_data <- csv_file("/home/agropt/AGROMOD/test_debates_30.csv", ",", true); // true = skip header
     
@@ -211,7 +213,7 @@ global {
             loop a1 over: opinion_agent {
                 loop a2 over: opinion_agent {
                     if a1 != a2 {
-                        pairwise_distances <- pairwise_distances + abs(a1.opinion - a2.opinion);
+                    	pairwise_distances << abs(a1.opinion - a2.opinion);
                     }
                 }
             }
@@ -222,7 +224,7 @@ global {
                     variance_distance <- variance_distance + (d - mean_distance) ^ 2;
                 }
                 polarization_index <- variance_distance / (length(pairwise_distances) * (1.0 ^ 2));
-            }
+            } 
         }
     }   
     
@@ -493,11 +495,12 @@ experiment Batch_consensus type: batch repeat: 1 keep_seed: true until: end_simu
     init {
         mode_batch <- true;
         model_type <- "consensus";
+        
     }      
 }
 
 // BATCH: CLUSTERING // focus on this first to test
-experiment Batch_clustering type: batch repeat: length(remove_duplicates(debate_id_list)) keep_seed: true until: end_simulation {
+experiment Batch_clustering type: batch repeat:2  keep_seed: true until: end_simulation {
     // Parameters
     parameter "Selected debate id" var: selected_debate_id among: remove_duplicates(debate_id_list);
     parameter "Convergence Rate" var: convergence_rate <- 0.1  among: [0.1, 0.3, 0.5, 0.7, 0.9];
@@ -510,6 +513,7 @@ experiment Batch_clustering type: batch repeat: length(remove_duplicates(debate_
         stochastic_sel: false nb_prelim_gen: 1 max_gen: 20 minimize: mae;
     
     init {
+    	gama.pref_parallel_simulations_all <- true;
         // extra debug steps 
         write "===Batch init starting ===";
         mode_batch <- true;

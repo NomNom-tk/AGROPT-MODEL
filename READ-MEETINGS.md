@@ -25,4 +25,9 @@
 + mail to all meeting monday 13-14h // follow up
 + follow up GAMA-model -> look into Taillandier et al 2021 paper for argument synthesis and dynamics inside of GAMA
 
+# RDV Nicolas, Thomas, Patrick 15/12
++ discussed how to move forward with argumentation model
++ need to finish model and integrate with thomas data
++ managed to almost entirely correct the model (added in convergence cycles and more tracking features)
++ see if you can change how many agents are in debates (can be variable)
  

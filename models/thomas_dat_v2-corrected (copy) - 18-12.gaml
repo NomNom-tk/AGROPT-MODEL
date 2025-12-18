@@ -636,7 +636,7 @@ experiment social_influence type: gui {
 }
 
 experiment Batch_consensus type: batch repeat: 2 keep_seed: true until: end_simulation {
-    parameter "Selected debate id" var: selected_debate_id among: remove_duplicates(debate_id_list);
+    parameter "Selected debate id" var: selected_debate_id min: 1 max: 55 step: 1;
     parameter "Convergence Rate" var: convergence_rate among: [0.1, 0.3, 0.5, 0.7, 0.9];
     parameter "Confidence Threshold" var: confidence_threshold among: [0.2, 0.4, 0.6, 0.8];
     parameter "Repulsion Threshold" var: repulsion_threshold among: [0.0, 0.2, 0.5, 0.8];

@@ -1,0 +1,36 @@
+abstract: "This generic agent-based model simulates the evolution of agent's opinions\
+  \ through their exchange of arguments. \nThe idea behind this model is to explicitly\
+  \ represent the process of mental deliberation of agents from arguments to an opinion,\
+  \ through the use of Dung's argumentation framework complemented by a structured\
+  \ description of arguments. An application of the model on the diffusion of vegetarian\
+  \ diets is proposed. \n"
+authors:
+- affiliation: INRA
+  email: patrick.taillandier@gmail.com
+  family-names: Taillandier
+  given-names: Patrick
+- affiliation: "ETH Z \u0308urich, IRL, PLUS"
+  email: nsalliou@ethz.ch
+  family-names: Salliou
+  given-names: Nicolas
+- affiliation: ATE (Czechia)
+  email: rallou.thomopoulos@inra.fr
+  family-names: Thomopoulos
+  given-names: Rallou
+cff-version: 1.2.0
+date-released: '2021-03-15'
+identifiers:
+- type: url
+  value: https://www.comses.net/codebases/f787d173-cc1f-48ff-a961-aaa31881fe6a/releases/1.0.0/
+keywords:
+- argumentative agents
+- dynamics opinion
+- GAMA
+- GAMA
+license: Apache-2.0
+message: If you use this software, please cite it using the metadata from this file.
+title: 'A model of opinion dynamics based on formal argumentation: application to
+  the diffusion of the vegetarian diet'
+type: software
+url: https://www.comses.net/codebases/f787d173-cc1f-48ff-a961-aaa31881fe6a/releases/1.0.0/
+version: 1.0.0

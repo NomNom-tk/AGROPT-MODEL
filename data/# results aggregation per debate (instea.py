@@ -5,6 +5,7 @@ import pandas as pd
 # change to absolute file path for usr
 results = pd.read_csv("/home/agropt/Gama_Workspace/agro-pt/models/models/outputs/batch_summary.csv")
 
+# need ot add in what kind of model was used (i.e. consensus, clustering, etc)
 debate_summary = results.groupby('selected_debate_id').agg({
     'mae' : ['mean', 'std', 'min', 'max'],
     'convergence_cycle' : 'mean',

@@ -7,10 +7,11 @@ import matplotlib.pyplot as plt
 import seaborn
 import plotly
 import kaleido
+import os
 
-df1 = pd.read_csv("/home/agropt/AGROMOD/AGROPT-MODEL/data/test files for debate_anal/test_11.csv")
-df2 = pd.read_csv("/home/agropt/AGROMOD/AGROPT-MODEL/data/test files for debate_anal/test_22.csv")
-df3 = pd.read_csv("/home/agropt/AGROMOD/AGROPT-MODEL/data/test files for debate_anal/test_33.csv")
+df1 = pd.read_csv("/home/agropt/Gama_Workspace/agro-pt/models/models/outputs/newer outputs/batch_summary-consensus-exhaustive.csv")
+df2 = pd.read_csv("/home/agropt/Gama_Workspace/agro-pt/models/models/outputs/newer outputs/batch_summary-exh-clustering.csv")
+df3 = pd.read_csv("/home/agropt/Gama_Workspace/agro-pt/models/models/outputs/newer outputs/batch_summary-exh-bipol.csv")
 
 combined_df = pd.concat([df1, df2, df3], ignore_index=True, sort=False)
 
@@ -49,21 +50,21 @@ for debate_id in unique_debates:
                 
                 # store
                 best_per_model[model] = best_row
-if best_per_model:
-    # lowest mae
-    winner = min(best_per_model.items(), key = lambda x: x[1]['mae'])
-    winner_model = winner[0] # model name
-    winner_data = winner[1] # row data
+    if best_per_model:
+        # lowest mae
+        winner = min(best_per_model.items(), key = lambda x: x[1]['mae'])
+        winner_model = winner[0] # model name
+        winner_data = winner[1] # row data
     
-    # store results for debate i
-    results.append({
-        'debate_id': debate_id,
-        'winner_model': winner_model,
-        'winner_mae': winner_data['mae'],
-        'consensus_mae': best_per_model['consensus']['mae'] if 'consensus' in best_per_model else None,
-        'clustering_mae': best_per_model['clustering']['mae'] if 'clustering' in best_per_model else None,
-        'bipolarization_mae': best_per_model['bipolarization']['mae'] if 'bipolarization' in best_per_model else None, 
-    })
+        # store results for debate i
+        results.append({
+            'debate_id': debate_id,
+            'winner_model': winner_model,
+            'winner_mae': winner_data['mae'],
+            'consensus_mae': best_per_model['consensus']['mae'] if 'consensus' in best_per_model else None,
+            'clustering_mae': best_per_model['clustering']['mae'] if 'clustering' in best_per_model else None,
+            'bipolarization_mae': best_per_model['bipolarization']['mae'] if 'bipolarization' in best_per_model else None, 
+        })
     
     best_models = pd.DataFrame(results)
     print(best_models.head())
@@ -183,3 +184,40 @@ def compare_models_for_one_debate(combined_df, debate_id):
 
 results_tes = compare_models_for_one_debate(combined_df, 21)
 print(results_tes)
+
+"""
+# os import to create figures dir
+os.makedirs('~/figures-output', exist_ok=True)
+"""
+
+# matplot figures
+# total wins
+def plot_model_wins(best_models, save_path='model_wins.png'):
+    
+    # win counts per model
+    win_counts = best_models['winner_model'].value_counts()
+    
+    #indexing the wins
+    x_values = win_counts.index
+    y_values = win_counts.values
+    
+    # create figure
+    fig, ax = plt.subplots(figsize=(10,6))
+    
+    # bar chart
+    bars = ax.bar(x_values, y_values, color=['blue', 'green', 'red'], alpha=0.7)
+    
+    # labels
+    ax.set_xlabel('models', fontsize=12, fontweight='bold')
+    ax.set_ylabel('wins', fontsize=12, fontweight='bold')
+    ax.set_title('Which model wins most overall?', fontsize=14, fontweight='bold')
+    
+    # grid
+    ax.grid(axis='y', alpha=0.3)
+    
+    # saving
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.show()
+    
+print(best_models)
+plot_model_wins(best_models)

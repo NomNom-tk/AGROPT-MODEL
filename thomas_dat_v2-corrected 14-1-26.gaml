@@ -32,15 +32,15 @@ model thomasdat2
 
 global {
     // Import CSV data
-    file text_data; //<- text_file("~/Gama_Workspace/agro-pt/models/models/data/data_complete_anonymised.csv", true); 
+    file text_data;
     
-    //decalring list
+    // Declaring list
     list<string> id_group_raw;
     list<int> agent_id_list;
     list<string> group_type_list;
-    string current_condition <- "unkown"; // among hetero, homo and control 
+    string current_condition <- "unknown"; // among hetero, homo and control 
     
-    // pro reduction metrics
+    // Pro reduction metrics
     list<int> pro_reduction_list;
     int num_pro_agents <- 0;
     int num_anti_agents <- 0;
@@ -50,6 +50,17 @@ global {
     list<float> initial_attitude_list;
     list<float> final_attitude_list;
     list<int> debate_id_list;
+    
+    // bipolarization diagnostics
+    int initial_num_clusters <- 0;
+    int total_attractive_interactions <- 0;
+    int total_repulsive_interactions <- 0;
+    int total_neutral_interactions <- 0 ;
+    float neutral_zone_width <- 0.0;
+    float mean_net_repulsion_abs <- 0.0;
+    
+    // final stats comp check
+    bool final_stats_computed <- false;
 
     // Simulation parameters
     int selected_debate_id <- 1;
@@ -64,7 +75,7 @@ global {
     // Control flags
     bool mode_batch <- false;
     bool end_simulation <- false;
-    int convergence_cycle <- -1; // -1 meaning there is not yet a convergence
+    int convergence_cycle <- -1;
     
     // Convergence parameters
     float mae_convergence_threshold <- 0.001 min: 0.0 max: 1.0;
@@ -85,17 +96,15 @@ global {
     int num_clusters <- 0;
     float polarization_index <- 0.0;
     
-
     // Initialization
     init {
-        // raw column extraction
         write "=== loading csv data===";
         
         file text_data <- text_file("./data/data_complete_anonymised.csv");
         list<string> all_lines <- text_data.contents;
         write "Total lines in file: " + length(all_lines);
         
-        // Parse header inline (no action needed)
+        // Parse header inline
         list<string> headers <- [];
         string header_line <- all_lines[0];
         string current <- "";
@@ -123,12 +132,12 @@ global {
         
         write "Column indices found";
         
-        if idx_id_group = -1 or idx_id = -1 or idx_db_t1 = -1 or idx_db_t2 = -1 or idx_condition = -1 {
+        if idx_id_group = -1 or idx_id = -1 or idx_db_t1 = -1 or idx_db_t2 = -1 or idx_condition = -1 or idx_pro_reduction = -1 {
             write "ERROR: Column not found!";
             return;
         }
         
-        int max_idx <- max([idx_id_group, idx_id, idx_db_t1, idx_db_t2, idx_condition]);
+        int max_idx <- max([idx_id_group, idx_id, idx_db_t1, idx_db_t2, idx_condition, idx_pro_reduction]);
         
         // Parse data rows inline
         int skipped_rows <- 0;
@@ -178,15 +187,13 @@ global {
         write "Skipped rows: " + skipped_rows;
         write "Successfully loaded " + length(agent_id_list) + " agents";
         
-        // FILTER OUT CORRUPTED DATA - Comment out this entire section to include all debates
+        // FILTER OUT CORRUPTED DATA
         write "=== FILTERING CORRUPTED DATA ===";
         int original_count <- length(id_group_raw);
         
-        // Find indices to keep (where ID_Group_all starts with a letter, not just numbers)
         list<int> valid_indices <- [];
         loop i from: 0 to: length(id_group_raw) - 1 {
             string group_id <- id_group_raw[i];
-            // Keep only if it starts with a letter (M, F, etc.) not just a number
             string first_char <- copy_between(group_id, 0, 1);
             if first_char in ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", 
                               "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"] {
@@ -194,7 +201,7 @@ global {
             }
         }
         
-        // Filter all lists to keep only valid indices
+        // Filter all lists
         list<string> filtered_id_group <- [];
         list<int> filtered_agent_id <- [];
         list<float> filtered_initial <- [];
@@ -211,7 +218,7 @@ global {
             filtered_pro_reduction << pro_reduction_list[idx];
         }
         
-        // Replace the original lists with filtered ones
+        // Replace original lists
         id_group_raw <- filtered_id_group;
         agent_id_list <- filtered_agent_id;
         initial_attitude_list <- filtered_initial;
@@ -220,39 +227,8 @@ global {
         pro_reduction_list <- filtered_pro_reduction;
         
         write "Filtered from " + original_count + " to " + length(id_group_raw) + " valid agents";
-        // END OF FILTERING SECTION
         
-        // Comment out this diagnostic section once you've verified the filtering works
-        /*
-        write "=== CHECKING ID_GROUP_RAW VALUES ===";
-        write "Total id_group_raw entries: " + length(id_group_raw);
-        write "First 10 values: " + copy_between(id_group_raw, 0, min([10, length(id_group_raw)]));
-        write "Last 10 values: " + copy_between(id_group_raw, max([0, length(id_group_raw) - 10]), length(id_group_raw));
-
-        // Count occurrences
-        map<string, int> group_counts <- map([]);
-        loop group_name over: id_group_raw {
-            if group_counts.keys contains group_name {
-                group_counts[group_name] <- group_counts[group_name] + 1;
-            } else {
-                group_counts[group_name] <- 1;
-            }
-        }
-
-        write "Groups with only 1 agent:";
-        int single_agent_groups <- 0;
-        loop group_name over: group_counts.keys {
-            if group_counts[group_name] = 1 {
-                single_agent_groups <- single_agent_groups + 1;
-                if single_agent_groups <= 10 {
-                    write "  " + group_name + ": 1 agent";
-                }
-            }
-        }
-        write "Total groups with only 1 agent: " + single_agent_groups;
-        */
-        
-        //create debate_id mapping
+        // Create debate_id mapping
         debate_id_list <- [];
         map<string, int> group_to_id <- map([]);
         int next_id <- 1;
@@ -265,7 +241,7 @@ global {
             debate_id_list << group_to_id[id_group];
         }
         
-        // find unique debates
+        // Find unique debates
         list<int> unique_debates <- remove_duplicates(debate_id_list);
         write "Found " + length(unique_debates) + " unique debates";
 
@@ -286,28 +262,50 @@ global {
         write "Created " + length(opinion_agent) + " opinion agents";
         
         do create_network;
+        
+        // initial opinion clustering (diagnostic)
+        list<int> init_hist <- list_with(10, 0);
+        loop o over: opinion_agent collect each.initial_opinion {
+        	int b <- min([9, int(o * 10)]);
+        	init_hist[b] <- init_hist[b] + 1;
+        }
+        initial_num_clusters <- init_hist count (each > 0);
+        
+        // structural diagnostic
+        neutral_zone_width <- repulsion_threshold - confidence_threshold;
+        
+        // guard for final stats
+        final_stats_computed <- false;
+        
     }
     
     // Create agents for specific debate
     action initialize_agents_for_debate(int target_debate_id) {
-    	// detection of agent exp condition from first agent in debate 
-    	bool condition_detected <- false;
-    	
+        bool condition_detected <- false;
+        
+        // FIRST LOOP: Detect condition
         loop i from: 0 to: length(debate_id_list) - 1 {
-        	if debate_id_list[i] = target_debate_id and !condition_detected{
-        		// detect from group type
-        		if group_type_list[i] = "1" {
-        			current_condition <- "homogeneous";
-        		} else if group_type_list[i] = "2" {
-        			current_condition <- "heterogeneous";
-        		} else if group_type_list[i] = "3" {
-        			current_condition <- "control"; 
-        		}
-        		condition_detected <- true;
-        	}
-        	
-        	
-        	// debate creation from id
+            if debate_id_list[i] = target_debate_id and !condition_detected {
+                string group_type_val <- group_type_list[i];
+                write "DEBUG group_type_val for debate" + target_debate_id + group_type_val;
+				
+				// match against text values from csv
+				if group_type_val = "Homogeneous" or group_type_val = "1" {
+					current_condition <- "homogeneous";
+				} else if group_type_val = "Heterogeneous" or group_type_val = "2" {
+					current_condition <- "heterogeneous"; 
+                } else if group_type_val = "Control" or group_type_val = "3" {
+                    current_condition <- "control";
+                } else {
+                	write "Warning unkown condition type";
+                }
+                condition_detected <- true;
+                write "DEBUG: detected condition = " + current_condition;
+            }
+        }
+        
+        // SECOND LOOP: Create agents
+        loop i from: 0 to: length(debate_id_list) - 1 {
             if debate_id_list[i] = target_debate_id {
                 create opinion_agent {
                     agent_id <- agent_id_list[i];
@@ -315,7 +313,6 @@ global {
                     group_type <- group_type_list[i];
                     pro_reduction <- pro_reduction_list[i];
                     
-                    // scale check
                     initial_opinion <- initial_attitude_list[i];
                     opinion <- initial_opinion;
                     previous_opinion <- initial_opinion;
@@ -328,10 +325,9 @@ global {
             }
         }
         
-        // debug to check agent initialization
-        write "Debate" + target_debate_id + " condition: " + current_condition;
-        
-    }  
+        write "Debate " + target_debate_id + " condition: " + current_condition;
+    }
+    
     // Network creation
     action create_network {
         ask opinion_agent {
@@ -344,23 +340,24 @@ global {
                     neighbors <- opinion_agent where (
                         each != self and 
                         each.debate_id = self.debate_id and
-                        each.group_type != 3 and
-                        self.group_type != 3
+                        each.group_type != "Control" and
+                        self.group_type != "Control" 
                     );
                 }
             }
             match "random" {
-                ask opinion_agent where (each.group_type != 3) {
+                ask opinion_agent where (each.group_type != "Control" and each.group_type != "3") {
                     neighbors <- opinion_agent where (
                         each != self and 
                         each.debate_id = self.debate_id and
-                        each.group_type != 3 and
+                        each.group_type != "Control" and
+                        each.group_type != "3" and
                         flip(connection_probability)
                     );
                 }
             }
             match "small_world" {
-                list<opinion_agent> agent_list <- list(opinion_agent where (each.group_type != 3));
+                list<opinion_agent> agent_list <- list(opinion_agent where (each.group_type != "Control" and each.group_type != "3"));
                 loop i from: 0 to: length(agent_list) - 1 {
                     opinion_agent current <- agent_list[i];
                     int k <- 4;
@@ -375,7 +372,7 @@ global {
                             opinion_agent where (
                                 each != current and 
                                 each.debate_id = current.debate_id and
-                                each.group_type != 3
+                                each.group_type != "Control" and each.group_type != "3"
                             )
                         );
                         if random_neighbor != nil {
@@ -387,22 +384,21 @@ global {
         }
     }
 
-	// anti and pro reduc stats computation (every 10 cycles)
-	reflex compute_pro_anti_stats when: every(10#cycle) and current_condition = "heterogeneous" {
-		list<opinion_agent> pro_agents <- opinion_agent where (each.pro_reduction = 1);
-		list<opinion_agent> anti_agents <- opinion_agent where (each.pro_reduction = 0);
-		
-		num_pro_agents <- length(pro_agents);
-		num_anti_agents <- length(anti_agents);
-		
-		if num_pro_agents > 0 {
-			mean_opinion_pro <- mean(pro_agents collect each.opinion);
-		}
-		if num_anti_agents > 0 {
-			mean_opinion_anti <- mean(anti_agents collect each.opinion);
-		}
-	}
-
+    // Anti and pro reduction stats computation (every 10 cycles)
+    reflex compute_pro_anti_stats when: every(10#cycle) and current_condition = "heterogeneous" {
+        list<opinion_agent> pro_agents <- opinion_agent where (each.pro_reduction = 1);
+        list<opinion_agent> anti_agents <- opinion_agent where (each.pro_reduction = 0);
+        
+        num_pro_agents <- length(pro_agents);
+        num_anti_agents <- length(anti_agents);
+        
+        if num_pro_agents > 0 {
+            mean_opinion_pro <- mean(pro_agents collect each.opinion);
+        }
+        if num_anti_agents > 0 {
+            mean_opinion_anti <- mean(anti_agents collect each.opinion);
+        }
+    }
 
     // Statistics computation (every 10 cycles)
     reflex compute_statistics when: every(10#cycle) {
@@ -453,11 +449,12 @@ global {
             }
             
             if max_change < mae_convergence_threshold {
-            	convergence_cycle <- cycle; // store convergence cycle in 
+                convergence_cycle <- cycle;
                 write "Converged at cycle " + convergence_cycle;
                 end_simulation <- true;
                 
                 do compute_fit;
+                do compute_final_statistics;
                 
                 if mode_batch {
                     do save_batch_results;
@@ -468,11 +465,12 @@ global {
     
     // Fallback: stop at max_cycles if not converged
     reflex max_cycles_reached when: cycle >= max_cycles and !end_simulation {
-        convergence_cycle <- max_cycles; // reached max cycle without convergence
+        convergence_cycle <- max_cycles;
         write "Reached max_cycles without convergence";
         end_simulation <- true;
         
         do compute_fit;
+        do compute_final_statistics;
         
         if mode_batch {
             do save_batch_results;
@@ -483,12 +481,10 @@ global {
     action compute_fit {
         write "=== Computing Fit at Cycle " + cycle + " ===";
         
-        // Reset containers
         mae_per_debate <- map<int, float>(map([]));
         list<int> debates <- remove_duplicates(opinion_agent collect each.debate_id);
         list<float> all_errors <- [];
         
-        // Calculate errors per debate
         loop d over: debates {
             list<opinion_agent> agents_d <- opinion_agent where (each.debate_id = d);
             
@@ -508,27 +504,90 @@ global {
             }
         }
         
-        // Calculate global MAE (AFTER loop!)
         mae <- length(all_errors) > 0 ? mean(all_errors) : 0.0;
         
         write "Global MAE: " + mae;
         write "Per-debate MAE: " + mae_per_debate;
+        
+        // mean absolute net repulsion (cluster stability)
+        list<float> net_repulsions <- [];
+        
+        ask opinion_agent {
+    		float net_repulsion <- 0.0;
+    		loop n over: neighbors {
+        		if abs(n.opinion - opinion) >= repulsion_threshold {
+            		net_repulsion <- net_repulsion + (n.opinion > opinion ? -1.0 : 1.0);
+        		}
+    		}
+    		net_repulsions << abs(net_repulsion);
     }
+    
+    mean_net_repulsion_abs <- length(net_repulsions) > 0 ? mean(net_repulsions) : 0.0;
+}
+    
+    // final stats computation --> comp final opinion var, cluster num, polarization index at exact convergence
+    // does not replace periodic computation, only overwrites at the end 
+    action compute_final_statistics {
+    	if final_stats_computed {
+    		return;
+    	}
+    	
+    	final_stats_computed <- true;
+    	
+    	list<float> opinions <- opinion_agent collect each.opinion;
+    	
+    	if length(opinions) > 0{
+    		// final variance
+    		opinion_variance <- variance(opinions);
+    	
+    		//final number of clusters, based on histogram computation
+    		int num_bins <- 10;
+    		list<int> histogram <- list_with(num_bins, 0);
+    	
+    		loop op over: opinions {
+    			int bin <- min([num_bins - 1, int(op * num_bins)]);
+    			histogram[bin] <- histogram[bin] + 1;
+    	}
+    	num_clusters <- histogram count (each > 0);
+    	
+    	// final polarizatio nindex (pairwise variance)
+    	list<float> pairwise_distances <- [];
+    	loop a1 over: opinion_agent{
+    		loop a2 over: opinion_agent{
+    			if a1 != a2 {
+    				pairwise_distances << abs(a1.opinion - a2.opinion);
+    			}
+    		}
+    	}
+    	
+    	if length(pairwise_distances) > 0 {
+    		float mean_distance <- mean(pairwise_distances);
+    		float variance_distance <- 0.0;
+    		
+    		loop d over: pairwise_distances {
+    			variance_distance <- variance_distance + (d - mean_distance) ^ 2;
+    		}
+    		
+    		polarization_index <- variance_distance / (length(pairwise_distances) * (1.0 ^ 2));
+    		}
+    	}
+    }
+    
     
     // Save batch results
     action save_batch_results {
         write "=== Saving Results ===";
         write "MAE: " + mae;
+        write "Condition: " + current_condition;
         write "Debates: " + mae_per_debate.keys;
         
-        // pro/anti split for heterogeneous debates
         int pro_count <- opinion_agent count (each.pro_reduction = 1);
         int anti_count <- opinion_agent count (each.pro_reduction = 0);
         
-        // Summary file
-        save [model_type, current_condition, selected_debate_id, pro_count, anti_count, convergence_rate, confidence_threshold,
-              repulsion_threshold, repulsion_strength, seed, convergence_cycle,
-              mae, opinion_variance, polarization_index, num_clusters]
+        save [model_type, current_condition, selected_debate_id, pro_count, anti_count, 
+              convergence_rate, confidence_threshold, repulsion_threshold, repulsion_strength, 
+              seed, convergence_cycle, mae, opinion_variance, polarization_index, num_clusters, initial_num_clusters,
+              neutral_zone_width, mean_net_repulsion_abs]
         to: "outputs/batch_summary.csv" rewrite: false;
         
         do save_agent_results;
@@ -536,42 +595,41 @@ global {
         write "Results saved successfully";
     }
     
-    // save agentic results
+    // Save agent results
     action save_agent_results {
-    	write "=== saving per agent results===";
-    	
-    	// pro/anti counts per debate
-    	int pro_count <- opinion_agent count (each.pro_reduction = 1);
-    	int anti_count <- opinion_agent count (each.pro_reduction = 0);
-    	
-    	// saving
-    	loop ag over: opinion_agent {
-    		float individual_error <- abs(ag.opinion - ag.final_attitude);
-    		float opinion_change <- ag.opinion - ag.initial_opinion;
-    		
-    		save [
-    			model_type,
-    			current_condition,
-    			selected_debate_id,
-    			ag.agent_id, // individual agent id
-    			ag.pro_reduction, // initial stance (1=pro, 0=anti)
-    			pro_count, // # pro agents in debate
-    			anti_count,
-    			ag.initial_opinion, //starting opinion
-    			ag.opinion, // final simulated opinion
-    			ag.final_attitude, // real final attitude from data
-    			opinion_change, // measure of opinion change
-    			individual_error, // prediction error for agent
-    			convergence_rate, // paramters used below
-    			confidence_threshold,
-    			repulsion_threshold,
-    			repulsion_strength,
-    			seed,
-    			convergence_cycle
-    		]
-    		to: "outputs/agent_level_results.csv" rewrite: false;
-    	}
-    	
+        write "=== Saving Per-Agent Results ===";
+        
+        int pro_count <- opinion_agent count (each.pro_reduction = 1);
+        int anti_count <- opinion_agent count (each.pro_reduction = 0);
+        
+        loop ag over: opinion_agent {
+            float individual_error <- abs(ag.opinion - ag.final_attitude);
+            float opinion_change <- ag.opinion - ag.initial_opinion;
+            
+            save [
+                model_type,
+                current_condition,
+                selected_debate_id,
+                ag.agent_id,
+                ag.pro_reduction,
+                pro_count,
+                anti_count,
+                ag.initial_opinion,
+                ag.opinion,
+                ag.final_attitude,
+                opinion_change,
+                individual_error,
+                convergence_rate,
+                confidence_threshold,
+                repulsion_threshold,
+                repulsion_strength,
+                seed,
+                convergence_cycle
+            ]
+            to: "outputs/agent_level_results.csv" rewrite: false;
+        }
+        
+        write "Saved " + length(opinion_agent) + " agent records";
     }
     
     // GUI stop
@@ -587,7 +645,7 @@ species opinion_agent {
     list<opinion_agent> neighbors <- [];
     rgb color <- #blue;
     point location;
-    int pro_reduction; // 1 is pro, 0 against
+    int pro_reduction;
     
     int agent_id;
     int debate_id;
@@ -631,32 +689,40 @@ species opinion_agent {
             
             float attraction_force <- 0.0;
             float repulsion_force <- 0.0;
-            int attractive_count <- 0.0;
-            int repulsive_count <- 0.0;
+            int attractive_count <- 0;
+            int repulsive_count <- 0;
             
             loop neighbor over: neighbors {
                 float difference <- abs(neighbor.opinion - self.opinion);
                 
                 if difference <= confidence_threshold {
+                	// attraction
                     attraction_force <- attraction_force + (neighbor.opinion - self.opinion);
                     attractive_count <- attractive_count + 1;
+                    total_attractive_interactions <- total_attractive_interactions + 1;
                 }
-                else {
+                else if difference >= repulsion_threshold {
+                	// repulsion
                     float direction <- neighbor.opinion > self.opinion ? -1.0 : 1.0;
                     repulsion_force <- repulsion_force + direction;
                     repulsive_count <- repulsive_count + 1;
+                    total_repulsive_interactions <- total_repulsive_interactions + 1;
                 }
+            	else {
+            		//neutral zone
+            		total_neutral_interactions <- total_neutral_interactions + 1;
+            	}
             }
             
             float opinion_change <- 0.0;
             if attractive_count > 0 {
-            	opinion_change <- opinion_change + convergence_rate * (attraction_force / attractive_count);
+                opinion_change <- opinion_change + convergence_rate * (attraction_force / attractive_count);
             }
             if repulsive_count > 0 {
-            	opinion_change <- opinion_change + repulsion_strength * (repulsion_force / repulsive_count);
+                opinion_change <- opinion_change + repulsion_strength * (repulsion_force / repulsive_count);
             }
             
-            opinion <- max([0.0, min([1.0, opinion + opinion_change / length(neighbors)])]);
+            opinion <- max([0.0, min([1.0, opinion + opinion_change])]);
             
             if opinion < 0.5 {
                 color <- rgb(0, 0, 255 * (1 - opinion * 2));
@@ -731,7 +797,7 @@ experiment social_influence type: gui {
         monitor "Mean Opinion" value: length(opinion_agent) > 0 ? mean(opinion_agent collect each.opinion) : 0.0;
         monitor "Opinion Range" value: length(opinion_agent) > 0 ? max(opinion_agent collect each.opinion) - min(opinion_agent collect each.opinion) : 0.0;
         monitor "Number of Agents" value: length(opinion_agent);
-        monitor "Control Agents" value: opinion_agent count (each.group_type = 3);
+        monitor "Control Agents" value: opinion_agent count (each.group_type = "Control" or each.group_type = 3);
         monitor "Model Fit MAE" value: mae;
         monitor "Debates Tracked" value: mae_per_debate.keys;
     }
@@ -749,7 +815,7 @@ experiment Batch_consensus_exh type: batch repeat: 2 keep_seed: true until: end_
     init {
         mode_batch <- true;
         model_type <- "consensus";
-        convergence_cycle <- -1; // reset per simulation
+        convergence_cycle <- -1;
     }
 }
 
@@ -764,7 +830,7 @@ experiment Batch_clustering_exh type: batch repeat: 2 keep_seed: true until: end
     init {
         mode_batch <- true;
         model_type <- "clustering";
-        convergence_cycle <- -1; // reset per simulation
+        convergence_cycle <- -1;
     }
 }
 
@@ -779,10 +845,9 @@ experiment Batch_bipolarization_exh type: batch repeat: 2 keep_seed: true until:
     init {
         mode_batch <- true;
         model_type <- "bipolarization";
-        convergence_cycle <- -1; // reset per simulation
+        convergence_cycle <- -1;
     }
 }
-
 
 // Batch Exp Genetic 
 /// Batch Consensus
@@ -792,15 +857,11 @@ experiment Batch_consensus type: batch repeat: 2 keep_seed: true until: end_simu
     parameter "Confidence Threshold" var: confidence_threshold among: [0.2, 0.4, 0.6, 0.8];
     parameter "Repulsion Threshold" var: repulsion_threshold among: [0.0, 0.2, 0.5, 0.8];
     parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3];
-    
-    method genetic pop_dim: 5 crossover_prob: 0.7 mutation_prob: 0.1 
-        improve_sol: true stochastic_sel: false 
-        nb_prelim_gen: 5 max_gen: 20 minimize: mae;
-    
+   
     init {
         mode_batch <- true;
         model_type <- "consensus";
-        convergence_cycle <- -1; // reset per simulation
+        convergence_cycle <- -1;
     }
 }
 
@@ -811,33 +872,25 @@ experiment Batch_clustering type: batch repeat: 2 keep_seed: true until: end_sim
     parameter "Confidence Threshold" var: confidence_threshold among: [0.2, 0.4, 0.6, 0.8];
     parameter "Repulsion Threshold" var: repulsion_threshold among: [0.0, 0.2, 0.5, 0.8];
     parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3];
-    
-    method genetic pop_dim: 5 crossover_prob: 0.7 mutation_prob: 0.1 
-        improve_sol: true stochastic_sel: false 
-        nb_prelim_gen: 5 max_gen: 20 minimize: mae;
-    
+   
     init {
         mode_batch <- true;
         model_type <- "clustering";
-        convergence_cycle <- -1; // reset per simulation
+        convergence_cycle <- -1;
     }
 }
 
-/// Batch Bipolarization
+/// Batch Clustering
 experiment Batch_bipolarization type: batch repeat: 2 keep_seed: true until: end_simulation {
     parameter "Selected debate id" var: selected_debate_id min: 1 max: 55 step: 1;
     parameter "Convergence Rate" var: convergence_rate among: [0.1, 0.3, 0.5, 0.7, 0.9];
     parameter "Confidence Threshold" var: confidence_threshold among: [0.2, 0.4, 0.6, 0.8];
     parameter "Repulsion Threshold" var: repulsion_threshold among: [0.0, 0.2, 0.5, 0.8];
     parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3];
-    
-    method genetic pop_dim: 5 crossover_prob: 0.7 mutation_prob: 0.1 
-        improve_sol: true stochastic_sel: false 
-        nb_prelim_gen: 5 max_gen: 20 minimize: mae;
-    
+   
     init {
         mode_batch <- true;
         model_type <- "bipolarization";
-        convergence_cycle <- -1; // reset per simulation
+        convergence_cycle <- -1;
     }
 }

@@ -9,21 +9,27 @@ import plotly
 import kaleido
 import os
 
-df1 = pd.read_csv("/home/agropt/Gama_Workspace/agro-pt/models/models/outputs/newer outputs/batch_summary-consensus-exhaustive.csv")
-df2 = pd.read_csv("/home/agropt/Gama_Workspace/agro-pt/models/models/outputs/newer outputs/batch_summary-exh-clustering.csv")
-df3 = pd.read_csv("/home/agropt/Gama_Workspace/agro-pt/models/models/outputs/newer outputs/batch_summary-exh-bipol.csv")
+dfbat = pd.read_csv("/home/agropt/Gama_Workspace/agro-pt/models/models/outputs/newer outputs/batch_summary.csv")
+dfag = pd.read_csv("/home/agropt/Gama_Workspace/agro-pt/models/models/outputs/newer outputs/agent_level_results.csv")
 
-combined_df = pd.concat([df1, df2, df3], ignore_index=True, sort=False)
+# combined_df = pd.concat([df1, df2], ignore_index=True, sort=False)
 
-# initial overview
-rows, cols = combined_df.shape
-comb_dat_type = combined_df.dtypes
+# initial overview for batch summary
+rows, cols = dfbat.shape
+dfbat_dat_type = dfbat.dtypes
 print(f"{rows} rows, {cols} columns")
-print(comb_dat_type)
-print(combined_df.head(5))
+print(dfbat_dat_type)
+print(dfbat_dat_type(5))
+
+# initial overview for agent level
+rows, cols = dfag.shape
+dfag_dat_type = dfag.dtypes
+print(f"{rows} rows, {cols} columns")
+print(dfag_dat_type)
+print(dfag_dat_type.head(5))
 
 # unique debates
-unique_debates = combined_df['selected_debate_id'].unique()
+unique_debates = dfbat['selected_debate_id'].unique()
 # print(unique_debates)
 
 # store results

@@ -3,13 +3,30 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import logging
+import sys
 
-# machine learning imports
+### LOGGING DEBUG< WRITES TO LOGGING FILE
+LOG_LEVEL = logging.INFO
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler("analysis.log", mode="w")
+    ]
+)
+
+# Regression model imports
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, r2_score, mean_squared_error
 
+# further stats imports
+import statsmodels.api as sm
+
 # import csv
-df = pd.read_csv("/home/alfajor/AGROTECH/git repo agropt/AGROPT-MODEL/data/data_complete_anonymised.csv")
+#df = pd.read_csv("/AGROPT-MODEL/data/data_complete_anonymised.csv") # home file read
+df = pd.read_csv("/home/agropt/AGROMOD/AGROPT-MODEL/data/data_complete_anonymised.csv")
 
 """
 Requirement already satisfied: six>=1.5 in /usr/lib/python3/dist-packages (from python-dateutil>=2.8.2->pandas) (1.16.0)
@@ -25,9 +42,9 @@ WARNING: The scripts fonttools, pyftmerge, pyftsubset and ttx are installed in '
 # initial data check
 # =================
 print(df.head())
-print(df.columns.tolist())
-print("\n missing values per column:")
-print(df.isnull().sum())
+logging.info(df.columns.tolist())
+logging.info("\n missing values per column:")
+logging.debug(df.isnull().sum())
 
 # list for subfactors
 # t1
@@ -66,12 +83,12 @@ df['attitude_t2'] = df[t2_subfactors].mean(axis=1)
 df['attitude_change'] = df['attitude_t2'] - df['attitude_t1'] # final - initial
 
 ## printing to check which agents changed their opinion and in which direction
-print(df['attitude_change'])
-print(df['attitude_t1'].head())
+logging.info(df['attitude_change'])
+logging.info(df['attitude_t1'].head())
 
-print(f"agents who become MORE pro-reduction: {(df['attitude_change'] > 0).sum()}")
-print(f"agents who become LESS pro-reduction: {(df['attitude_change'] < 0).sum()}")
-print(f"agents who did not change: {(df['attitude_change'] == 0).sum()}")
+logging.debug(f"agents who become MORE pro-reduction: {(df['attitude_change'] > 0).sum()}")
+logging.debug(f"agents who become LESS pro-reduction: {(df['attitude_change'] < 0).sum()}")
+logging.debug(f"agents who did not change: {(df['attitude_change'] == 0).sum()}")
 
 # filtering for homogeneous and heterogeneous debates and including control (next step to analyze, discuss)
 df_wo_control = df[df['Condition'] != 'Control'].copy()
@@ -89,10 +106,10 @@ else: # numeric type
 
 ## check split of agents
 if len(df_hetero_anti) + len(df_hetero_pro) == len(df_hetero):
-  print("heterogeneous split checked")
+  logging.debug("heterogeneous split checked")
 else:
-  print("warning: heterogeneous split doesn't add up")
-  print(f"missing agents: {len(df_hetero) - len(df_hetero_anti) - len(df_hetero_pro)}")
+  logging.debug("warning: heterogeneous split doesn't add up")
+  logging.debug(f"missing agents: {len(df_hetero) - len(df_hetero_anti) - len(df_hetero_pro)}")
 
 
 # =============
@@ -158,25 +175,25 @@ def prediction_errors(
       'Max MAE': df_errors['abs_error'].max()
     }
     ## summary stats by claude
-    print("\n" + "="*50)
-    print("PREDICTION ERROR ANALYSIS")
-    print("="*50)
-    print(f"Mean MAE: {metrics['MAE']:.4f}")
-    print(f"MAE Variance: {metrics['MAE_VAR']:.4f}")
-    print(f"Median MAE: {metrics['Median MAE']:.4f}")
-    print(f"Max error: {metrics['Max MAE']:.4f}")
+    logging.info("\n" + "="*50)
+    logging.info("PREDICTION ERROR ANALYSIS")
+    logging.info("="*50)
+    logging.info(f"Mean MAE: {metrics['MAE']:.4f}")
+    logging.info(f"MAE Variance: {metrics['MAE_VAR']:.4f}")
+    logging.info(f"Median MAE: {metrics['Median MAE']:.4f}")
+    logging.info(f"Max error: {metrics['Max MAE']:.4f}")
 
     # worst 10 predictions
-    print("\n10 worst predictions")
+    logging.info("\n10 worst predictions")
     worst = df_errors.nlargest(10, 'abs_error')[
       [agent_id_col, debate_id_col, condition_col, pro_reduction_col, 'predicted', 'abs_error'] 
     ]
-    print(worst.to_string(index=False))
+    logging.info(worst.to_string(index=False))
 
     #save to summary uncomment if needed   
     if save_path is not None:
       df_errors.to_csv(save_path, index=False)
-      print("f\n prediction errors summary saved to: {save_path}")
+      logging.debug(f"\n prediction errors summary saved to: {save_path}")
     return df_errors, metrics
 
 
@@ -305,9 +322,6 @@ def plot_coefficients_comparison(
     labels : tuple
         Labels for the models (model_1, model_2).
     """
-    import matplotlib.pyplot as plt
-    import numpy as np
-    import pandas as pd
 
     # Check alignment
     if len(subfactor_names) != len(model_1.coef_):
@@ -361,28 +375,38 @@ def fit_model_and_analyze(
   subactors: list
   y_col: str
   save_prefix: str for filename
+  
+    Saves only 3 files per model:
+    1. *_coefficients.png - Visual bar chart of coefficients
+    2. *_errors.csv - Individual agent predictions and errors
+    3. *_stats.txt - Complete statistical summary (coefficients, p-values, R², etc.)
 
   """
 
   # model 1
-
+  
+  # debug 
+  logging.info("we started the fit and analyze model")
+  
   x1 = df_input[subfactors]
   y1 = df_input[y_col]
   
+  
+  ### SK LEARNN FIT
   # fit the linear regression
-  model1 = LinearRegression()
-  model1.fit(x1, y1)
+  model1_sklearn = LinearRegression()
+  model1_sklearn.fit(x1, y1)
 
   # coefficient plot
   plot_coefficients(
-    model1,
+    model1_sklearn,
     title=f"{model_name} - subfactor importance",
     save_path=f"{save_prefix}_{model_name}_coefficients.png"
   )
 
   # prediction errors calculation
   df_errors1, metrics1 = prediction_errors(
-    model1,
+    model1_sklearn,
     x1,
     y_actual=y1,
     df_source=df_input,
@@ -392,37 +416,73 @@ def fit_model_and_analyze(
     pro_reduction_col=pro_reduction_col,
     save_path=f"{save_prefix}_{model_name}_errors.csv"
   )
+  
+  ### fit with stats models (same regression with more output)
+  x1_with_const = sm.add_constant(x1)
+  model1_stats = sm.OLS(y1, x1_with_const)
+  results1 = model1_stats.fit()
+  
+  ### stats print in console
+  logging.info(f"stat summary {model_name}")
+  logging.info(results1.summary())
+  
+  ### file save independent of others (_stats.txt)
+  stats_path = f"{save_prefix}_{model_name}_stats.txt"
+  with open(stats_path, 'w') as f:
+        f.write(results1.summary().as_text())
+  logging.debug(f"✓ Complete statistics saved to: {stats_path}")
 
   # Model 2 given multi model comparison
   if df_input2 is not None and model_name2 is not None:
     x2 = df_input2[subfactors]
     y2 = df_input2[y_col]
-    model2 = LinearRegression()
-    model2.fit(x2, y2)
+    
+    ### SKLEARN fit
+    model2_sklearn = LinearRegression()
+    model2_sklearn.fit(x2, y2)
+    
 
     plot_coefficients_comparison(
-        model1,
-        model2,
+        model1_sklearn,
+        model2_sklearn,
         title=f"{model_name} vs {model_name2} subfactor coefficients",
         save_path=f"{save_prefix}_{model_name}_vs_{model_name2}_coefficients.png",
         labels=(model_name, model_name2)
     )
 
     df_errors2, metrics2 = prediction_errors(
-        model2, x2, y_actual=y2, df_source=df_input2,
+        model2_sklearn, x2, y_actual=y2, df_source=df_input2,
         agent_id_col=agent_id_col, debate_id_col=debate_id_col,
         condition_col=condition_col, pro_reduction_col=pro_reduction_col,
         save_path=f"{save_prefix}_{model_name2}_errors.csv"
     )
+    
+    ### fit with STATSMODELS
+    x2_with_const = sm.add_constant(x2)
+    model2_stats = sm.OLS(y2, x2_with_const)
+    results2 = model2_stats.fit()
+    
+    ### stats print in console
+    logging.info(f"stat summary {model_name}")
+    logging.info(results2.summary())
+    
+    
+     ### file save independent of others (_stats.txt)
+    stats_path2 = f"{save_prefix}_{model_name2}_stats.txt"
+    with open(stats_path2, 'w') as f:
+        f.write(results2.summary().as_text())
+    logging.debug(f"stats summary complete to {stats_path2}")
+    
 
-    return (model1, df_errors1, metrics1, model2, df_errors2, metrics2)
+    return (model1_sklearn, df_errors1, metrics1, results1,
+            model2_sklearn, df_errors2, metrics2, results2)
 
 
-  return (model1, df_errors1, metrics1)
+  return (model1_sklearn, df_errors1, metrics1, results1)
 
 ##### MODEL DECLA TEST###
 ## df without control (hetero and homo combined)
-global_wo_control, df_errors_global_wocontrol, metrics_glob = fit_model_and_analyze(
+global_wo_control, df_errors_global_wocontrol, metrics_glob, stats_results = fit_model_and_analyze(
     df_input = df_wo_control.copy(),
     model_name= "Global without control",
     save_prefix= "global"    

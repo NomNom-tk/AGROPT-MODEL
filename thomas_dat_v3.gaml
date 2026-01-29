@@ -169,36 +169,37 @@ global {
         write "Column indices found";
         
         // Detailed error reporting
-if idx_id_group = -1 {
-    write "ERROR: Column 'ID_Group_all' not found!";
-    write "Available columns: " + headers;
-    return;
-}
-if idx_id = -1 {
-    write "ERROR: Column 'ID' not found!";
-    write "Available columns: " + headers;
-    return;
-}
-if idx_db_t1 = -1 {
-    write "ERROR: Column 'DB_IndexT1' not found!";
-    write "Available columns: " + headers;
-    return;
-}
-if idx_db_t2 = -1 {
-    write "ERROR: Column 'DB_IndexT2' not found!";
-    write "Available columns: " + headers;
-    return;
-}
-if idx_condition = -1 {
-    write "ERROR: Column 'Condition' not found!";
-    write "Available columns: " + headers;
-    return;
-}
-if idx_pro_reduction = -1 {
-    write "ERROR: Column 'Pro_reduction' not found!";
-    write "Available columns: " + headers;
-    return;
-}
+        /////// FIX this
+        if idx_id_group = -1 {
+            write "ERROR: Column 'ID_Group_all' not found!";
+            write "Available columns: " + headers;
+        return;
+        }
+        if idx_id = -1 {
+            write "ERROR: Column 'ID' not found!";
+            write "Available columns: " + headers;
+        return;
+        }
+        if idx_db_t1 = -1 {
+            write "ERROR: Column 'DB_IndexT1' not found!";
+            write "Available columns: " + headers;
+        return;
+        }
+        if idx_db_t2 = -1 {
+            write "ERROR: Column 'DB_IndexT2' not found!";
+            write "Available columns: " + headers;
+        return;
+        }
+        if idx_condition = -1 {
+            write "ERROR: Column 'Condition' not found!";
+            write "Available columns: " + headers;
+        return;
+        }
+        if idx_pro_reduction = -1 {
+            write "ERROR: Column 'Pro_reduction' not found!";
+            write "Available columns: " + headers;
+        return;
+        }
         
        ///if idx_id_group = -1 or idx_id = -1 or idx_db_t1 = -1 or idx_db_t2 = -1 or 
    	   //idx_condition = -1 or idx_pro_reduction = -1 {
@@ -212,7 +213,7 @@ if idx_pro_reduction = -1 {
                 write "ERROR: Subfactor " + (i+1) + " column not found!";
                 return;
     	    }
-	}
+    }
         
         // update max_idx to include subfactor indices
         list<int> all_indices <- [idx_id_group, idx_id, idx_db_t1, idx_db_t2, idx_condition, idx_pro_reduction];	  
@@ -223,89 +224,58 @@ if idx_pro_reduction = -1 {
         int skipped_rows <- 0;
         int processed_rows <- 0;
         
-        loop i from: 1 to: length(all_lines) - 1 {
-            string line <- all_lines[i];
-            
-            if length(line) < 10 {
-                skipped_rows <- skipped_rows + 1;
-                continue;
-            }
-            
-            // Parse line inline
-            list<string> row <- [];
-            current <- "";
-            
-            loop j from: 0 to: length(line) - 1 {
-                string char <- copy_between(line, j, j + 1);
-                if char = "," {
-                    row << current;
-                    current <- "";
-                } else {
-                    current <- current + char;
-                }
-            }
-            row << current;
-            
-            if length(row) > max_idx {
-                id_group_raw << string(row[idx_id_group]);
-                agent_id_list << int(row[idx_id]);
-                
-                float raw_t1 <- float(row[idx_db_t1]);
-                float raw_t2 <- float(row[idx_db_t2]);
-                initial_attitude_list << (raw_t1 + 6.0) / 12.0;
-                final_attitude_list << (raw_t2 + 6.0) / 12.0;
-                
-                group_type_list << string(row[idx_condition]);
-                pro_reduction_list << int(row[idx_pro_reduction]);
-                
-                // Parse subfactors using loop
-		loop j from: 0 to: 4 {
-    		    float t1_val <- (float(row[idx_sub_t1[j]]) + 6.0) / 12.0;
-    		    float t2_val <- (float(row[idx_sub_t2[j]]) + 6.0) / 12.0;
+        // Parse data from CSV matrix
+    loop row_idx from: 0 to: data_matrix.rows - 1 {
+        // Get row data
+        id_group_raw << string(data_matrix[idx_id_group, row_idx]);
+        agent_id_list << int(data_matrix[idx_id, row_idx]);
     
-    		// Append to appropriate list based on index
-    		    if j = 0 {
-        		subfactor_1_t1_list << t1_val;
-        		subfactor_1_t2_list << t2_val;
-    		    } else if j = 1 {
-        		subfactor_2_t1_list << t1_val;
-        		subfactor_2_t2_list << t2_val;
-    		    } else if j = 2 {
-        		subfactor_3_t1_list << t1_val;
-        		subfactor_3_t2_list << t2_val;
-    		    } else if j = 3 {
-        		subfactor_4_t1_list << t1_val;
-        		subfactor_4_t2_list << t2_val;
-    		    } else if j = 4 {
-        		subfactor_5_t1_list << t1_val;
-        		subfactor_5_t2_list << t2_val;
-    		    }
-		}
-                
-                processed_rows <- processed_rows + 1;
-            } else {
-                skipped_rows <- skipped_rows + 1;
+        float raw_t1 <- float(data_matrix[idx_db_t1, row_idx]);
+        float raw_t2 <- float(data_matrix[idx_db_t2, row_idx]);
+        initial_attitude_list << (raw_t1 + 6.0) / 12.0;
+        final_attitude_list << (raw_t2 + 6.0) / 12.0;
+    
+        group_type_list << string(data_matrix[idx_condition, row_idx]);
+        pro_reduction_list << int(data_matrix[idx_pro_reduction, row_idx]);
+    
+        // Parse subfactors using loop
+        loop j from: 0 to: 4 {
+            float t1_val <- (float(data_matrix[idx_sub_t1[j], row_idx]) + 6.0) / 12.0;
+            float t2_val <- (float(data_matrix[idx_sub_t2[j], row_idx]) + 6.0) / 12.0;
+        
+            // Append to appropriate list based on index
+            if j = 0 {
+                subfactor_1_t1_list << t1_val;
+                subfactor_1_t2_list << t2_val;
+            } else if j = 1 {
+                subfactor_2_t1_list << t1_val;
+                subfactor_2_t2_list << t2_val;
+            } else if j = 2 {
+                subfactor_3_t1_list << t1_val;
+                subfactor_3_t2_list << t2_val;
+            } else if j = 3 {
+                subfactor_4_t1_list << t1_val;
+                subfactor_4_t2_list << t2_val;
+            } else if j = 4 {
+                subfactor_5_t1_list << t1_val;
+                subfactor_5_t2_list << t2_val;
             }
-        }
+        }   
+    }
+
+write "Successfully loaded " + length(agent_id_list) + " agents";
         
-        write "Processed rows: " + processed_rows;
-        write "Skipped rows: " + skipped_rows;
-        write "Successfully loaded " + length(agent_id_list) + " agents";
-        
-        // FILTER OUT CORRUPTED DATA
-        write "=== FILTERING CORRUPTED DATA ===";
+        // Keep all data
+        write "=== Processing data (including control agents) ===";
         int original_count <- length(id_group_raw);
         
         list<int> valid_indices <- [];
         loop i from: 0 to: length(id_group_raw) - 1 {
-            string group_id <- id_group_raw[i];
-            string first_char <- copy_between(group_id, 0, 1);
-            if first_char in ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", 
-                              "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"] {
-                valid_indices << i;
-            }
+            valid_indices << i;
         }
         
+        write "Total agents to process: " + length(valid_indices);
+
         // Filter all lists
         list<string> filtered_id_group <- [];
         list<int> filtered_agent_id <- [];
@@ -347,9 +317,7 @@ if idx_pro_reduction = -1 {
             filtered_sub2_t2 << subfactor_2_t2_list[idx];
             filtered_sub3_t2 << subfactor_3_t2_list[idx];
             filtered_sub4_t2 << subfactor_4_t2_list[idx];
-            filtered_sub5_t2 << subfactor_5_t2_list[idx];
-            
-            
+            filtered_sub5_t2 << subfactor_5_t2_list[idx];    
         }
         
         // Replace original lists
@@ -375,19 +343,36 @@ if idx_pro_reduction = -1 {
         
         write "Filtered from " + original_count + " to " + length(id_group_raw) + " valid agents";
         
-        // Create debate_id mapping
+        // Create debate_id mapping (including control as individual debates)
         debate_id_list <- [];
         map<string, int> group_to_id <- map([]);
         int next_id <- 1;
         
-        loop id_group over: id_group_raw {
-            if not (group_to_id.keys contains id_group) {
-                group_to_id[id_group] <- next_id;
-                next_id <- next_id + 1;
+        loop i from: 0 to: length(id_group_raw) -1 {
+            string id_group <- id_group_raw[i];
+            string condition <- group_type_list[i];
+
+            // control agents: each gets a unique debate_id
+            if condition = "Control" {
+                string unique_control_id <- "Control_" + agent_id_list[i];
+                if not (group_to_id.keys contains unique_control_id) {
+                    group_to_id[unique_control_id] <- next_id;
+                    next_id <- next_id + 1;
+                }
+                debate_id_list << group_to_id[unique_control_id];
             }
-            debate_id_list << group_to_id[id_group];
+            // regular groups: using ID_Group_all
+            else {
+                if not (group_to_id.keys contains id_group) {
+                    group_to_id[id_group] <- next_id;
+                    next_id <- next_id + 1;
+                }
+                debate_id_list << group_to_id[id_group];
+            }
         }
-        
+
+        write "Total debates (including " + (opinion_agent count (each.group_type = "Control")) + " control agents): " + length(remove_duplicates(debate_id_list));
+
         // Find unique debates
         list<int> unique_debates <- remove_duplicates(debate_id_list);
         write "Found " + length(unique_debates) + " unique debates";
@@ -884,6 +869,11 @@ species opinion_agent {
     float subfactor_5_t2;
     
     // Consensus formation
+    // agent opinion steps: ALL agents use same set of opinions and everyone hears everyone at once
+    // i) all agents calculate new opinion based on ALL neighbors
+    // ii) agent takes all opinions -> 
+    // iii)(ALL agents simulataneously) calculates mean of all opinions -> 
+    // new opinion = previous_opinion + convergence_rate * (mean opinion - previous_opinion)
     reflex consensus_formation when: model_type = "consensus" {
         if length(neighbors) > 0 {
             previous_opinion <- opinion;

@@ -28,3 +28,8 @@ structure (in gama there is no compartmentalization of global variables, loads i
 ---gui_exp.gaml // gui experiment for debug and testing
 ---batch_experiments.gaml // batch experiments and parameter searching
 
+- had to restructure code because of GAMA limitations
+- arrived at a more simple structure and need to modify the data_loader file, create a wrapper to make it a species then introduce into the main model
+- will work on the weekend to resolve this bug
+
+

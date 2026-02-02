@@ -32,4 +32,16 @@ structure (in gama there is no compartmentalization of global variables, loads i
 - arrived at a more simple structure and need to modify the data_loader file, create a wrapper to make it a species then introduce into the main model
 - will work on the weekend to resolve this bug
 
-
+## 2/2/26
+- TODO
+    - work on GAMA debug wrapper
+    - continue to develop hypotheses for protocol (see if you can finish writing a first draft)
+- started by debugging and testing wrapper for data loader
+- managed to get the file somewhat working (issue with data headers not being acessible)
+- switch to protocol work
+- finished hypotheses and expected results
+- switched back to debugging -> got the file to work besides the ID_Group_all column
+- tested multiple different methods of parsing (manual and forced conversion / built in parser) DID NOT WORK
+    - update: changed value in file text_data to false (from true) -> detected and correctly loaded headers and agents
+    - index out of bounds issue
+    - 

@@ -127,4 +127,5 @@
             + difference between control and debate MAE - potentially the effect of discussion
     + improvement: one speaker and all receive this information (could promote more realistic dynamics)
         + ask Patrick → send summary message of discussion and suggest meeting
-        + 
+     
+

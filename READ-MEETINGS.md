@@ -128,4 +128,22 @@
     + improvement: one speaker and all receive this information (could promote more realistic dynamics)
         + ask Patrick → send summary message of discussion and suggest meeting
      
+# RDV Nicolas et Julien 29/1
+- Thomas a résumé les progrès sur son article
+- Nicolas résumé et discussion vis a vis du modèle de prise de parole sur GAMA → commencer a integrer ceci
 
+# RDV Nicolas 3/2/26
+- the progress i am making so far is just fine and positive!
+    - my suggestions and critical thinking is great
+- medium term in the lab
+    - i would be the reference in the lab for simulation so do not hesitate to ask as many questions as possible
+    - 1-2 weeks in Toulouse to work with Patrick (rediscuss all together)
+- Complex Systems conference on gama google groups
+- to discuss tomorrow
+    - more in depth gama learning
+    - want to interact with the gama community (researchers / thesis students)
+    - Do not hesitate to ask questions!
+- GAMA code for speaking -> 1 person speaks, all listen and aggregate their opinion from speaking opinion (and neighbors?)
+- OSF
+    - start filling out protocol in OSF
+    - important "hypotheses, method and how do we evaluate the results"

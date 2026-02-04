@@ -44,4 +44,10 @@ structure (in gama there is no compartmentalization of global variables, loads i
 - tested multiple different methods of parsing (manual and forced conversion / built in parser) DID NOT WORK
     - update: changed value in file text_data to false (from true) -> detected and correctly loaded headers and agents
     - index out of bounds issue
-    - 
+    - managed to correct the parsing and data_loader
+
+## 4/2/26
+- started with GAMA debugging for index problems
+- fixed it by initializing weights (section hierarchy) before initializing agents for the debate in the init section
+- continued to work on protocol after lunch
+- 

@@ -52,3 +52,10 @@ structure (in gama there is no compartmentalization of global variables, loads i
 - continued to work on protocol after lunch
 - met with Nicolas and Patrick – talked about future project and current protocol idea
 - continued to restructure introduction and reformat hypotheses
+
+## 5/2/26
+- started with GAMA debug post meeting with Nicolas, Thomas and Julien
+- proceeded to work on protocol, specification of hypotheses and continued work on the introduction regarding deliberation and justification for its use in the meat redution context
+- spent a good 2 hours on setting up Julien's imac with ubuntu and repairing broadcom wifi drivers and kernel (6.17....)
+- ended by thinking about structure for hypotheses and rationale leading into it
+- 

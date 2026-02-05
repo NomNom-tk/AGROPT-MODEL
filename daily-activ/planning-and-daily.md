@@ -50,4 +50,5 @@ structure (in gama there is no compartmentalization of global variables, loads i
 - started with GAMA debugging for index problems
 - fixed it by initializing weights (section hierarchy) before initializing agents for the debate in the init section
 - continued to work on protocol after lunch
-- 
+- met with Nicolas and Patrick – talked about future project and current protocol idea
+- continued to restructure introduction and reformat hypotheses

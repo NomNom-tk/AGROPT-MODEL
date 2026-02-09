@@ -1,4 +1,4 @@
-# meant to organize what i do each day to stay accountable
+u# meant to organize what i do each day to stay accountable
 
 ## 29/1/26
 - meeting with Nicolas, Thomas, and Julien
@@ -58,4 +58,9 @@ structure (in gama there is no compartmentalization of global variables, loads i
 - proceeded to work on protocol, specification of hypotheses and continued work on the introduction regarding deliberation and justification for its use in the meat redution context
 - spent a good 2 hours on setting up Julien's imac with ubuntu and repairing broadcom wifi drivers and kernel (6.17....)
 - ended by thinking about structure for hypotheses and rationale leading into it
-- 
+
+## 9/2/26
+- started work with hypotheses elaboration and answering emails for the first 15 minutes
+- continued working on the protocol / finished hypothesis desription and continued justification
+- referenced most of the protocol → thought about doxyge like plugin for documentation of GAMA
+- final need to write ABM implementation for protocol

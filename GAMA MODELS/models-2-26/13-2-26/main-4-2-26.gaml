@@ -4,8 +4,6 @@ model opinion_dynamics_main
 
 import "actions/data_loader (copy).gaml" // reads csv, parsers and fill raw data lists (declared in global)
 import "species/opinion_agent.gaml" // import opinion agent species
-import "experiments/gui_experiments.gaml" // gui mode experiments
-import "experiments/batch_experiments.gaml" // batch experiments for param optimization
 
 global {
     // DATA IMPORT

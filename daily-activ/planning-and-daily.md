@@ -64,3 +64,35 @@ structure (in gama there is no compartmentalization of global variables, loads i
 - continued working on the protocol / finished hypothesis desription and continued justification
 - referenced most of the protocol → thought about doxyge like plugin for documentation of GAMA
 - final need to write ABM implementation for protocol
+
+## 10/2/26
+- meeting with Nicolas regarding protocol advances
+- continued working on the ABM implementation and refining of hypotheses
+- started a structure of the model (i.e. identifying which parts interact with what and how)
+- defined questions to ask the researchers in meeting on the 11th of feb
+
+# 11/2/26
+- meeting with researchers (Arthur, Kevin) and Patrick and Nicolas
+- discussed model calibration and how to achieve this (need to think about more in depth questions regarding model assumptions)
+- assumption that all agents are homogeneous and only interact based on model dynamics is NOT REALISTIC
+- look into how agents can be heterogeneous (i.e. different agent profiles, for example a superspreader in the context of covid / a pioneer that draws people in and polarizes opinions)
+- before running batch in a headless environment, test with a gui experiment and run robustness checks
+- think about the fixed time increment (is it fixed where agents interact in each step or not)
+- could all parameters except 1 (and vary it among agents)
+- send protocol and github issue reporting link
+- look into how to allow GAMA to use more ram (possibly fresh install) // separate workspace from git uploads (already done)
+- Do we really have time to reach a consensus in the context of the debate (i.e., given they are all about an hour long)?
+
+# 12/2/26
+- started work by filling out the elements of model checklist
+- did not finish but steadily working on it
+- fresh install gama to check workspace issue
+- not resolved
+- meeting with Nicolas, Thomas and Julien after team meeting
+    - discussed the need for argumentation classification logic
+
+# 13/2/26
+- started by filling in model elements
+- clarified inputs for agents: DBFactor 1-5 @ T1
+- DB Index @ T1 = mean(Factor 1 & 2) - mean (Factor 3,4,5)
+- 

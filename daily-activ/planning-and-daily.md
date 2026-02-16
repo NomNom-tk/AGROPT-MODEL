@@ -95,4 +95,11 @@ structure (in gama there is no compartmentalization of global variables, loads i
 - started by filling in model elements
 - clarified inputs for agents: DBFactor 1-5 @ T1
 - DB Index @ T1 = mean(Factor 1 & 2) - mean (Factor 3,4,5)
+- met with Patrick in the afternoon to clarify calibration strategy and how to set up experiments correctly
+
+# 16/2/26
+- started by organising git repo
+    - main: actual and correct working code
+    - dev: exploring and developed code but not ready yet
+    - research: all research and documentation files for protocol and future research
 - 

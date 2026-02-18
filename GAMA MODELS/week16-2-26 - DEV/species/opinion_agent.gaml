@@ -24,6 +24,14 @@ species opinion_agent {
     string group_type;                      // "Homogeneous", "Heterogeneous", "Control"
     float initial_opinion;                  // Starting opinion (computed from T1 subfactors)
     float final_attitude;                   // Target opinion (DB_IndexT2)
+
+    // ====
+    // Agent-level attributes (heterogeneous agents)
+    // ===
+    float agent_convergence_rate;
+    float agent_confidence_threshold;
+    float agent_repulsion_threshold;
+    float agent_repulsion_strength;
     
     // ========================================================================
     // SUBFACTOR STORAGE (T1 = initial, T2 = target)
@@ -53,7 +61,7 @@ species opinion_agent {
             // Average opinion including self
             list<float> all_opinions <- [opinion] + (neighbors collect each.opinion);
             float new_opinion <- mean(all_opinions);
-            opinion <- max([0.0, min([1.0, opinion + convergence_rate * (new_opinion - opinion)])]); // bounds creation
+            opinion <- max([0.0, min([1.0, opinion + agent_convergence_rate * (new_opinion - opinion)])]); // bounds creation
             
             // Update color (blue=0, red=1)
             color <- rgb(opinion * 255, 0, (1 - opinion) * 255); // standardized color scheme
@@ -71,13 +79,13 @@ species opinion_agent {
             
             // Filter neighbors within confidence threshold
             list<opinion_agent> similar_neighbors <- neighbors where (
-                abs(each.opinion - self.opinion) <= confidence_threshold
+                abs(each.opinion - self.opinion) <= agent_confidence_threshold
             );
             
             if length(similar_neighbors) > 0 {
                 list<float> similar_opinions <- similar_neighbors collect each.opinion;
                 float avg_similar <- mean(similar_opinions);
-                opinion <- max([0.0, min([1.0, opinion + convergence_rate * (avg_similar - opinion)])]); // bounds creation
+                opinion <- max([0.0, min([1.0, opinion + agent_convergence_rate * (avg_similar - opinion)])]); // bounds creation
                 color <- rgb(opinion * 255, 0, (1 - opinion) * 255); // standardized color scheme
             }
         }
@@ -102,13 +110,13 @@ species opinion_agent {
             loop neighbor over: neighbors {
                 float difference <- abs(neighbor.opinion - self.opinion);
                 
-                if difference <= confidence_threshold {
+                if difference <= agent_confidence_threshold {
                     // ATTRACTION: Move toward similar neighbors
                     attraction_force <- attraction_force + (neighbor.opinion - self.opinion);
                     attractive_count <- attractive_count + 1;
                     total_attractive_interactions <- total_attractive_interactions + 1;
                 }
-                else if difference >= repulsion_threshold {
+                else if difference >= agent_repulsion_threshold {
                     // REPULSION: Move away from dissimilar neighbors
                     float direction <- neighbor.opinion > self.opinion ? -1.0 : 1.0;
                     repulsion_force <- repulsion_force + direction;
@@ -124,10 +132,10 @@ species opinion_agent {
             // Apply combined forces
             float opinion_change <- 0.0;
             if attractive_count > 0 {
-                opinion_change <- opinion_change + convergence_rate * (attraction_force / attractive_count);
+                opinion_change <- opinion_change + agent_convergence_rate * (attraction_force / attractive_count);
             }
             if repulsive_count > 0 {
-                opinion_change <- opinion_change + repulsion_strength * (repulsion_force / repulsive_count);
+                opinion_change <- opinion_change + agent_repulsion_strength * (repulsion_force / repulsive_count);
             }
             
             // Update opinion (clamped to [0,1])

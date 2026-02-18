@@ -18,17 +18,6 @@ global {
     // Efficient storage: subfactors_t1[0..4][row_index] for 5 subfactors
     list<list<float>> subfactors_t1;        // Initial subfactor values (T1)
     list<list<float>> subfactors_t2;        // Target subfactor values (T2)
-    
-    // SUBFACTOR WEIGHTS (experimental parameters)
-    // These weights determine the contribution of each subfactor to initial opinion
-    /// NOT USED GIVEN ATTITUDE CALC EQUATION
-    /*/ NOTE: Weights are automatically normalized (sum doesn't need to equal 1.0)
-    float weight_subfactor_1 <- 0.2 min: 0.0 max: 1.0;
-    float weight_subfactor_2 <- 0.2 min: 0.0 max: 1.0;
-    float weight_subfactor_3 <- 0.2 min: 0.0 max: 1.0;
-    float weight_subfactor_4 <- 0.2 min: 0.0 max: 1.0;
-    float weight_subfactor_5 <- 0.2 min: 0.0 max: 1.0;
-    */
 
     // Helper list for easier computation (populated in init)
     list<float> weights <- [];
@@ -75,7 +64,13 @@ global {
     float confidence_threshold <- 0.5 min: 0.0 max: 1.0;    // ε: Similarity for attraction
     float repulsion_threshold <- 0.6 min: 0.0 max: 1.0;     // Dissimilarity for repulsion
     float repulsion_strength <- 0.1 min: 0.0 max: 0.5;      // Strength of repulsive force
-    
+
+    // opinion dynamics parameters Extension
+    float convergence_rate_sd <- 0.05 min: 0.0 max: 0.2;
+    float confidence_threshold_sd <- 0.1 min: 0.0 max: 0.3;
+    float repulsion_threshold_sd <- 0.1 min: 0.0 max: 0.3;
+    float repulsion_strength_sd <- 0.05 min: 0.0 max: 0.2;
+
     // RESULTS & ANALYSIS
     float mae <- 0.0;                       // Mean Absolute Error (global)
     map<int, float> mae_per_debate <- map<int, float>(map([]));
@@ -284,9 +279,24 @@ global {
                     subfactor_3_t2 <- subfactors_t2[2][idx];
                     subfactor_4_t2 <- subfactors_t2[3][idx];
                     subfactor_5_t2 <- subfactors_t2[4][idx];
+
+                    // Agent level parameter sampling
+                    agent_convergence_rate <- max([0.01, min([0.99,
+                        gauss(convergence_rate, convergence_rate_sd)
+                    ])]);
+
+                    agent_confidence_threshold <- max([0.01, min([0.99,
+                        gauss(confidence_threshold, confidence_threshold_sd)
+                    ])]);
+
+                    agent_repulsion_strength <- max([0.01, min([0.99,
+                        gauss(repulsion_strength, repulsion_strength_sd)
+                    ])]);
+
+                    agent_repulsion_threshold <- max([0.01, min([0.99,
+                        gauss(repulsion_threshold, repulsion_threshold_sd)
+                    ])]);
                     
-                    ///// NEED to fix, currently does not correclty calculate weight 
-                    ///// does not corroborate with DB_IndexT1 so chosen to simply use DB_IndexT1
                     // COMPUTE INITIAL OPINION FROM WEIGHTED SUBFACTORS
                     // use DB_index formula mean(F1,F2) - mean(F3,F4,F5)
                     float pro_mean <- (subfactor_1_t1 + subfactor_2_t1) / 2.0;
@@ -314,6 +324,15 @@ global {
                     // Color based on opinion (blue=0, red=1)
                     color <- rgb(opinion * 255, 0, (1 - opinion) * 255);
                 }
+
+                write "=== AGENT PARAMETER DISTRIBUTION CHECK ===";
+                list<float> agent_conv_rates <- opinion_agent collect each.agent_convergence_rate;
+                write "Convergence rate - Mean: " + mean(agent_conv_rates) + 
+                      ", SD: " + standard_deviation(agent_conv_rates) +
+                      ", Min: " + min(agent_conv_rates) +
+                      ", Max: " + max(agent_conv_rates);
+                write "Target mean: " + convergence_rate + ", Target SD: " + convergence_rate_sd;
+
             }
         }
         
@@ -525,7 +544,7 @@ global {
         ask opinion_agent {
             float net_repulsion <- 0.0;
             loop n over: neighbors {
-                if abs(n.opinion - opinion) >= repulsion_threshold {
+                if abs(n.opinion - opinion) >= agent_repulsion_threshold {
                     net_repulsion <- net_repulsion + (n.opinion > opinion ? -1.0 : 1.0);
                 }
             }
@@ -662,9 +681,11 @@ global {
                 error_sub1, error_sub2, error_sub3, 
                 error_sub4, error_sub5,
                 
-                // Weights used REMOVED
-                //weight_subfactor_1, weight_subfactor_2, weight_subfactor_3, 
-                //weight_subfactor_4, weight_subfactor_5,
+                // agent-level parameters
+                ag.agent_convergence_rate,
+                ag.agent_confidence_threshold,
+                ag.agent_repulsion_threshold,
+                ag.agent_repulsion_strength,
                 
                 // Parameters
                 convergence_rate,

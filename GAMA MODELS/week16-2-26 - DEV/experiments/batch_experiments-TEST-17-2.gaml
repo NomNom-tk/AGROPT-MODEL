@@ -60,6 +60,12 @@ experiment Batch_consensus_gen type: batch repeat: 30 keep_seed: true until: end
     parameter "Confidence Threshold" var: confidence_threshold among: [0.2, 0.4, 0.5, 0.6, 0.8];
     parameter "Repulsion Threshold" var: repulsion_threshold among: [0.0, 0.2, 0.5, 0.6, 0.8];
     parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3];
+
+    // agent-level parameters
+    parameter "SD Convergence Rate" var: convergence_rate_sd among: [0.0, 0.05, 0.1, 0.2];
+    parameter "SD Confidence Threshold" var: confidence_threshold_sd among: [0.0, 0.1, 0.2, 0.3];
+    parameter "SD Repulsion Threshold" var: repulsion_threshold_sd among: [0.0, 0.1, 0.2, 0.3];
+    parameter "SD Repulsion Strength" var: repulsion_strength_sd among: [0.0, 0.05, 0.1, 0.2];
     
     method genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
     nb_prelim_gen: 5 max_gen: 2;
@@ -79,7 +85,13 @@ experiment Batch_clustering_gen type: batch repeat: 30 keep_seed: true until: en
     // parameter "Repulsion Threshold" var: repulsion_threshold among: [0.0, 0.2, 0.5, 0.6, 0.8]; -- not relevant for clustering
     // parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3]; -- not relevant for clustering
 
-    method: genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
+    // agent-level parameters
+    parameter "SD Convergence Rate" var: convergence_rate_sd among: [0.0, 0.05, 0.1, 0.2];
+    parameter "SD Confidence Threshold" var: confidence_threshold_sd among: [0.0, 0.1, 0.2, 0.3];
+    //parameter "SD Repulsion Threshold" var: repulsion_threshold_sd among: [0.0, 0.1, 0.2, 0.3];
+    //parameter "SD Repulsion Strength" var: repulsion_strength_sd among: [0.0, 0.05, 0.1, 0.2];
+
+    method genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
     nb_prelim_gen: 5 max_gen: 5;
 
     init {
@@ -98,8 +110,14 @@ experiment Batch_bipolarization_gen type: batch repeat: 30 keep_seed: true until
     parameter "Repulsion Threshold" var: repulsion_threshold among: [0.4, 0.5, 0.6, 0.7, 0.8];
     parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3];
 
-    method: genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
-    nb_prelim_gen: 5 max_gen: 5
+    // agent-level parameters
+    parameter "SD Convergence Rate" var: convergence_rate_sd among: [0.0, 0.05, 0.1, 0.2];
+    parameter "SD Confidence Threshold" var: confidence_threshold_sd among: [0.0, 0.1, 0.2, 0.3];
+    parameter "SD Repulsion Threshold" var: repulsion_threshold_sd among: [0.0, 0.1, 0.2, 0.3];
+    parameter "SD Repulsion Strength" var: repulsion_strength_sd among: [0.0, 0.05, 0.1, 0.2];
+
+    method genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
+    nb_prelim_gen: 5 max_gen: 5;
    
     init {
         mode_batch <- true;

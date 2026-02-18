@@ -103,3 +103,18 @@ structure (in gama there is no compartmentalization of global variables, loads i
     - dev: exploring and developed code but not ready yet
     - research: all research and documentation files for protocol and future research
 - 
+
+# 17/2/26
+- worked on GAMA model and deconstructing the code
+- ran GA for consensus and quick analysis
+
+# 18/2/26
+- travel itinerary for Melanie and Nicolas
+- started with GAMA GA for clustering and bipolarization
+- analyzed using claude and then using R
+- thinking about how to implement agent profiles using agent-specific parameters for each social influence model
+-- started a bug and leanring journal for GAMA
+--- implemented agent level parameter sampling from global parameter distributions (changes in opinion_agent, batch_exp and main)
+
+
+

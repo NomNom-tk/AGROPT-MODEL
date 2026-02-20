@@ -2,7 +2,7 @@
 
 model batch_exp
 
-import "../main-16-2-26.gaml" // relative path back to main
+import "../main-16-2-26-homophily fix.gaml" // relative path back to main
 
 
 // BATCH EXPERIMENTS: EXHAUSTIVE SEARCH
@@ -53,13 +53,16 @@ experiment Batch_bipolarization_exh type: batch repeat: 2 keep_seed: true until:
 
 // BATCH EXPERIMENTS: GENETIC ALGORITHM
 
-// Batch Consensus (Genetic)
+// Batch Consensus (Genetic) NEW IWTH HOMOPHILY
 experiment Batch_consensus_gen type: batch repeat: 30 keep_seed: true until: end_simulation {
     parameter "Selected debate id" var: selected_debate_id min: 1 max: 55 step: 1;
     parameter "Convergence Rate" var: convergence_rate among: [0.1, 0.2, 0.3, 0.5];
     parameter "Confidence Threshold" var: confidence_threshold among: [0.2, 0.4, 0.5, 0.6, 0.8];
     parameter "Repulsion Threshold" var: repulsion_threshold among: [0.0, 0.2, 0.5, 0.6, 0.8];
     parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3];
+
+    // homophily parameter
+    parameter "Homophily Strength" var: homophily_strength among: [0.0, 0.3, 0.5, 0.7, 1.0];
 
     // agent-level parameters
     parameter "SD Convergence Rate" var: convergence_rate_sd among: [0.0, 0.05, 0.1, 0.2];
@@ -85,6 +88,9 @@ experiment Batch_clustering_gen type: batch repeat: 30 keep_seed: true until: en
     // parameter "Repulsion Threshold" var: repulsion_threshold among: [0.0, 0.2, 0.5, 0.6, 0.8]; -- not relevant for clustering
     // parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3]; -- not relevant for clustering
 
+    // homophily parameter
+    parameter "Homophily Strength" var: homophily_strength among: [0.0, 0.3, 0.5, 0.7, 1.0];
+
     // agent-level parameters
     parameter "SD Convergence Rate" var: convergence_rate_sd among: [0.0, 0.05, 0.1, 0.2];
     parameter "SD Confidence Threshold" var: confidence_threshold_sd among: [0.0, 0.1, 0.2, 0.3];
@@ -109,6 +115,9 @@ experiment Batch_bipolarization_gen type: batch repeat: 30 keep_seed: true until
     parameter "Confidence Threshold" var: confidence_threshold among: [0.2, 0.3, 0.4, 0.5];
     parameter "Repulsion Threshold" var: repulsion_threshold among: [0.4, 0.5, 0.6, 0.7, 0.8];
     parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3];
+
+    // homophily parameter
+    parameter "Homophily Strength" var: homophily_strength among: [0.0, 0.3, 0.5, 0.7, 1.0];
 
     // agent-level parameters
     parameter "SD Convergence Rate" var: convergence_rate_sd among: [0.0, 0.05, 0.1, 0.2];

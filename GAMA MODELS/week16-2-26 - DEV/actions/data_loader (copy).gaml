@@ -1,6 +1,6 @@
 model data_loader 
 
-import "../main-16-2-26.gaml"
+import "../main-16-2-26-homophily fix.gaml"
 
     global {
         /**

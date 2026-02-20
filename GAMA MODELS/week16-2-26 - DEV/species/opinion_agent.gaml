@@ -5,7 +5,7 @@
  
 model opinion_agent_species
 
-import "../main-16-2-26.gaml"
+import "../main-16-2-26-homophily fix.gaml"
 
 species opinion_agent {
     // ========================================================================

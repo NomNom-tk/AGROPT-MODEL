@@ -4,13 +4,14 @@
  */
 model gui_experiments
 
-import "../main-16-2-26.gaml"
+import "../main-16-2-26-homophily fix.gaml"
 
 experiment social_influence type: gui {
     parameter "Model Type" var: model_type category: "Model Selection";
     parameter "Selected Debate ID" var: selected_debate_id category: "Data";
-    parameter "Network Type" var: network_type category: "Network";
-    parameter "Connection Probability (random)" var: connection_probability category: "Network";
+    //parameter "Network Type" var: network_type category: "Network";
+    //parameter "Connection Probability (random)" var: connection_probability category: "Network";
+    parameter "Homophily Strength" var: homophily_strength category: "Network"; 
     parameter "Convergence Rate (μ)" var: convergence_rate category: "Opinion Dynamics";
     parameter "Confidence Threshold (ε)" var: confidence_threshold category: "Opinion Dynamics";
     parameter "Repulsion Threshold" var: repulsion_threshold category: "Opinion Dynamics";

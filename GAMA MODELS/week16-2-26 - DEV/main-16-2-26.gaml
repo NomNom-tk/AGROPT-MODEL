@@ -143,7 +143,7 @@ global {
         // CREATE DEBATE ID MAPPING
         // Control agents get unique IDs, others grouped by ID_Group_all
         debate_id_list <- [];
-        map<string, int> group_to_id <- map([]);
+        map<string, int> group_to_id <- map<string, int>(map([]));
         int next_id <- 1;
         
         loop i from: 0 to: length(id_group_raw) - 1 {

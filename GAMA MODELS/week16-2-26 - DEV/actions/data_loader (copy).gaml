@@ -166,8 +166,8 @@ import "../main-16-2-26-homophily fix.gaml"
             initial_attitude_list <- [];
             final_attitude_list <- [];
             pro_reduction_list <- [];
-            subfactors_t1 <- list_with(5, []);
-            subfactors_t2 <- list_with(5, []);
+            subfactors_t1 <- list<list<float>>(list_with(5, []));
+            subfactors_t2 <- list<list<float>>(list_with(5, []));
 
             // Parse data rows
             loop row_idx from: start_row to: data_matrix.rows - 1 {

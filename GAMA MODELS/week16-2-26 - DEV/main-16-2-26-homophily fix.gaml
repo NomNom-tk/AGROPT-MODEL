@@ -42,7 +42,7 @@ global {
     //string network_type <- "complete" among: ["complete", "random", "small_world"]; // replaced due to homophily implementation
     //float connection_probability <- 0.3 min: 0.0 max: 1.0;
     
-    float homophily_strength <- 0.5 min: 0 max: 1.0;
+    float homophily_strength <- 0.5 min: 0.0 max: 1.0;
 
 
     // Timing
@@ -82,67 +82,15 @@ global {
     // initialization ONLY for orchestration
     init {
     	// call data loader with file path parameter
-    	do load_csv_data("../data/data_complete_anonymised.csv");
+    	do load_csv_data("../../data+dictionary/data_complete_anonymised.csv");
     	
-    	// ✅ CHECK WHAT WAS ACTUALLY LOADED
-    	write "=== DATA LOADER VERIFICATION ===";
-    	write "agent_id_list length: " + length(agent_id_list);
-    	write "id_group_raw length: " + length(id_group_raw);
-    	write "subfactors_t1 length: " + length(subfactors_t1);
-    
-    	if length(subfactors_t1) > 0 {
-            write "subfactors_t1[0] length: " + length(subfactors_t1[0]);
-            write "subfactors_t1[1] length: " + length(subfactors_t1[1]);
-            write "subfactors_t1[2] length: " + length(subfactors_t1[2]);
-            write "subfactors_t1[3] length: " + length(subfactors_t1[3]);
-            write "subfactors_t1[4] length: " + length(subfactors_t1[4]);
-    	}
-    
-    	if length(subfactors_t2) > 0 {
-            write "subfactors_t2[0] length: " + length(subfactors_t2[0]);
-    	}
-    	
-    	//
-    	
-    	// check whether lists are populated so they can be used
-    	write "Loaded " + length(agent_id_list) + " agents";
 
-        // VALIDATION: Check if computed initial_opinion matches DB_IndexT1
-        write "=== VALIDATION CHECK ===";
-
-        loop i from: 0 to: min([10, length(agent_id_list)]) - 1 {
-            // Compute what initial opinion SHOULD be from subfactors
-            float f1 <- subfactors_t1[0][i];
-            float f2 <- subfactors_t1[1][i];
-            float f3 <- subfactors_t1[2][i];
-            float f4 <- subfactors_t1[3][i];
-            float f5 <- subfactors_t1[4][i];
-    
-            // Original formula (denormalized to [-6, +6])
-            float denorm_f1 <- f1 * 6.0 + 1.0;
-            float denorm_f2 <- f2 * 6.0 + 1.0;
-            float denorm_f3 <- f3 * 6.0 + 1.0;
-            float denorm_f4 <- f4 * 6.0 + 1.0;
-            float denorm_f5 <- f5 * 6.0 + 1.0;
-    
-            float computed_index <- (denorm_f1 + denorm_f2) / 2.0 - (denorm_f3 + denorm_f4 + denorm_f5) / 3.0;
-            float computed_normalized <- (computed_index + 6.0) / 12.0;
-    
-            float empirical_attitude <- initial_attitude_list[i];
-            float difference <- abs(computed_normalized - empirical_attitude);
-    
-            write "Agent " + i + ": computed=" + computed_normalized + ", empirical=" + empirical_attitude + ", diff=" + difference;
-    
-            if difference > 0.01 {
-                write "WARNING: Large discrepancy!";
-            }
-        }
         //
-        
+        do debug_init;
         // CREATE DEBATE ID MAPPING
         // Control agents get unique IDs, others grouped by ID_Group_all
         debate_id_list <- [];
-        map<string, int> group_to_id <- map([]);
+        map<string, int> group_to_id <- map<string, int>([]);
         int next_id <- 1;
         
         loop i from: 0 to: length(id_group_raw) - 1 {
@@ -215,6 +163,63 @@ global {
         
         // Guard for final stats
         final_stats_computed <- false;
+    }
+    
+    action debug_init {
+    	
+    	// ✅ CHECK WHAT WAS ACTUALLY LOADED
+    	write "=== DATA LOADER VERIFICATION ===";
+    	write "agent_id_list length: " + length(agent_id_list);
+    	write "id_group_raw length: " + length(id_group_raw);
+    	write "subfactors_t1 length: " + length(subfactors_t1);
+    
+    	if length(subfactors_t1) > 0 {
+            write "subfactors_t1[0] length: " + length(subfactors_t1[0]);
+            write "subfactors_t1[1] length: " + length(subfactors_t1[1]);
+            write "subfactors_t1[2] length: " + length(subfactors_t1[2]);
+            write "subfactors_t1[3] length: " + length(subfactors_t1[3]);
+            write "subfactors_t1[4] length: " + length(subfactors_t1[4]);
+    	}
+    
+    	if length(subfactors_t2) > 0 {
+            write "subfactors_t2[0] length: " + length(subfactors_t2[0]);
+    	}
+    	
+    	//
+    	
+    	// check whether lists are populated so they can be used
+    	write "Loaded " + length(agent_id_list) + " agents";
+
+        // VALIDATION: Check if computed initial_opinion matches DB_IndexT1
+        write "=== VALIDATION CHECK ===";
+
+        loop i from: 0 to: min([10, length(agent_id_list)]) - 1 {
+            // Compute what initial opinion SHOULD be from subfactors
+            float f1 <- subfactors_t1[0][i];
+            float f2 <- subfactors_t1[1][i];
+            float f3 <- subfactors_t1[2][i];
+            float f4 <- subfactors_t1[3][i];
+            float f5 <- subfactors_t1[4][i];
+    
+            // Original formula (denormalized to [-6, +6])
+            float denorm_f1 <- f1 * 6.0 + 1.0;
+            float denorm_f2 <- f2 * 6.0 + 1.0;
+            float denorm_f3 <- f3 * 6.0 + 1.0;
+            float denorm_f4 <- f4 * 6.0 + 1.0;
+            float denorm_f5 <- f5 * 6.0 + 1.0;
+    
+            float computed_index <- (denorm_f1 + denorm_f2) / 2.0 - (denorm_f3 + denorm_f4 + denorm_f5) / 3.0;
+            float computed_normalized <- (computed_index + 6.0) / 12.0;
+    
+            float empirical_attitude <- initial_attitude_list[i];
+            float difference <- abs(computed_normalized - empirical_attitude);
+    
+            write "Agent " + i + ": computed=" + computed_normalized + ", empirical=" + empirical_attitude + ", diff=" + difference;
+    
+            if difference > 0.01 {
+                write "WARNING: Large discrepancy!";
+            }
+        }
     }
     
     // ACTION: CREATE AGENTS FOR SPECIFIC DEBATE

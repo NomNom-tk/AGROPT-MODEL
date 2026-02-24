@@ -1,91 +1,20 @@
 // Central Structuring file for models of social influence
 
-model opinion_dynamics_main
+model opinion_dynamics
 
 import "actions/data_loader (copy).gaml" // reads csv, parsers and fill raw data lists (declared in global)
 import "species/opinion_agent.gaml" // import opinion agent species
+import "Parameters.gaml"
+import "Constants.gaml"
 
 global {
     
-    // Current experiment condition (detected at runtime)
-    string current_condition <- "unknown"; // among: "homogeneous", "heterogeneous", "control"
-    
-    // SUBFACTOR DATA STORAGE (T1 = initial, T2 = target)
-    // Efficient storage: subfactors_t1[0..4][row_index] for 5 subfactors
-    list<list<float>> subfactors_t1;        // Initial subfactor values (T1)
-    list<list<float>> subfactors_t2;        // Target subfactor values (T2)
-
-    // Helper list for easier computation (populated in init)
-    list<float> weights <- [];
-
-    // Network type parameters
-    int small_world_k <- 4 min: 2 max: 6; //parameter: "Small world K neighbors" category: "Network" 
-    float small_world_rewire <- 0.1 min: 0.0 max: 0.3; //parameter: "Small world rewiring probability" category: "Network" 
-    
-    // PRO/ANTI REDUCTION METRICS
-    int num_pro_agents <- 0;                // Count of pro-reduction agents
-    int num_anti_agents <- 0;               // Count of anti-reduction agents
-    float mean_opinion_pro <- 0.0;          // Mean opinion of pro agents
-    float mean_opinion_anti <- 0.0;         // Mean opinion of anti agents
-    
-    // BIPOLARIZATION DIAGNOSTICS
-    int initial_num_clusters <- 0;          // Opinion clusters at start
-    int total_attractive_interactions <- 0; // Count of attractive interactions
-    int total_repulsive_interactions <- 0;  // Count of repulsive interactions
-    int total_neutral_interactions <- 0;    // Count of neutral zone interactions
-    float neutral_zone_width <- 0.0;        // Width of neutral zone (repulsion - confidence)
-    float mean_net_repulsion_abs <- 0.0;    // Mean absolute net repulsion force
-    
-    // SIMULATION CONTROL
-    int selected_debate_id <- 1;            // Which debate to simulate
-    string model_type <- "consensus" among: ["consensus", "clustering", "bipolarization"];
-    //string network_type <- "complete" among: ["complete", "random", "small_world"]; // replaced due to homophily implementation
-    //float connection_probability <- 0.3 min: 0.0 max: 1.0;
-    
-    float homophily_strength <- 0.5 min: 0.0 max: 1.0;
-
-
-    // Timing
-    float step <- 0.5;
-    int max_cycles <- 100;
-    
-    // Control flags
-    bool mode_batch <- false;               // Batch mode vs GUI mode
-    bool end_simulation <- false;           // Convergence flag
-    int convergence_cycle <- -1;            // Cycle when convergence achieved
-    bool final_stats_computed <- false;     // Guard for final statistics
-    
-    // Convergence parameters
-    float mae_convergence_threshold <- 0.001 min: 0.0 max: 1.0;
-
-    // OPINION DYNAMICS PARAMETERS
-    float convergence_rate <- 0.2 min: 0.0 max: 1.0;        // μ: Speed of opinion change
-    float confidence_threshold <- 0.5 min: 0.0 max: 1.0;    // ε: Similarity for attraction
-    float repulsion_threshold <- 0.6 min: 0.0 max: 1.0;     // Dissimilarity for repulsion
-    float repulsion_strength <- 0.1 min: 0.0 max: 0.5;      // Strength of repulsive force
-
-    // opinion dynamics parameters Extension
-    float convergence_rate_sd <- 0.05 min: 0.0 max: 0.2;
-    float confidence_threshold_sd <- 0.1 min: 0.0 max: 0.3;
-    float repulsion_threshold_sd <- 0.1 min: 0.0 max: 0.3;
-    float repulsion_strength_sd <- 0.05 min: 0.0 max: 0.2;
-
-    // RESULTS & ANALYSIS
-    float mae <- 0.0;                       // Mean Absolute Error (global)
-    map<int, float> mae_per_debate <- map<int, float>(map([]));
-    float world_size <- 100.0;              // Spatial world size for visualization
-    
-    // Analysis variables
-    float opinion_variance <- 0.0;          // Variance of opinions
-    int num_clusters <- 0;                  // Number of opinion clusters
-    float polarization_index <- 0.0;        // Measure of opinion polarization
     // initialization ONLY for orchestration
     init {
     	// call data loader with file path parameter
-    	do load_csv_data("../../data+dictionary/data_complete_anonymised.csv");
+    	do load_csv_data("../data+dictionary/data_complete_anonymised.csv");
     	
-
-        //
+        // debug check for index computation
         do debug_init;
         // CREATE DEBATE ID MAPPING
         // Control agents get unique IDs, others grouped by ID_Group_all
@@ -185,15 +114,8 @@ global {
             write "subfactors_t2[0] length: " + length(subfactors_t2[0]);
     	}
     	
-    	//
-    	
-    	// check whether lists are populated so they can be used
-    	write "Loaded " + length(agent_id_list) + " agents";
-
-        // VALIDATION: Check if computed initial_opinion matches DB_IndexT1
-        write "=== VALIDATION CHECK ===";
-
-        loop i from: 0 to: min([10, length(agent_id_list)]) - 1 {
+    	// data computation for initial subfactors for check
+    	loop i from: 0 to: min([10, length(agent_id_list)]) - 1 {
             // Compute what initial opinion SHOULD be from subfactors
             float f1 <- subfactors_t1[0][i];
             float f2 <- subfactors_t1[1][i];
@@ -213,6 +135,13 @@ global {
     
             float empirical_attitude <- initial_attitude_list[i];
             float difference <- abs(computed_normalized - empirical_attitude);
+    	
+    	// check whether lists are populated so they can be used
+    	write "Loaded " + length(agent_id_list) + " agents";
+
+        // VALIDATION: Check if computed initial_opinion matches DB_IndexT1
+        write "=== VALIDATION CHECK ===";
+
     
             write "Agent " + i + ": computed=" + computed_normalized + ", empirical=" + empirical_attitude + ", diff=" + difference;
     

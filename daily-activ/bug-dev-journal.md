@@ -48,4 +48,72 @@ write "Mean: " + mean(agent_rates) + ", SD: " + standard_deviation(agent_rates);
 - update parameters in batch experiment
 - update saving to csv for agent file
 
+## 24/2/26
+### learned about using modular agent creation for different models
+- creation of a virtual general species (virtual does not exist, cannot create agents from it but serves as a forced reminder to declare functions, attributes) // abstract concept
+- any action designated as virtual: true implies that the compute_opinion needs to be defined (allows for an individual compute opinion for each subspecies of the general class)
+-- forces you to create subspecies 
+- implementation
+-- e.g. global {
+	list<opinion_agent> opinion_agents -> {agents of_generic_species opinion_agent};
+}
+
+species opinion_agent virtual: true  {
+    // ========================================================================
+    // CORE ATTRIBUTES
+    // ========================================================================
+    float previous_opinion <- 0.0;          // Opinion at previous timestep
+    float opinion min: 0.0 max: 1.0;        // Current opinion [0,1]
+    list<opinion_agent> neighbors <- [];    // Connected agents in network
+    rgb color <- #blue;        
+    
+    ...
+    
+    action compute_opinion virtual: true;
+    
+    reflex repeat_compute_opinion {
+    	do compute_opinion;
+    	
+    }
+    
+    // now for a subspecies example
+    
+    species consensus_agent parent: opinion_agent {
+    action compute_opinion {
+        if length(neighbors) > 0 {
+            previous_opinion <- opinion;
+            
+            // Average opinion including self
+            list<float> all_opinions <- [opinion] + (neighbors collect each.opinion);
+            float new_opinion <- mean(all_opinions);
+            opinion <- max([0.0, min([1.0, opinion + agent_convergence_rate * (new_opinion - opinion)])]); // bounds creation
+            
+        }
+    }
+}
+    
+### when implementing this in the main file to create agents (per model, etc)
+- create a species and cast it to <opinion_agent>(model_type + "_agent"_ {
+	agent logic....
+	}
+-- essentially you create a species at tell it what kind of species it is (casting), then assign it the model type + string of characters
+
+
+- use ask instead of loops when repeating across agents/species (use loops when repeating across numbers, columns)
+-- e.g. // part of saving batch results
+       ask opinion_agents {
+            float individual_error <- abs(opinion - final_attitude);
+            float opinion_change <- opinion - initial_opinion;
+            
+            // Calculate mean of T2 subfactors for comparison
+            float mean_t2_subfactors <- (subfactor_1_t2 + subfactor_2_t2 +
+                                         subfactor_3_t2 + subfactor_4_t2 + 
+                                         subfactor_5_t2) / 5.0; 
+-- this allows you to remove the individual context of each agent (no need to write ag.subfactor...)
+
+
+### main file importing
+- only main file should import all other relevant files (NOT EXPERIMENTS)
+- experiments should only import the main file
+
 

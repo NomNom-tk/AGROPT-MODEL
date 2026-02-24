@@ -116,5 +116,33 @@ structure (in gama there is no compartmentalization of global variables, loads i
 -- started a bug and leanring journal for GAMA
 --- implemented agent level parameter sampling from global parameter distributions (changes in opinion_agent, batch_exp and main)
 
+# 19/2/26
+- initial test with agent-level parameter sampling
+- confirmed it properly works
+- re-checked protocol and what we can achieve with hypotheses
+- started working on ODD protocol for the basic model (social influence)
+- started working on homophily network implementation
 
+# 20/2/26
+- ran GA with homophily network implemented for all 3 models
+- finished first draft of ODD
+- bullet notes for Toulouse
+- need to write R script for analysis
+
+# 23/2/26
+- drafted notes and ideas with Patrick for the week
+- I would like:
+-- to refactor code
+-- come to terms with the headless mode and the internal GAMA parser
+-- come into contact with more researchers (thesis, internship students) that use GAMA, Discord suggestion
+-- spoke about DSL for gama and doxygen
+- set up schedule to talk about future project // thesis idea is good and should be pursued
+- set up parameters and constants file to isolate them from the model (easier access for calling)
+
+# 24/2/26
+- finished parameters and constants file
+- got help to implement modular opinion_agent creation (for each model, i.e. parent and subspecies)
+- learned about how to implement modular species and computations // can now add in the argumentation model
+- then got help on setting up creation of agents in main file using 'ask' instead of 'loop' when repeating across agents
+- started writing R file for analysis
 

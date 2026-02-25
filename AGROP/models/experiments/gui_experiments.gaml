@@ -17,6 +17,7 @@ experiment social_influence type: gui {
     parameter "Repulsion Threshold" var: repulsion_threshold category: "Opinion Dynamics";
     parameter "Repulsion Strength" var: repulsion_strength category: "Opinion Dynamics";
     parameter "Max Cycles" var: max_cycles category: "Simulation";
+    parameter "Debug" var: debug_mode <- true category: "Debugging";
     
     output {
         // Spatial display

@@ -20,7 +20,6 @@ import "../Constants.gaml"
          */
         
         action load_csv_data(string file_path) {
-            write "=== LOADING CSV DATA ===";
 
             // Load CSV file
             file text_data <- csv_file(file_path, ",", string, false);
@@ -51,41 +50,6 @@ import "../Constants.gaml"
     	    write "First 10 headers: " + headers;
             
             int start_row <- 1; // data starts at row 1
-
-            /*/ headers test v1
-            list<string> headers <- data_matrix.contents[0]; // first row is headers
-            
-            write "Headers: " + length(headers) + "columns";
-            write "first 5 headers: " + copy_between(headers, 0, min(5, length(headers)));
-            
-            int start_row <- 1;
-            
-            // Get headers
-            /list<string> headers <- data_matrix.headers;
-            //list<string> headers <- data_matrix row_at 0;
-            list<string> headers;
-            int start_row <- 0;
-            
-            write "DEBUG: headers variable type: " + type_of(headers);
-    	    write "DEBUG: headers length: " + length(headers);
-    	    write "DEBUG: headers content: " + headers;
-            
-            // Print raw first row
-    	    if data_matrix.rows > 0 and data_matrix.columns > 0 {
-                write "Raw first cell [0,0]: '" + data_matrix[0,0] + "'";
-        	if data_matrix.columns > 1 {
-            	    write "Raw second cell [1,0]: '" + data_matrix[1,0] + "'";
-        	}
-    	    }
-	    
-	    
-            // Fallback if headers missing
-            if length(headers) = 0 {
-                headers <- data_matrix[0];
-                start_row <- 1;
-                write "WARNING: Headers not auto-detected, using first row as header";
-            }
-            */
 
             // Find column indices
             int idx_id_group <- headers index_of "ID_Group_all";
@@ -190,5 +154,10 @@ import "../Constants.gaml"
             }
 
             write "Successfully loaded " + length(agent_id_list) + " agents";
+        }
+        
+        /// REVISIT AFTER INITIAL CHECK
+        action debug_csv_load {
+        	
         }
     }

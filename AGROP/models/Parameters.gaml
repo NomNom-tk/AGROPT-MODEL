@@ -76,8 +76,8 @@ global {
     int num_clusters <- 0; // Number of opinion clusters
     float polarization_index <- 0.0; // Measure of opinion polarization
     
-    
-    
+    // Debug parameters
+    bool debug_mode <- false;
 	
 }
 

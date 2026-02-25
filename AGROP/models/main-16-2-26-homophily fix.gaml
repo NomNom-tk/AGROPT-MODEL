@@ -12,10 +12,11 @@ global {
     // initialization ONLY for orchestration
     init {
     	// call data loader with file path parameter
-    	do load_csv_data("../data+dictionary/data_complete_anonymised.csv");
+    	do load_csv_data("../data-dictionary/data_complete_anonymised.csv");
     	
         // debug check for index computation
         do debug_init;
+        
         // CREATE DEBATE ID MAPPING
         // Control agents get unique IDs, others grouped by ID_Group_all
         debate_id_list <- [];
@@ -45,37 +46,52 @@ global {
                 debate_id_list << group_to_id[id_group];
             }
         }
-
-        write "Total debates (including control agents): " + length(remove_duplicates(debate_id_list));
+        
+        // debug for init_agent creation
+        do debug_init_agents;
         
 
         // REPORT DEBATE DISTRIBUTION
-        list<int> unique_debates <- remove_duplicates(debate_id_list);
-        write "Found " + length(unique_debates) + " unique debates";
-
-        loop debate over: unique_debates {
-            int count <- debate_id_list count (each = debate);
-            write "Debate " + debate + ": " + count + " agents";
-        }
+        do debate_distribution;
         
         // LOAD AGENTS FOR SELECTED DEBATE
         if bool(mode_batch) {
-            write "Loading debate " + selected_debate_id + " for batch mode";
+        	
+            //write "Loading debate " + selected_debate_id + " for batch mode";
             do initialize_agents_for_debate(selected_debate_id);
         } else {
-            write "Loading debate " + selected_debate_id + " for GUI mode";
+            //write "Loading debate " + selected_debate_id + " for GUI mode";
             do initialize_agents_for_debate(selected_debate_id);
         }
         
-        write "Created " + length(opinion_agents) + " opinion agents";
+        //write "Created " + length(opinion_agents) + " opinion agents";
         
         
         // CREATE NETWORK
         do create_network;
         
         // INITIAL DIAGNOSTICS
-        // Initial opinion clustering (count non-empty bins)
-        list<int> init_hist <- list_with(10, 0);
+        do initial_diagnostics;
+        
+    }
+    
+    // REVISIT AFTER INITIAL TEST WHY INDEX OUT OF BOUNDS
+    action debate_id_mapping {
+    	
+    }
+    
+    action debate_distribution {
+    	list<int> unique_debates <- remove_duplicates(debate_id_list);
+        write "Found " + length(unique_debates) + " unique debates";
+
+        loop debate over: unique_debates {
+            int count <- debate_id_list count (each = debate);
+            write "Debate " + debate + ": " + count + " agents";
+        }
+    }
+    
+    action initial_diagnostics {
+    	list<int> init_hist <- list_with(10, 0);
         loop o over: opinion_agents collect each.initial_opinion {
             int b <- min([9, int(o * 10)]);
             init_hist[b] <- init_hist[b] + 1;
@@ -90,8 +106,8 @@ global {
     }
     
     action debug_init {
-    	
-    	// ✅ CHECK WHAT WAS ACTUALLY LOADED
+    	if debug_mode {
+    		// ✅ CHECK WHAT WAS ACTUALLY LOADED
     	write "=== DATA LOADER VERIFICATION ===";
     	write "agent_id_list length: " + length(agent_id_list);
     	write "id_group_raw length: " + length(id_group_raw);
@@ -103,6 +119,7 @@ global {
             write "subfactors_t1[2] length: " + length(subfactors_t1[2]);
             write "subfactors_t1[3] length: " + length(subfactors_t1[3]);
             write "subfactors_t1[4] length: " + length(subfactors_t1[4]);
+            
     	}
     
     	if length(subfactors_t2) > 0 {
@@ -144,6 +161,9 @@ global {
                 write "WARNING: Large discrepancy!";
             }
         }
+        write "Total debates (including control agents): " + length(remove_duplicates(debate_id_list));
+    	}
+    	
     }
     
     // ACTION: CREATE AGENTS FOR SPECIFIC DEBATE
@@ -176,6 +196,7 @@ global {
         loop idx from: 0 to: length(debate_id_list) - 1 {
             if debate_id_list[idx] = target_debate_id {
             
+            /*
             write "=== Creating agent from row " + idx + " ===";
         
             // Test each access BEFORE create block
@@ -185,7 +206,7 @@ global {
             write "Test 4: subfactor_1_t1 = " + subfactors_t1[0][idx];
             write "Test 5: final_attitude = " + final_attitude_list[idx];
             write "Test 6: weights list = " + weights;
-
+			*/
             
                 create species<opinion_agent>(model_type + "_agent") {
                 	      // Basic identifiers
@@ -252,21 +273,22 @@ global {
 	                    // Color based on opinion (blue=0, red=1)
 	                    color <- rgb(opinion * 255, 0, (1 - opinion) * 255);
 	                }
-	                
                 }
-
-                write "=== AGENT PARAMETER DISTRIBUTION CHECK ===";
+        }
+        
+        //write "Debate " + target_debate_id + " condition: " + current_condition;
+    }
+    
+    action debug_init_agents {
+    	if debug_mode{
+    	write "=== AGENT PARAMETER DISTRIBUTION CHECK ===";
                 list<float> agent_conv_rates <- opinion_agents collect each.agent_convergence_rate;
                 write "Convergence rate - Mean: " + mean(agent_conv_rates) + 
                       ", SD: " + standard_deviation(agent_conv_rates) +
                       ", Min: " + min(agent_conv_rates) +
                       ", Max: " + max(agent_conv_rates);
                 write "Target mean: " + convergence_rate + ", Target SD: " + convergence_rate_sd;
-
-            
-        }
-        
-        write "Debate " + target_debate_id + " condition: " + current_condition;
+    	}
     }
     
     // ACTION: CREATE NETWORK STRUCTURE
@@ -517,7 +539,7 @@ global {
               convergence_rate, confidence_threshold, repulsion_threshold, repulsion_strength, 
               seed, convergence_cycle, mae, opinion_variance, polarization_index, num_clusters, initial_num_clusters,
               neutral_zone_width, mean_net_repulsion_abs]
-        to: "outputs/batch_summary.csv" rewrite: false;
+        to: "../outputs/batch_summary.csv" rewrite: false;
         
         do save_agent_results;
         

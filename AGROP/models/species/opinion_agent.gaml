@@ -10,6 +10,19 @@ import "../Constants.gaml"
 
 global {
 	list<opinion_agent> opinion_agents -> {agents of_generic_species opinion_agent};
+	
+	 action argument_pool {
+    	create argument_ number: argument_pool_size {
+    		position <- flip(0.5) ? -1:1; // pro or con [-1,1]
+    	}
+    }
+    
+    reflex update_prev_opinion {
+    	ask opinion_agents {
+    		previous_opinion <- opinion;
+    	}
+    }
+    	
 }
 
 species opinion_agent virtual: true  {
@@ -58,6 +71,7 @@ species opinion_agent virtual: true  {
     action compute_opinion virtual: true;
     
     reflex repeat_compute_opinion {
+    	
     	do compute_opinion;
     	
     }
@@ -82,7 +96,68 @@ species opinion_agent virtual: true  {
 
 }
 
+species argument_ {
+	int position;  // whether pro [1] or con [-1]
+	int argument_id; // identifier for each argument
+}
+
 // to include in every child agent: schedules: [shuffle(opinion_agent)]
+
+species argumentative_agent parent: opinion_agent {
+	map<argument_, int> my_arguments;
+	float opinion min: -1.0 max: 1.0; // Current opinion [-1,1]
+	init {
+		if empty(argument_) {
+			ask world {
+				do argument_pool;
+			}
+
+		}
+
+		list<argument_> agent_list <- (agent_arg among argument_);
+		loop i from: 0 to: agent_arg - 1 {
+			my_arguments[agent_list at i] <- i + relev_arg - agent_arg + 1;
+		}
+		do intermediary_opinion;
+
+	}
+
+	action compute_opinion {
+		if length(neighbors) > 0 {
+			do argument_exchange;
+			
+		}
+
+	}
+
+	action intermediary_opinion {
+	// list arguments and calculate opinion
+		float numerator <- 0.0;
+		float denominator <- 0.0;
+		loop arg1 over: my_arguments.keys where (my_arguments[each] > 0) {
+			numerator <- numerator + (my_arguments[arg1] * arg1.position);
+			denominator <- denominator + my_arguments[arg1];
+		}
+
+		opinion <- numerator / denominator; // value of [-1,+1]
+		opinion <- (opinion + 1.0) / 2.0; /// could normalize to [0,1]
+	}
+	
+	action argument_exchange {
+		argument_ first_arg <- one_of(my_arguments.keys);
+		ask neighbors as:argumentative_agent{
+			
+			
+			my_arguments[first_arg] <- relev_arg + 1;
+			my_arguments <- my_arguments.keys as_map(each::my_arguments[each] - 1);
+			do intermediary_opinion;
+		} 
+	}
+	
+
+}
+
+
 
 // ========================================================================
 // REFLEX: CONSENSUS FORMATION (Assimilative Model)
@@ -92,7 +167,7 @@ species opinion_agent virtual: true  {
 species consensus_agent parent: opinion_agent {
     action compute_opinion {
         if length(neighbors) > 0 {
-            previous_opinion <- opinion;
+           // previous_opinion <- opinion;
             
             // Average opinion including self
             list<float> all_opinions <- [opinion] + (neighbors collect each.opinion);
@@ -111,7 +186,7 @@ species consensus_agent parent: opinion_agent {
 species clustering_agent parent: opinion_agent {
     action compute_opinion {
         if length(neighbors) > 0 {
-            previous_opinion <- opinion;
+           // previous_opinion <- opinion;
             
             // Filter neighbors within confidence threshold
             list<opinion_agent> similar_neighbors <- neighbors where (
@@ -139,7 +214,7 @@ species bipolarization_agent parent: opinion_agent {
     
     action compute_opinion {
         if length(neighbors) > 0 {
-            previous_opinion <- opinion;
+           // previous_opinion <- opinion;
             
             float attraction_force <- 0.0;
             float repulsion_force <- 0.0;

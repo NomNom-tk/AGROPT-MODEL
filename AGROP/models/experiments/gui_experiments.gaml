@@ -7,6 +7,8 @@ model gui_experiments
 import "../main-16-2-26-homophily fix.gaml"
 
 experiment social_influence type: gui {
+	float minimum_cycle_duration <- 0.1;
+	
     parameter "Model Type" var: model_type category: "Model Selection";
     parameter "Selected Debate ID" var: selected_debate_id category: "Data";
     //parameter "Network Type" var: network_type category: "Network";

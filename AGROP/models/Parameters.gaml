@@ -46,7 +46,7 @@ global {
     
     // SIMULATION CONTROL
     int selected_debate_id <- 1;            // Which debate to simulate
-    string model_type <- "consensus" among: ["consensus", "clustering", "bipolarization"];
+    string model_type <- "consensus" among: ["consensus", "clustering", "bipolarization", "argumentative"];
     float homophily_strength <- 0.5 min: 0.0 max: 1.0; // Strength of neighbor attraction
     
     // Control flags
@@ -78,6 +78,12 @@ global {
     
     // Debug parameters
     bool debug_mode <- false;
+    
+    // argumentation parameters
+    int argument_pool_size <- 30;
+    int agent_arg <- 10 min: 5 max: 15;
+    int argument_id;
+    int relev_arg <- 3 min: 1 max: 10;
 	
 }
 

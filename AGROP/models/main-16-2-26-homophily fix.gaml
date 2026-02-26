@@ -68,12 +68,15 @@ global {
         
         
         // CREATE NETWORK
-        do create_network;
+       // do create_network;
         
         // INITIAL DIAGNOSTICS
         do initial_diagnostics;
         
     }
+    
+    
+   
     
     // REVISIT AFTER INITIAL TEST WHY INDEX OUT OF BOUNDS
     action debate_id_mapping {
@@ -291,6 +294,18 @@ global {
     	}
     }
     
+    reflex update_network {
+    	
+    	list<opinion_agent> active_agents <- opinion_agents where (each.group_type != "Control");
+    	ask active_agents {
+    		list<opinion_agent> potential_neighbors <- active_agents where (
+                each != self and
+                each.debate_id = self.debate_id );
+            list<float> proba_select <- potential_neighbors collect (0.5 * (2 - abs(each.opinion - opinion)));
+            neighbors <- [potential_neighbors[rnd_choice(proba_select)]];
+    	}
+    	
+    }
     // ACTION: CREATE NETWORK STRUCTURE
     action create_network {
         // Reset all neighbors
@@ -539,7 +554,7 @@ global {
               convergence_rate, confidence_threshold, repulsion_threshold, repulsion_strength, 
               seed, convergence_cycle, mae, opinion_variance, polarization_index, num_clusters, initial_num_clusters,
               neutral_zone_width, mean_net_repulsion_abs]
-        to: "../outputs/batch_summary.csv" rewrite: false;
+        to: "outputs/batch_summary.csv" rewrite: false;
         
         do save_agent_results;
         

@@ -116,4 +116,17 @@ species opinion_agent virtual: true  {
 - only main file should import all other relevant files (NOT EXPERIMENTS)
 - experiments should only import the main file
 
+# 26/2/26
+- learned how to integrate a new model into the existing models of social influence (Mas and flache 2013, bipolarization without negative influence)
+- struggled and had help from patrick
+-- gained a better understanding of maps and how to manipulate them (add, remove, modify)
+-- implementation in the code: 
+
+- modify gui experiment to slow down steps (use minimum_cycle_duration as a parameter)
+- GAMA program (use of searching in built-in model library for terms, e.g., maps, calibration and sensitivity analysis)
+- interactive console in GAMA (e.g., '?loop' brings up the documentation)
+
+
+
+
 

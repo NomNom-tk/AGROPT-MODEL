@@ -45,14 +45,6 @@ global {
             }
         }
         
-        // debug for init_agent creation
-        if debug_mode = true {
-        	// debug check for index computation
-        	do debug_init;
-        	
-        	do debug_init_agents;	
-        }
-        
         // REPORT DEBATE DISTRIBUTION
         do debate_distribution;
         
@@ -68,9 +60,17 @@ global {
         
         //write "Created " + length(opinion_agents) + " opinion agents";
         
+        // debug for init_agent creation
+        if debug_mode = true {
+        	// debug check for index computation
+        	do debug_init;
+        	
+        	do debug_init_agents;	
+        }
         
         // CREATE NETWORK
-       // do create_network;
+        // COMMENT OUT FOR ARUGMENTATION
+        do create_network;
         
         // INITIAL DIAGNOSTICS
         do initial_diagnostics;
@@ -172,45 +172,42 @@ global {
     }
     
     // ACTION: CREATE AGENTS FOR SPECIFIC DEBATE
-    action initialize_agents_for_debate(int target_debate_id) {
-        bool condition_detected <- false;
-        
-        // FIRST LOOP: Detect condition type for this debate
-        loop i from: 0 to: length(debate_id_list) - 1 {
-            if debate_id_list[i] = target_debate_id and !condition_detected {
-                string group_type_val <- group_type_list[i];
-                
-                // FIXED: Only use string comparisons (removed numeric "1", "2", "3")
-                if group_type_val = "Homogeneous" {
-                    current_condition <- "homogeneous";
-                } else if group_type_val = "Heterogeneous" {
-                    current_condition <- "heterogeneous"; 
-                } else if group_type_val = "Control" {
-                    current_condition <- "control";
-                } else {
-                    
-                }
-                condition_detected <- true;
-                
-                if debug_mode {
-                	// group type detection
-                	write "DEBUG: group_type_val for debate " + target_debate_id + ": " + group_type_val;
-                	
-                	// unkown condition check
-                	write "Warning: unknown condition type '" + group_type_val + "'";
-                	
-                	// condition detection check
-                	write "DEBUG: detected condition = " + current_condition;
-                }
-            }
-    	}
-        
-        // SECOND LOOP: Create agents for this debate
-        // FIXED: Renamed loop variable from 'i' to 'idx' to avoid shadowing
-        loop idx from: 0 to: length(debate_id_list) - 1 {
-            if debate_id_list[idx] = target_debate_id {
-            
-            /*
+    action initialize_agents_for_debate (int target_debate_id) {
+	bool condition_detected <- false;
+
+	// FIRST LOOP: Detect condition type for this debate
+	loop i from: 0 to: length(debate_id_list) - 1 {
+		if debate_id_list[i] = target_debate_id and !condition_detected {
+			string group_type_val <- group_type_list[i];
+
+			// FIXED: Only use string comparisons (removed numeric "1", "2", "3")
+			if group_type_val = "Homogeneous" {
+				current_condition <- "homogeneous";
+			} else if group_type_val = "Heterogeneous" {
+				current_condition <- "heterogeneous";
+			} else if group_type_val = "Control" {
+				current_condition <- "control";
+			} else {
+			}
+
+			condition_detected <- true;
+			if debug_mode {
+			// group type detection
+				write "DEBUG: group_type_val for debate " + target_debate_id + ": " + group_type_val;
+
+				// unkown condition check
+				write "Warning: unknown condition type '" + group_type_val + "'";
+
+				// condition detection check
+				write "DEBUG: detected condition = " + current_condition;
+			} } }
+
+			// SECOND LOOP: Create agents for this debate
+	// FIXED: Renamed loop variable from 'i' to 'idx' to avoid shadowing
+	loop idx from: 0 to: length(debate_id_list) - 1 {
+		if debate_id_list[idx] = target_debate_id {
+
+		/*
             write "=== Creating agent from row " + idx + " ===";
         
             // Test each access BEFORE create block
@@ -221,102 +218,71 @@ global {
             write "Test 5: final_attitude = " + final_attitude_list[idx];
             write "Test 6: weights list = " + weights;
 			*/
-            
-                create species<opinion_agent>(model_type + "_agent") {
-                	      // Basic identifiers
-	                    agent_id <- agent_id_list[idx];
-	                    debate_id <- target_debate_id;
-	                    group_type <- group_type_list[idx];
-	                    pro_reduction <- pro_reduction_list[idx];
-	                    
-	                    // ASSIGN SUBFACTORS (T1 - initial)
-	                    subfactor_1_t1 <- subfactors_t1[0][idx];
-	                    subfactor_2_t1 <- subfactors_t1[1][idx];
-	                    subfactor_3_t1 <- subfactors_t1[2][idx];
-	                    subfactor_4_t1 <- subfactors_t1[3][idx];
-	                    subfactor_5_t1 <- subfactors_t1[4][idx];
-	                
-	                    // ASSIGN TARGET SUBFACTORS (T2)
-	                    subfactor_1_t2 <- subfactors_t2[0][idx];
-	                    subfactor_2_t2 <- subfactors_t2[1][idx];
-	                    subfactor_3_t2 <- subfactors_t2[2][idx];
-	                    subfactor_4_t2 <- subfactors_t2[3][idx];
-	                    subfactor_5_t2 <- subfactors_t2[4][idx];
-	
-	                    // Agent level parameter sampling
-	                    agent_convergence_rate <- max([0.01, min([0.99,
-	                        gauss(convergence_rate, convergence_rate_sd)
-	                    ])]);
-	
-	                    agent_confidence_threshold <- max([0.01, min([0.99,
-	                        gauss(confidence_threshold, confidence_threshold_sd)
-	                    ])]);
-	
-	                    agent_repulsion_strength <- max([0.01, min([0.99,
-	                        gauss(repulsion_strength, repulsion_strength_sd)
-	                    ])]);
-	
-	                    agent_repulsion_threshold <- max([0.01, min([0.99,
-	                        gauss(repulsion_threshold, repulsion_threshold_sd)
-	                    ])]);
-	                    
-	                    // COMPUTE INITIAL OPINION FROM WEIGHTED SUBFACTORS
-	                    // use DB_index formula mean(F1,F2) - mean(F3,F4,F5)
-	                    float pro_mean <- (subfactor_1_t1 + subfactor_2_t1) / 2.0;
-	                    float contra_mean <- (subfactor_3_t1 + subfactor_4_t1 + subfactor_5_t1) / 3.0;
-	
-	                    // denormalize to [1,7] scale
-	                    float pro_denorm <- pro_mean * 6.0 + 1.0;
-	                    float contra_denorm <- contra_mean * 6.0 + 1.0;
-	
-	                    // compute raw difference
-	                    float db_index_raw <- pro_denorm - contra_denorm;
-	
-	                    // normalize back to [0,1]
-	                    initial_opinion <- (db_index_raw + 6.0) / 12.0;
-	
-	                    // SET UP INITIAL STATE
-	                    opinion <- initial_opinion;
-	                    previous_opinion <- initial_opinion;
-	                    
-	                    final_attitude <- final_attitude_list[idx];
-	                    
-	                    // Random spatial location for visualization
-	                    location <- {rnd(world_size), rnd(world_size)};
-	                    
-	                    // Color based on opinion (blue=0, red=1)
-	                    color <- rgb(opinion * 255, 0, (1 - opinion) * 255);
-	                }
-                }
-        }
-        
-        //write "Debate " + target_debate_id + " condition: " + current_condition;
-    }
+			create species<opinion_agent>(model_type + "_agent") {
+			// ALWAYS SET THESE (outside if/else)
+				agent_id <- agent_id_list[idx];
+				debate_id <- target_debate_id;
+				group_type <- group_type_list[idx];
+				pro_reduction <- pro_reduction_list[idx];
+
+				// SUBFACTORS (ALWAYS)
+				subfactor_1_t1 <- subfactors_t1[0][idx];
+				subfactor_2_t1 <- subfactors_t1[1][idx];
+				subfactor_3_t1 <- subfactors_t1[2][idx];
+				subfactor_4_t1 <- subfactors_t1[3][idx];
+				subfactor_5_t1 <- subfactors_t1[4][idx];
+				subfactor_1_t2 <- subfactors_t2[0][idx];
+				subfactor_2_t2 <- subfactors_t2[1][idx];
+				subfactor_3_t2 <- subfactors_t2[2][idx];
+				subfactor_4_t2 <- subfactors_t2[3][idx];
+				subfactor_5_t2 <- subfactors_t2[4][idx];
+
+				// PARAMETERS (if/else for heterogeneity)
+				if use_heterogeneous_agents {
+					agent_convergence_rate <- max([0.01, min([0.99, gauss(convergence_rate, convergence_rate_sd)])]);
+					agent_confidence_threshold <- max([0.01, min([0.99, gauss(confidence_threshold, confidence_threshold_sd)])]);
+					agent_repulsion_strength <- max([0.01, min([0.99, gauss(repulsion_strength, repulsion_strength_sd)])]);
+					agent_repulsion_threshold <- max([0.01, min([0.99, gauss(repulsion_threshold, repulsion_threshold_sd)])]);
+				} else {
+					agent_convergence_rate <- convergence_rate;
+					agent_confidence_threshold <- confidence_threshold;
+					agent_repulsion_strength <- repulsion_strength;
+					agent_repulsion_threshold <- repulsion_threshold;
+				}
+
+				// OPINION CALCULATION (ALWAYS)
+				float pro_mean <- (subfactor_1_t1 + subfactor_2_t1) / 2.0;
+				float contra_mean <- (subfactor_3_t1 + subfactor_4_t1 + subfactor_5_t1) / 3.0;
+				float pro_denorm <- pro_mean * 6.0 + 1.0;
+				float contra_denorm <- contra_mean * 6.0 + 1.0;
+				float db_index_raw <- pro_denorm - contra_denorm;
+				initial_opinion <- (db_index_raw + 6.0) / 12.0;
+				opinion <- initial_opinion;
+				previous_opinion <- initial_opinion;
+				final_attitude <- final_attitude_list[idx];
+				location <- {rnd(world_size), rnd(world_size)};
+				color <- rgb(opinion * 255, 0, (1 - opinion) * 255);
+			}
+
+		}
+
+	}
+
+	//write "Debate " + target_debate_id + " condition: " + current_condition;
+}
+
+action debug_init_agents {
+	if debug_mode {
+		write "=== AGENT PARAMETER DISTRIBUTION CHECK ===";
+		list<float> agent_conv_rates <- opinion_agents collect each.agent_convergence_rate;
+		write
+		"Convergence rate - Mean: " + mean(agent_conv_rates) + ", SD: " + standard_deviation(agent_conv_rates) + ", Min: " + min(agent_conv_rates) + ", Max: " + max(agent_conv_rates);
+		write "Target mean: " + convergence_rate + ", Target SD: " + convergence_rate_sd;
+	}
+
+}
     
-    action debug_init_agents {
-    	if debug_mode{
-    	write "=== AGENT PARAMETER DISTRIBUTION CHECK ===";
-                list<float> agent_conv_rates <- opinion_agents collect each.agent_convergence_rate;
-                write "Convergence rate - Mean: " + mean(agent_conv_rates) + 
-                      ", SD: " + standard_deviation(agent_conv_rates) +
-                      ", Min: " + min(agent_conv_rates) +
-                      ", Max: " + max(agent_conv_rates);
-                write "Target mean: " + convergence_rate + ", Target SD: " + convergence_rate_sd;
-    	}
-    }
     
-    reflex update_network {
-    	
-    	list<opinion_agent> active_agents <- opinion_agents where (each.group_type != "Control");
-    	ask active_agents {
-    		list<opinion_agent> potential_neighbors <- active_agents where (
-                each != self and
-                each.debate_id = self.debate_id );
-            list<float> proba_select <- potential_neighbors collect (0.5 * (2 - abs(each.opinion - opinion)));
-            neighbors <- [potential_neighbors[rnd_choice(proba_select)]];
-    	}
-    	
-    }
     // ACTION: CREATE NETWORK STRUCTURE
     action create_network {
         // Reset all neighbors
@@ -417,9 +383,9 @@ global {
         if length(opinion_changes) > 0 {
             float max_change <- max(opinion_changes);
             
-            if mode_batch and debug_mode {
+            //if mode_batch and debug_mode {
                 write "Cycle " + cycle + " | Max change: " + max_change;
-            }
+            //}
             
             // Check if converged
             if max_change < mae_convergence_threshold {
@@ -438,6 +404,21 @@ global {
             }
         }
     }
+    
+    // NETWORK update ONLY for argumentation
+    // STATIC NETWORK FOR SOCIAL INFLUENCE
+    /*reflex update_network {
+    	
+    	list<opinion_agent> active_agents <- opinion_agents where (each.group_type != "Control");
+    	ask active_agents {
+    		list<opinion_agent> potential_neighbors <- active_agents where (
+                each != self and
+                each.debate_id = self.debate_id );
+            list<float> proba_select <- potential_neighbors collect (0.5 * (2 - abs(each.opinion - opinion)));
+            neighbors <- [potential_neighbors[rnd_choice(proba_select)]];
+    	}
+    	
+    }*/
     
     // REFLEX: FALLBACK - STOP AT MAX_CYCLES
     reflex max_cycles_reached when: cycle >= max_cycles and !end_simulation {
@@ -560,7 +541,7 @@ global {
     		write "=== Saving Results ===";
         	write "MAE: " + mae;
         	write "Condition: " + current_condition;
-        	write "Debates: " + mae_per_debate.keys;
+        	//write "Debates: " + mae_per_debate.keys;
     	} else {
     		write "Results saved successfully for debate:" + selected_debate_id;
     	}
@@ -572,8 +553,9 @@ global {
         // removed subfactor weights as they are fixed by initial computation equation
         save [model_type, current_condition, selected_debate_id, pro_count, anti_count, 
               convergence_rate, confidence_threshold, repulsion_threshold, repulsion_strength, 
-              seed, convergence_cycle, mae, opinion_variance, polarization_index, num_clusters, initial_num_clusters,
-              neutral_zone_width, mean_net_repulsion_abs]
+              use_heterogeneous_agents, convergence_rate_sd, confidence_threshold_sd, repulsion_threshold_sd, 
+              repulsion_strength_sd, seed, convergence_cycle, mae, opinion_variance, polarization_index, num_clusters, 
+              initial_num_clusters, neutral_zone_width, mean_net_repulsion_abs, homophily_strength]
         to: "outputs/batch_summary.csv" rewrite: false;
         
         do save_agent_results;
@@ -649,7 +631,9 @@ global {
                 repulsion_threshold,
                 repulsion_strength,
                 seed,
-                convergence_cycle
+                homophily_strength,
+                convergence_cycle,
+                use_heterogeneous_agents
             ]
             to: "outputs/agent_level_results.csv" rewrite: false;
         }

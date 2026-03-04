@@ -14,13 +14,19 @@ nrow(df_ag)
 conditions <- unique(df_ag$current_condition)
 
 
-
-
 # do agents with higher convergence rate change more?
 ## does convergence rate predict opinion change?
 agent_behavior <- df_ag %>%
   mutate(
     abs_opinion_change = abs(opinion_change)
+  )
+
+# pro vs anti change
+pro_vs_anti <- df_batch %>%
+  group_by(pro_reduction, model_type) %>%
+  summarize(
+    mean_change = mean(abs(opinion_change)),
+    mean_error = mean(individual_error)
   )
 
 ## correlation test

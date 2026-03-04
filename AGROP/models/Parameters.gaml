@@ -66,6 +66,9 @@ global {
     float confidence_threshold_sd <- 0.1 min: 0.0 max: 0.3;
     float repulsion_threshold_sd <- 0.1 min: 0.0 max: 0.3;
     float repulsion_strength_sd <- 0.05 min: 0.0 max: 0.2;
+    
+    // agent heterogeneity toggle
+    bool use_heterogeneous_agents <- true; // default: heterogeneous
 
     // RESULTS & ANALYSIS
     float mae <- 0.0; // Mean Absolute Error (global)
@@ -78,6 +81,7 @@ global {
     
     // Debug parameters
     bool debug_mode <- false;
+    
     
     // argumentation parameters
     int argument_pool_size <- 30;

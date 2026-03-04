@@ -5,13 +5,14 @@ install.packages("fixest") # use for regression given clustered data (i don't th
 install.packages("gtsummary") # use for regression tables for regression comparison and models
 install.packages("performance") # used to compare models "compare_performance(m_sim, m_real)
 install.packages("broom") # used to extract regression characteristics and create a tidy table for plotting
+install.packages("tidyr")
 library(ggplot2)
 library(tidyverse)
 library(dplyr)
 
 # csv import for debate level and agent-level
-# MAKE SURE IT IS THE BATCH FILE AND NOT AGENT !!!!
-df_batch <- read.csv("./data/batch_summary.csv")
+# change from . to .. or the reverse if it doesn't work
+df_batch <- read.csv("../data/batch_summary.csv")
 
 # basic exploration
 # use nrow to check rows, what type of model, unique debates, distribution of conditions
@@ -23,19 +24,13 @@ table(df_batch$model_type)
 # find unique debates
 length(unique(df_batch$selected_debate_id))
 
-# distribution of conditions
-table(df_batch$current_condition)
+# hetero vs homo comparison
+hetero_comparison <- df_batch %>%
+  group_by(model_type, use_heterogeneous_agents) %>%
+  summarize(mae_mean = mean(mae), n = n(), .groups = 'drop')
 
-tab_bip_check <- df_batch %>%
-  group_by(neutral_zone_width, selected_debate_id,
-           seed) %>%
-  summarize(
-    occur = list(selected_debate_id),
-    
-  )
+print(hetero_comparison)
 
-
-print(tab_bip_check)
 
 # stochasticity check -- do different seeds give a different mae? group by model, params then summarize by mae and seeds
 stochasticity_check <- df_batch %>%
@@ -55,6 +50,14 @@ print(stochasticity_check)
 # min and max stochasticity
 max(stochasticity_check$mae_sd, na.rm = TRUE)
 min(stochasticity_check$mae_sd, na.rm = TRUE)
+
+# parameter correlations with mae
+params_cor <- df_batch %>%
+  group_by(model_type) %>%
+  summarize(
+    cor_convergence = cor(convergence_rate, mae),
+    cor_homophily = cor(homophily_strength, mae)
+  )
 
 # best parameters per model
 # use slice_min(mae, n=1) and then select by model and params
@@ -90,7 +93,7 @@ heterogeneity_check <- df_batch %>%
     group_by (model_type, has_heterogeneity) %>%
     summarize (
       mae_mean = mean(mae),
-      mae_meadian = meadian(mae),
+      mae_meadian = median(mae),
       n = n(),
       .groups = 'drop'
     )
@@ -102,10 +105,11 @@ ggplot(data = df_batch, mapping = aes(convergence_rate_sd, mae, color = model_ty
   labs(title = "SD vs MAE for Convergence Rate", 
        x = "SD of Convergence Rate", 
        y = "MAE") +
-  theme_bw() +
-  ggsave("SD-MAE-convergence.png",
-         path = "/home/AGROTECH/R",
-         dpi = 300)
+  theme_bw()
+
+ggsave("SD-MAE-convergence.png",
+       path = "../graphics",
+       dpi = 300)
 
 # which model performs the best overall
 model_comparison <- df_batch %>%
@@ -212,6 +216,16 @@ final_recommendations <- df_batch %>%
 
 print("Final Recommendations")
 print(final_recommendations)
+
+# final results table
+results_table <- df_batch %>%
+  group_by(model_type, use_heterogeneous_agents) %>%
+  summarize(
+    MAE = mean(mae), .groups = 'drop'
+  ) %>%
+  arrange(model_type, use_heterogeneous_agents)
+
+write.csv(results_table, "results-presentation.csv")
 
 # save results to csv
 write.csv(final_recommendations, "calibration_test_parameters.csv")

@@ -17,11 +17,11 @@ global {
     	}
     }
     
-    /*reflex update_prev_opinion {
+    reflex update_prev_opinion {
     	ask opinion_agents {
     		previous_opinion <- opinion;
     	}
-    }*/
+    }
     	
 }
 
@@ -167,7 +167,7 @@ species argumentative_agent parent: opinion_agent {
 species consensus_agent parent: opinion_agent {
     action compute_opinion {
         if length(neighbors) > 0 {
-           	previous_opinion <- opinion;
+           // previous_opinion <- opinion;
             
             // Average opinion including self
             list<float> all_opinions <- [opinion] + (neighbors collect each.opinion);
@@ -186,7 +186,7 @@ species consensus_agent parent: opinion_agent {
 species clustering_agent parent: opinion_agent {
     action compute_opinion {
         if length(neighbors) > 0 {
-           	previous_opinion <- opinion;
+           // previous_opinion <- opinion;
             
             // Filter neighbors within confidence threshold
             list<opinion_agent> similar_neighbors <- neighbors where (
@@ -214,7 +214,7 @@ species bipolarization_agent parent: opinion_agent {
     
     action compute_opinion {
         if length(neighbors) > 0 {
-            previous_opinion <- opinion;
+           // previous_opinion <- opinion;
             
             float attraction_force <- 0.0;
             float repulsion_force <- 0.0;

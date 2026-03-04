@@ -4,7 +4,7 @@
  */
 model gui_experiments
 
-import "../main-16-2-26-homophily fix.gaml"
+import "../main_4-3.gaml"
 
 experiment social_influence type: gui {
 	float minimum_cycle_duration <- 0.1;
@@ -20,6 +20,7 @@ experiment social_influence type: gui {
     parameter "Repulsion Strength" var: repulsion_strength category: "Opinion Dynamics";
     parameter "Max Cycles" var: max_cycles category: "Simulation";
     parameter "Debug" var: debug_mode <- true category: "Debugging";
+    parameter "Use heterogeneous agents" var: use_heterogeneous_agents among: [true, false];
     
     output {
         // Spatial display

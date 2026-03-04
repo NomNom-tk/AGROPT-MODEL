@@ -551,7 +551,7 @@ global {
         // Save summary statistics
         // removed subfactor weights as they are fixed by initial computation equation
         save [model_type, current_condition, selected_debate_id, pro_count, anti_count, 
-              convergence_rate, confidence_threshold, repulsion_threshold, repulsion_strength, 
+              convergence_rate, confidence_threshold, repulsion_threshold, repulsion_strength, homophily_strength,
               seed, convergence_cycle, mae, opinion_variance, polarization_index, num_clusters, initial_num_clusters,
               neutral_zone_width, mean_net_repulsion_abs]
         to: "outputs/batch_summary.csv" rewrite: false;
@@ -630,6 +630,7 @@ global {
                 repulsion_threshold,
                 repulsion_strength,
                 seed,
+                homophily_strength,
                 convergence_cycle
             ]
             to: "outputs/agent_level_results.csv" rewrite: false;

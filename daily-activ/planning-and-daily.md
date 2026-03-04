@@ -146,3 +146,46 @@ structure (in gama there is no compartmentalization of global variables, loads i
 - then got help on setting up creation of agents in main file using 'ask' instead of 'loop' when repeating across agents
 - started writing R file for analysis
 
+# 25/2/26
+- read through bipolarization without negative influence paper
+- wrote down notes on how to implement the model
+- received exercises for GAMA
+- started the exercises
+
+# 26/2/26
+- tried to code the model into GAMA with little success
+- help from Patrick to understand how to better define maps
+- translation of model with help and extra steps
+- almost finished it and continued to work on exercises
+- testing with server and headless but no success
+
+# 27/2/26
+- finished implementing simple argumentation model
+- started cleaning debug code in files
+- further updated git repo
+- helped test Unity and Gama integration
+
+# 2/3/26
+- continued work on exercises and debug refactoring (not a complete success)
+- continued work on R script
+- testing of server with headless but no cigar
+- started planning on argumentation model (abstract for JASS) implementation
+
+# 3/3/26
+- finished R script
+- first run on server with success!
+- amelioration of model due to convergence issues
+
+# 4/3/26
+- repolished R script
+- modified GAMA code to work with convergence issues and modified network creation (allows for both argumentation and social influence)
+--> convergence problem in network creation dynamics (created dynamic rewiring -- too complicated for now, too far from original models)
+--> point being that all models have static homophilic network creation, each model can then change interaction dynamics and partner selection
+- run on server (and further debug with convergence)
+- first pull of reasonable results from server!
+- first run of r script with new data (need to modify for better presentation of initial results)
+- need to write script for sectioning debates - not all!
+- archive of models pre-convergence fix (denoted in "archive" by 4-3-26) 
+
+
+

@@ -24,7 +24,6 @@ import "../Constants.gaml"
             // Load CSV file
             file text_data <- csv_file(file_path, ",", string, false);
             matrix data_matrix <- matrix(text_data);
-            write "Total rows in file: " + data_matrix.rows + ", cols=" + data_matrix.columns;
             
             // extract headers
             list<string> headers <- [];
@@ -39,15 +38,20 @@ import "../Constants.gaml"
                 // add to list
                 headers <- headers + header_name; 
                 
-                // debug for the first few
+                /*/ debug for the first few
                 if col < 5 {
                     write " Col " + col + ": '" + header_name + "' (type: " + type_of(cell_value) + ")"; 
             
-                }
+                }*/
             }
             
-            write "Total headers extracted: " + length(headers);
-    	    write "First 10 headers: " + headers;
+            if debug_mode {
+            	write "Total rows in file: " + data_matrix.rows + ", cols=" + data_matrix.columns;
+            	write "Total headers extracted: " + length(headers);
+    	    	write "First 10 headers: " + headers;
+    	    	write "Successfully loaded " + length(agent_id_list) + " agents";
+            	
+            }
             
             int start_row <- 1; // data starts at row 1
 
@@ -68,7 +72,7 @@ import "../Constants.gaml"
                 idx_sub_t2[j-1] <- headers index_of ("DBFactor" + j + "T2");
             }
 
-            write "Column indices found";
+            // write "Column indices found";
             
             // action for verbose error checking
 
@@ -152,11 +156,10 @@ import "../Constants.gaml"
                     subfactors_t2[j] << t2_val;
                 }
             }
-
-            write "Successfully loaded " + length(agent_id_list) + " agents";
+            
         }
         
-        /// REVISIT AFTER INITIAL CHECK
+        // TODO REVISIT AFTER INITIAL CHECK -- initial debug clean done
         action debug_csv_load {
         	
         }

@@ -10,8 +10,8 @@ library(tidyverse)
 library(dplyr)
 
 # csv import for debate level and agent-level
-# hard-coded file path, need to change to relative once repo is properly set up
-df_batch <- read.csv("batch_summary-consensus-genetic.csv")
+# MAKE SURE IT IS THE BATCH FILE AND NOT AGENT !!!!
+df_batch <- read.csv("./data/batch_summary.csv")
 
 # basic exploration
 # use nrow to check rows, what type of model, unique debates, distribution of conditions
@@ -26,6 +26,17 @@ length(unique(df_batch$selected_debate_id))
 # distribution of conditions
 table(df_batch$current_condition)
 
+tab_bip_check <- df_batch %>%
+  group_by(neutral_zone_width, selected_debate_id,
+           seed) %>%
+  summarize(
+    occur = list(selected_debate_id),
+    
+  )
+
+
+print(tab_bip_check)
+
 # stochasticity check -- do different seeds give a different mae? group by model, params then summarize by mae and seeds
 stochasticity_check <- df_batch %>%
   group_by(model_type, selected_debate_id, convergence_rate,
@@ -38,6 +49,8 @@ stochasticity_check <- df_batch %>%
     n_seeds = n(),
     .groups = 'drop'
   )
+
+print(stochasticity_check)
 
 # min and max stochasticity
 max(stochasticity_check$mae_sd, na.rm = TRUE)
@@ -106,6 +119,7 @@ model_comparison <- df_batch %>%
   arrange(mae_mean)
 
 print(model_comparison)
+
 ## which model is best for each condition
 model_by_condition <- df_batch %>%
   group_by(model_type, current_condition) %>%

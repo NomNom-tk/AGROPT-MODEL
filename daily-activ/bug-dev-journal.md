@@ -127,6 +127,14 @@ species opinion_agent virtual: true  {
 - interactive console in GAMA (e.g., '?loop' brings up the documentation)
 
 
+# 4/3/26
+- new cheat sheet feature discovered
+--> first() on a string returns a char
+--> when checking first char of a string key use first(key) = 'a'
+--> starts_with expects a string but first() returns a char // types must match!
+- single quotes = char / double quotes = string
+
+
 
 
 

@@ -105,6 +105,10 @@ global {
         
         // Structural diagnostic for bipolarization model
         neutral_zone_width <- repulsion_threshold - confidence_threshold;
+
+        // initial variance for comparison
+        list<float> init_opinions <- opinion_agents collect each.initial_opinion;
+        float initial_variance <- variance(init_opinions);
         
         // Guard for final stats
         final_stats_computed <- false;
@@ -554,7 +558,7 @@ action debug_init_agents {
         save [model_type, current_condition, selected_debate_id, pro_count, anti_count, 
               convergence_rate, confidence_threshold, repulsion_threshold, repulsion_strength, 
               use_heterogeneous_agents, convergence_rate_sd, confidence_threshold_sd, repulsion_threshold_sd, 
-              repulsion_strength_sd, seed, convergence_cycle, mae, opinion_variance, polarization_index, num_clusters, 
+              repulsion_strength_sd, seed, convergence_cycle, mae, initial_variance, opinion_variance, polarization_index, num_clusters, 
               initial_num_clusters, neutral_zone_width, mean_net_repulsion_abs, homophily_strength]
         to: "outputs/batch_summary.csv" rewrite: false;
         

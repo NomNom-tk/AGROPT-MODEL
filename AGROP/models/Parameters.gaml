@@ -82,6 +82,9 @@ global {
     // Debug parameters
     bool debug_mode <- false;
     
+    // speaking logic
+    bool speaking_mode <- false;
+    
     
     // argumentation parameters
     int argument_pool_size <- 30;

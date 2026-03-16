@@ -17,11 +17,31 @@ global {
     	}
     }
     
-    reflex update_prev_opinion {
+    
+    
+    reflex speaking_turn {
+    	write length(opinion_agents);
+    	opinion_agent speaking_ag <- nil;
     	ask opinion_agents {
-    		previous_opinion <- opinion;
+    		speak_weight <- 1.0 / (sum(recent_speech) + 1);
     	}
-    }
+    	if speaking_mode {
+    		list<float> weights <- opinion_agents collect each.speak_weight;
+    		int chosen_index <- rnd_choice(weights);
+    		speaking_ag <- (opinion_agents at chosen_index);
+    		//opinion_agent(opinion_agents with_min_of(sum(each.recent_speech)));
+    		ask speaking_ag {
+    			do talk_to_all;
+    		}
+    	}
+    	ask opinion_agents where (each != speaking_ag) {
+    		write "check";
+    		recent_speech <+ 0;
+    		if length(recent_speech) > length(opinion_agents) {
+    			remove index: 0 from: recent_speech;
+    		}
+    	}
+	}
     	
 }
 
@@ -42,7 +62,12 @@ species opinion_agent virtual: true  {
     string group_type;                      // "Homogeneous", "Heterogeneous", "Control"
     float initial_opinion;                  // Starting opinion (computed from T1 subfactors)
     float final_attitude;                   // Target opinion (DB_IndexT2)
-
+	
+	// speakign attributes
+	list<int> recent_speech <- [];
+	bool is_speaking <- false;
+	float speak_weight <- 0.0;
+	
     // ====
     // Agent-level attributes (heterogeneous agents)
     // ===
@@ -51,8 +76,6 @@ species opinion_agent virtual: true  {
     float agent_repulsion_threshold;
     float agent_repulsion_strength;
     
-    // for parent species, take out all common attributes for social influence models
-    // then create 'child' species that inherit from these attributes and have their own dynamics
     // ========================================================================
     // SUBFACTOR STORAGE (T1 = initial, T2 = target)
     // ========================================================================
@@ -69,11 +92,26 @@ species opinion_agent virtual: true  {
     float subfactor_5_t2;
     
     action compute_opinion virtual: true;
+    action compute_opinion_speaker (float speaker_opinion) virtual: true;
+    
+    action talk_to_all {
+    	float my_opinion <- opinion;
+    	ask opinion_agents where (each != self) {
+    		do compute_opinion_speaker speaker_opinion: my_opinion;
+    	}
+    	recent_speech <+ 1;
+    	if length(recent_speech) > length(opinion_agents) {
+    		remove index: 0 from: recent_speech;
+    	}
+    }
     
     reflex repeat_compute_opinion {
+    	write "computing opinion for agent " + agent_id + " opinion: " + opinion;
+    	if !speaking_mode {
     	
     	do compute_opinion;
     	
+    }
     }
     
     // ASPECTS: VISUALIZATION
@@ -103,7 +141,7 @@ species argument_ {
 
 // to include in every child agent: schedules: [shuffle(opinion_agent)]
 
-species argumentative_agent parent: opinion_agent {
+/*species argumentative_agent parent: opinion_agent {
 	map<argument_, int> my_arguments;
 	float opinion min: -1.0 max: 1.0; // Current opinion [-1,1]
 	init {
@@ -128,6 +166,10 @@ species argumentative_agent parent: opinion_agent {
 			
 		}
 
+	}
+	
+	action compute_speaker_opinion (float speaker_opinion) {
+		do argument_exchange;
 	}
 
 	action intermediary_opinion {
@@ -155,7 +197,7 @@ species argumentative_agent parent: opinion_agent {
 	}
 	
 
-}
+}*/
 
 
 
@@ -166,8 +208,10 @@ species argumentative_agent parent: opinion_agent {
 // Formula: opinion_new = opinion_old + μ * (mean_neighbor_opinion - opinion_old)
 species consensus_agent parent: opinion_agent {
     action compute_opinion {
+    	write "Agent " + agent_id + " opinion: " + opinion + " neighbors: " + length(neighbors);
         if length(neighbors) > 0 {
            // previous_opinion <- opinion;
+           write "INSIDE neighbor block, neighbors: " + length(neighbors);
             
             // Average opinion including self
             list<float> all_opinions <- [opinion] + (neighbors collect each.opinion);
@@ -176,7 +220,15 @@ species consensus_agent parent: opinion_agent {
             
         }
     }
-}
+    action compute_opinion_speaker (float speaker_opinion) {
+    		write "neighbors: " + length(neighbors) + " group_type: " + group_type;
+            // Average opinion of speaker plus own
+            list<float> speak_own_opi <- [opinion] + [speaker_opinion];
+            float new_opinion <- mean(speak_own_opi);
+            opinion <- max([0.0, min([1.0, opinion + agent_convergence_rate * (new_opinion - opinion)])]); // bounds creation
+            
+        }
+    }
 
 // ========================================================================
 // REFLEX: BOUNDED CONFIDENCE (Clustering Model)
@@ -201,7 +253,16 @@ species clustering_agent parent: opinion_agent {
             }
         }
     }
-} 
+    
+    action compute_opinion_speaker (float speaker_opinion) {
+            if abs(speaker_opinion - self.opinion) <= agent_confidence_threshold {
+                list<float> similar_speaker <- [opinion] + [speaker_opinion];
+                float avg_similar <- mean(similar_speaker);
+                opinion <- max([0.0, min([1.0, opinion + agent_convergence_rate * (avg_similar - opinion)])]); // bounds creation
+                color <- rgb(opinion * 255, 0, (1 - opinion) * 255); // standardized color scheme
+            }
+        }
+    } 
     
 // ========================================================================
 // REFLEX: BIPOLARIZATION (Repulsive Influence Model)
@@ -258,6 +319,48 @@ species bipolarization_agent parent: opinion_agent {
             // Update color
             color <- rgb(opinion * 255, 0, (1 - opinion) * 255); // standardized color scheme
         }
+    }
+    
+    action compute_opinion_speaker (float speaker_opinion) {
+    	float attraction_force <- 0.0;
+        float repulsion_force <- 0.0;
+        int attractive_count <- 0;
+        int repulsive_count <- 0;
+    	
+    	float speaker_diff <- abs(speaker_opinion - self.opinion);
+                
+                if speaker_diff <= agent_confidence_threshold {
+                    // ATTRACTION: Move toward similar neighbors
+                    attraction_force <- attraction_force + (speaker_opinion - self.opinion);
+                    attractive_count <- attractive_count + 1;
+                    total_attractive_interactions <- total_attractive_interactions + 1;
+                }
+                else if speaker_diff >= agent_repulsion_threshold {
+                    // REPULSION: Move away from dissimilar neighbors
+                    float direction <- speaker_opinion > self.opinion ? -1.0 : 1.0;
+                    repulsion_force <- repulsion_force + direction;
+                    repulsive_count <- repulsive_count + 1;
+                    total_repulsive_interactions <- total_repulsive_interactions + 1;
+                }
+                else {
+                    // NEUTRAL ZONE: No influence
+                    total_neutral_interactions <- total_neutral_interactions + 1;
+                }
+    	// Apply combined forces
+            float opinion_change <- 0.0;
+            if attractive_count > 0 {
+                opinion_change <- opinion_change + agent_convergence_rate * (attraction_force / attractive_count);
+            }
+            if repulsive_count > 0 {
+                opinion_change <- opinion_change + agent_repulsion_strength * (repulsion_force / repulsive_count);
+            }
+            
+            // Update opinion (clamped to [0,1])
+            opinion <- max([0.0, min([1.0, opinion + opinion_change])]);
+            
+            // Update color
+            color <- rgb(opinion * 255, 0, (1 - opinion) * 255); // standardized color scheme
+    
     }
 }
 

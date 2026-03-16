@@ -2,8 +2,8 @@
 
 model opinion_dynamics
 
-import "actions/data_loader (copy).gaml" // reads csv, parsers and fill raw data lists (declared in global)
-import "species/opinion_agent.gaml" // import opinion agent species
+import "actions/data_loader (copy)2_3.gaml" // reads csv, parsers and fill raw data lists (declared in global)
+import "species/opinion_agent-2_3.gaml" // import opinion agent species
 import "Parameters.gaml"
 import "Constants.gaml"
 
@@ -71,6 +71,9 @@ global {
         // CREATE NETWORK
         // COMMENT OUT FOR ARUGMENTATION
         do create_network;
+        ask opinion_agents {
+    write "Agent " + agent_id + " group_type: " + group_type + " neighbors: " + length(neighbors);
+}
         
         // INITIAL DIAGNOSTICS
         do initial_diagnostics;
@@ -409,6 +412,12 @@ action debug_init_agents {
         }
     }
     
+    reflex update_prev_opinion {
+    	ask opinion_agents {
+    		previous_opinion <- opinion;
+    	}
+    }
+    
     // NETWORK update ONLY for argumentation
     // STATIC NETWORK FOR SOCIAL INFLUENCE
     /*reflex update_network {
@@ -558,12 +567,12 @@ action debug_init_agents {
         save [model_type, current_condition, selected_debate_id, pro_count, anti_count, 
               convergence_rate, confidence_threshold, repulsion_threshold, repulsion_strength, 
               use_heterogeneous_agents, convergence_rate_sd, confidence_threshold_sd, repulsion_threshold_sd, 
-              repulsion_strength_sd, seed, convergence_cycle, mae, initial_variance, opinion_variance, polarization_index, num_clusters, 
+              repulsion_strength_sd, seed, convergence_cycle, mae, opinion_variance, polarization_index, num_clusters, 
               initial_num_clusters, neutral_zone_width, mean_net_repulsion_abs, homophily_strength]
         to: "outputs/batch_summary.csv" rewrite: false;
-        
+      
         do save_agent_results;
-        
+        // TODO add in initial_variance
         
     }
     
@@ -650,7 +659,7 @@ action debug_init_agents {
     }
     
     // REFLEX: STOP GUI AT MAX_CYCLES
-    reflex stop_gui when: cycle >= max_cycles and !mode_batch {
+    reflex stop_gui when: (cycle >= max_cycles or end_simulation) and !mode_batch {
         do pause;
     }
 }

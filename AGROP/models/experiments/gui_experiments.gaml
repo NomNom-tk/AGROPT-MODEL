@@ -20,7 +20,7 @@ experiment social_influence type: gui {
     parameter "Repulsion Strength" var: repulsion_strength category: "Opinion Dynamics";
     parameter "Max Cycles" var: max_cycles category: "Simulation";
     parameter "Debug" var: debug_mode <- true category: "Debugging";
-    parameter "Use heterogeneous agents" var: use_heterogeneous_agents among: [true, false];
+    parameter "speaking mode" var: speaking_mode category: "Simulation";
     
     output {
         // Spatial display

@@ -72,8 +72,8 @@ global {
         // COMMENT OUT FOR ARUGMENTATION
         do create_network;
         ask opinion_agents {
-    write "Agent " + agent_id + " group_type: " + group_type + " neighbors: " + length(neighbors);
-}
+    	write "Agent " + agent_id + " group_type: " + group_type + " neighbors: " + length(neighbors);
+		}
         
         // INITIAL DIAGNOSTICS
         do initial_diagnostics;
@@ -291,6 +291,7 @@ action debug_init_agents {
     
     
     // ACTION: CREATE NETWORK STRUCTURE
+    // steps: reset all neighbors, build homophily network, ensure minimum connectivity, enforce undirected connections
     action create_network {
         // Reset all neighbors
         ask opinion_agents {
@@ -324,6 +325,15 @@ action debug_init_agents {
             );
             if closest != nil {
                 neighbors <- neighbors + closest;
+            }
+        }
+
+        // ensure undirected connections (only affects speaking_mode <- false)
+        ask opinion_agents {
+            loop n over: neighbors {
+                if !(n.neighbors contains self) {
+                    n.neighbors <- n.neighbors + self;
+                }
             }
         }
     }

@@ -46,8 +46,8 @@ global {
     
     // SIMULATION CONTROL
     int selected_debate_id <- 1;            // Which debate to simulate
-    string model_type <- "consensus" among: ["consensus", "clustering", "bipolarization", "argumentative"];
-    float homophily_strength <- 0.5 min: 0.0 max: 1.0; // Strength of neighbor attraction
+    string model_type <- "consensus" among: ["consensus", "clustering", "bipolarization", "argumentative", "no_change"];
+    //float homophily_strength <- 0.5 min: 0.0 max: 1.0; // Strength of neighbor attraction
     
     // Control flags
     bool mode_batch <- false; // Batch mode vs GUI mode
@@ -68,7 +68,7 @@ global {
     float repulsion_strength_sd <- 0.05 min: 0.0 max: 0.2;
     
     // agent heterogeneity toggle
-    bool use_heterogeneous_agents <- true; // default: heterogeneous
+    bool use_distinct_agents <- true; // default: heterogeneous
 
     // RESULTS & ANALYSIS
     float mae <- 0.0; // Mean Absolute Error (global)

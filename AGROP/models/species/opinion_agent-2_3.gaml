@@ -19,8 +19,9 @@ global {
     
     
     
-    reflex speaking_turn {
-    	write length(opinion_agents);
+    reflex speaking_turn when: length(opinion_agents) > 0 and !end_simulation {
+    	write "cycle: " + cycle + " agents: " + length(opinion_agents) + " speaking_mode: " + speaking_mode;
+    	//write length(opinion_agents);
     	opinion_agent speaking_ag <- nil;
     	ask opinion_agents {
     		speak_weight <- 1.0 / (sum(recent_speech) + 1);
@@ -29,13 +30,12 @@ global {
     		list<float> weights <- opinion_agents collect each.speak_weight;
     		int chosen_index <- rnd_choice(weights);
     		speaking_ag <- (opinion_agents at chosen_index);
-    		//opinion_agent(opinion_agents with_min_of(sum(each.recent_speech)));
     		ask speaking_ag {
     			do talk_to_all;
     		}
     	}
     	ask opinion_agents where (each != speaking_ag) {
-    		write "check";
+    		//write "check";
     		recent_speech <+ 0;
     		if length(recent_speech) > length(opinion_agents) {
     			remove index: 0 from: recent_speech;
@@ -106,7 +106,7 @@ species opinion_agent virtual: true  {
     }
     
     reflex repeat_compute_opinion {
-    	write "computing opinion for agent " + agent_id + " opinion: " + opinion;
+    	//write "computing opinion for agent " + agent_id + " opinion: " + opinion;
     	if !speaking_mode {
     	
     	do compute_opinion;
@@ -200,6 +200,16 @@ species argument_ {
 }*/
 
 
+// no-change agent
+species no_change_agent parent: opinion_agent {
+	action compute_opinion{
+		// do nothing, no update
+	}
+	action compute_opinion_speaker (float speaker_opinion) {
+		// do nothing
+	}
+}
+
 
 // ========================================================================
 // REFLEX: CONSENSUS FORMATION (Assimilative Model)
@@ -208,10 +218,10 @@ species argument_ {
 // Formula: opinion_new = opinion_old + μ * (mean_neighbor_opinion - opinion_old)
 species consensus_agent parent: opinion_agent {
     action compute_opinion {
-    	write "Agent " + agent_id + " opinion: " + opinion + " neighbors: " + length(neighbors);
+    	//write "Agent " + agent_id + " opinion: " + opinion + " neighbors: " + length(neighbors);
         if length(neighbors) > 0 {
            // previous_opinion <- opinion;
-           write "INSIDE neighbor block, neighbors: " + length(neighbors);
+           //write "INSIDE neighbor block, neighbors: " + length(neighbors);
             
             // Average opinion including self
             list<float> all_opinions <- [opinion] + (neighbors collect each.opinion);
@@ -221,7 +231,7 @@ species consensus_agent parent: opinion_agent {
         }
     }
     action compute_opinion_speaker (float speaker_opinion) {
-    		write "neighbors: " + length(neighbors) + " group_type: " + group_type;
+    		//write "neighbors: " + length(neighbors) + " group_type: " + group_type;
             // Average opinion of speaker plus own
             list<float> speak_own_opi <- [opinion] + [speaker_opinion];
             float new_opinion <- mean(speak_own_opi);

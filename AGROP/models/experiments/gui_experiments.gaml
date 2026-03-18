@@ -13,7 +13,7 @@ experiment social_influence type: gui {
     parameter "Selected Debate ID" var: selected_debate_id category: "Data";
     //parameter "Network Type" var: network_type category: "Network";
     //parameter "Connection Probability (random)" var: connection_probability category: "Network";
-    parameter "Homophily Strength" var: homophily_strength category: "Network"; 
+    //parameter "Homophily Strength" var: homophily_strength category: "Network"; 
     parameter "Convergence Rate (μ)" var: convergence_rate category: "Opinion Dynamics";
     parameter "Confidence Threshold (ε)" var: confidence_threshold category: "Opinion Dynamics";
     parameter "Repulsion Threshold" var: repulsion_threshold category: "Opinion Dynamics";

@@ -8,11 +8,12 @@ import "Parameters.gaml"
 import "Constants.gaml"
 
 global {
-    
+	// TODO temp set for initial variance
+    float initial_variance;
     // initialization ONLY for orchestration
     init {
     	// call data loader with file path parameter
-    	do load_csv_data("../data-dictionary/data_complete_anonymised.csv");
+    	do load_csv_data("../data-dictionary/exp-dat/train_data.csv");
     	
         
         // CREATE DEBATE ID MAPPING
@@ -71,18 +72,17 @@ global {
         // CREATE NETWORK
         // COMMENT OUT FOR ARUGMENTATION
         do create_network;
-        ask opinion_agents {
-    	write "Agent " + agent_id + " group_type: " + group_type + " neighbors: " + length(neighbors);
+        if debug_mode = true{
+        	ask opinion_agents {
+    		write "Agent " + agent_id + " group_type: " + group_type + " neighbors: " + length(neighbors);
+			}
 		}
         
         // INITIAL DIAGNOSTICS
         do initial_diagnostics;
         
     }
-    
-    
-   
-    
+
     // REVISIT AFTER INITIAL TEST WHY INDEX OUT OF BOUNDS
     action debate_id_mapping {
     	
@@ -118,8 +118,8 @@ global {
     }
     
     action debug_init {
-    	if debug_mode {
-    		// ✅ CHECK WHAT WAS ACTUALLY LOADED
+    	if debug_mode = true {
+		// ✅ CHECK WHAT WAS ACTUALLY LOADED
     	write "=== DATA LOADER VERIFICATION ===";
     	write "agent_id_list length: " + length(agent_id_list);
     	write "id_group_raw length: " + length(id_group_raw);
@@ -198,7 +198,7 @@ global {
 			}
 
 			condition_detected <- true;
-			if debug_mode {
+			if debug_mode = true {
 			// group type detection
 				write "DEBUG: group_type_val for debate " + target_debate_id + ": " + group_type_val;
 
@@ -245,7 +245,7 @@ global {
 				subfactor_5_t2 <- subfactors_t2[4][idx];
 
 				// PARAMETERS (if/else for heterogeneity)
-				if use_heterogeneous_agents {
+				if use_distinct_agents {
 					agent_convergence_rate <- max([0.01, min([0.99, gauss(convergence_rate, convergence_rate_sd)])]);
 					agent_confidence_threshold <- max([0.01, min([0.99, gauss(confidence_threshold, confidence_threshold_sd)])]);
 					agent_repulsion_strength <- max([0.01, min([0.99, gauss(repulsion_strength, repulsion_strength_sd)])]);
@@ -279,7 +279,7 @@ global {
 }
 
 action debug_init_agents {
-	if debug_mode {
+	if debug_mode = true {
 		write "=== AGENT PARAMETER DISTRIBUTION CHECK ===";
 		list<float> agent_conv_rates <- opinion_agents collect each.agent_convergence_rate;
 		write
@@ -291,14 +291,24 @@ action debug_init_agents {
     
     
     // ACTION: CREATE NETWORK STRUCTURE
-    // steps: reset all neighbors, build homophily network, ensure minimum connectivity, enforce undirected connections
+    // steps: reset all neighbors, enforce undirected connections
     action create_network {
         // Reset all neighbors
         ask opinion_agents {
             neighbors <- [];
         }
+        
+        // complete network (all agents connected each other)
+        ask opinion_agents {
+        	neighbors <- opinion_agents where (
+        		each != self and each.debate_id = self.debate_id
+        	);
+        }
 
-        // homophily based network
+        /*/ homophily based network
+        neighbors <- opinion_agents where (
+        	each != self and each.debate_id = self.debate_id)
+        
         ask opinion_agents where (each.group_type != "Control") {
             loop potential_neighbor over: opinion_agents where (
                 each != self and
@@ -326,7 +336,7 @@ action debug_init_agents {
             if closest != nil {
                 neighbors <- neighbors + closest;
             }
-        }
+        }*/
 
         // ensure undirected connections (only affects speaking_mode <- false)
         ask opinion_agents {
@@ -401,13 +411,13 @@ action debug_init_agents {
             float max_change <- max(opinion_changes);
             
             //if mode_batch and debug_mode {
-                write "Cycle " + cycle + " | Max change: " + max_change;
+            //    write "Cycle " + cycle + " | Max change: " + max_change;
             //}
             
             // Check if converged
             if max_change < mae_convergence_threshold {
                 convergence_cycle <- cycle;
-                if debug_mode {
+                if debug_mode = true {
                 	write "Converged at cycle " + convergence_cycle;
                 }
                 end_simulation <- true;
@@ -501,7 +511,7 @@ action debug_init_agents {
         
         mean_net_repulsion_abs <- length(net_repulsions) > 0 ? mean(net_repulsions) : 0.0;
         
-        if debug_mode {
+        if debug_mode = true {
             	write "=== Computing Fit at Cycle " + cycle + " ===";
             	
             	// mae calc check
@@ -560,7 +570,7 @@ action debug_init_agents {
     
     // ACTION: SAVE BATCH RESULTS
     action save_batch_results {
-    	if debug_mode {
+    	if debug_mode = true {
     		write "=== Saving Results ===";
         	write "MAE: " + mae;
         	write "Condition: " + current_condition;
@@ -576,13 +586,12 @@ action debug_init_agents {
         // removed subfactor weights as they are fixed by initial computation equation
         save [model_type, current_condition, selected_debate_id, pro_count, anti_count, 
               convergence_rate, confidence_threshold, repulsion_threshold, repulsion_strength, 
-              use_heterogeneous_agents, convergence_rate_sd, confidence_threshold_sd, repulsion_threshold_sd, 
-              repulsion_strength_sd, seed, convergence_cycle, mae, opinion_variance, polarization_index, num_clusters, 
-              initial_num_clusters, neutral_zone_width, mean_net_repulsion_abs, homophily_strength]
+              use_distinct_agents, convergence_rate_sd, confidence_threshold_sd, repulsion_threshold_sd, 
+              repulsion_strength_sd, seed, convergence_cycle, speaking_mode, initial_variance, mae, opinion_variance, polarization_index, num_clusters, 
+              initial_num_clusters, neutral_zone_width, mean_net_repulsion_abs]
         to: "outputs/batch_summary.csv" rewrite: false;
       
         do save_agent_results;
-        // TODO add in initial_variance
         
     }
     
@@ -609,6 +618,13 @@ action debug_init_agents {
             float error_sub4 <- abs(opinion - subfactor_4_t2);
             float error_sub5 <- abs(opinion - subfactor_5_t2);
             
+            /*/ TODO modify recent speech conversion to string (use strsplit in R for analysis)
+            string recent_speech_str <- "";
+            loop val over: recent_speech {
+            	string val_str <- string(val) + ";";
+            	recent_speech_str <- string(recent_speech_str + val_str);
+            }*/
+            
             save [
                 model_type,
                 current_condition,
@@ -624,6 +640,7 @@ action debug_init_agents {
                 
                 // Initial opinion (weighted)
                 initial_opinion,
+                initial_variance,
                 
                 // Simulation final opinion
                 opinion,
@@ -648,20 +665,22 @@ action debug_init_agents {
                 agent_repulsion_threshold,
                 agent_repulsion_strength,
                 
+                // speech
+                //recent_speech_str,
+                
                 // Parameters
                 convergence_rate,
                 confidence_threshold,
                 repulsion_threshold,
                 repulsion_strength,
                 seed,
-                homophily_strength,
                 convergence_cycle,
-                use_heterogeneous_agents
+                use_distinct_agents
             ]
             to: "outputs/agent_level_results.csv" rewrite: false;
         }
         
-    if debug_mode {
+    if debug_mode = false {
     	write "=== Saving Per-Agent Results ===";
     } else {
     	write "Saved " + length(opinion_agents) + " agent records" + "for debate:" + selected_debate_id;

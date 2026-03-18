@@ -11,7 +11,7 @@ model opinion_dynamics
 global {
     float step <- 0.5; // time step of simulation
     
-    int max_cycles <- 300; // max cycles for convergence
+    int max_cycles <- 100; // max cycles for convergence
     
     float mae_convergence_threshold <- 0.001 min: 0.0 max: 1.0; // Convergence Checking
     

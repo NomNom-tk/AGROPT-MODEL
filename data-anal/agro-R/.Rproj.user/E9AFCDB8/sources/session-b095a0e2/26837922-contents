@@ -14,7 +14,12 @@ nrow(df_ag)
 conditions <- unique(df_ag$current_condition)
 
 
-# do agents with higher convergence rate change more?
+#### pre to post delib attitude prediction ####
+ols_mod <- lm(final_attitude ~ initial_opinion, data = df_ag)
+
+summary(ols_mod)
+
+#### do agents with higher convergence rate change more? ####
 ## does convergence rate predict opinion change?
 agent_behavior <- df_ag %>%
   mutate(

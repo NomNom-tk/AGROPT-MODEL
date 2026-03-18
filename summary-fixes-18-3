@@ -1,0 +1,37 @@
+# summary of changes 18/2
+
+Network:
+
+Switched from homophily-based to full connected network
+Added undirected connection enforcement
+
+Speaking mechanic:
+
+Fixed talk_to_all to use opinion_agents instead of opinion_agent
+Added when: length(opinion_agents) > 0 and !end_simulation guard to speaking_turn
+Fixed update_prev_opinion ordering — moved to main file after check_convergence
+Added stop_gui trigger on end_simulation
+Added max_cycles_speaking parameter for speaking mode experiments
+
+Batch experiments:
+
+Fixed model_type, speaking_mode, use_distinct_agents moved from parameters to init
+Removed irrelevant parameters per model type (consensus, clustering, bipolarization)
+Added debate_label attribute to opinion_agent and save logic
+Added guard in initialize_agents_for_debate for invalid debate IDs
+Added bipolarization-specific metrics guard in save_batch_results
+Added agent-level repulsion_threshold constraint guard
+Removed do die blocks from bipolarization experiments
+Cleaned up no_change experiment
+
+Parameters file:
+
+Restructured into four clear sections: inputs, runtime state, raw data, outputs
+Fixed initial_variance shadowing bug
+Added recent_speech_str string conversion for CSV saving
+
+Bug fixes:
+
+Fixed false convergence at cycle 15 via update_prev_opinion ordering
+Fixed rnd_choice error with empty weights list
+Fixed id_group_raw H/M prefix preservation confirmed

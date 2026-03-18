@@ -153,12 +153,9 @@ import "../Constants.gaml"
                     subfactors_t2[j] << t2_val;
                 }
             }
-            
 
             if debug_mode = true {
             	write "Successfully loaded " + length(agent_id_list) + " agents";
-            	write "id_group_raw[0]: " + id_group_raw[0]; // check for debate_id identifier
-				write "id_group_raw[1]: " + id_group_raw[1];
             }
         }
         

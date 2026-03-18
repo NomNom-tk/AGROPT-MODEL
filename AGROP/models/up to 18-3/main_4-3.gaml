@@ -7,7 +7,9 @@ import "species/opinion_agent-2_3.gaml" // import opinion agent species
 import "Parameters.gaml"
 import "Constants.gaml"
 
-global { 
+global {
+	// TODO temp set for initial variance
+    float initial_variance;
     // initialization ONLY for orchestration
     init {
     	// call data loader with file path parameter
@@ -109,7 +111,7 @@ global {
 
         // initial variance for comparison
         list<float> init_opinions <- opinion_agents collect each.initial_opinion;
-        initial_variance <- variance(init_opinions);
+        float initial_variance <- variance(init_opinions);
         
         // Guard for final stats
         final_stats_computed <- false;
@@ -180,13 +182,6 @@ global {
     action initialize_agents_for_debate (int target_debate_id) {
 	bool condition_detected <- false;
 
-    // guard for skipping invalid debate IDs
-    if !(debate_id_list contains target_debate_id) {
-        write "Debate " + target_debate_id + "not found, skipping";
-        end_simulation <- true;
-        return;
-    }
-
 	// FIRST LOOP: Detect condition type for this debate
 	loop i from: 0 to: length(debate_id_list) - 1 {
 		if debate_id_list[i] = target_debate_id and !condition_detected {
@@ -236,8 +231,6 @@ global {
 				debate_id <- target_debate_id;
 				group_type <- group_type_list[idx];
 				pro_reduction <- pro_reduction_list[idx];
-                debate_label <- id_group_raw[idx];
-                experiment_id <- current_experiment_id;
 
 				// SUBFACTORS (ALWAYS)
 				subfactor_1_t1 <- subfactors_t1[0][idx];
@@ -257,7 +250,6 @@ global {
 					agent_confidence_threshold <- max([0.01, min([0.99, gauss(confidence_threshold, confidence_threshold_sd)])]);
 					agent_repulsion_strength <- max([0.01, min([0.99, gauss(repulsion_strength, repulsion_strength_sd)])]);
 					agent_repulsion_threshold <- max([0.01, min([0.99, gauss(repulsion_threshold, repulsion_threshold_sd)])]);
-					agent_repulsion_threshold <- max([agent_confidence_threshold + 0.05, agent_repulsion_threshold]);
 				} else {
 					agent_convergence_rate <- convergence_rate;
 					agent_confidence_threshold <- confidence_threshold;
@@ -578,40 +570,7 @@ action debug_init_agents {
     
     // ACTION: SAVE BATCH RESULTS
     action save_batch_results {
-        int pro_count <- opinion_agents count (each.pro_reduction = 1);
-        int anti_count <- opinion_agents count (each.pro_reduction = 0);
-        string debate_label <- first(opinion_agents).debate_label;
-        
-        if model_type = "bipolarization" {
-        	neutral_zone_width <- repulsion_strength - confidence_threshold;
-        	
-        	// mean net repulsion abs calc
-        	list<float> net_repulsions <- [];
-        	ask opinion_agents {
-        		float net_repulsion <- 0.0;
-        		loop n over: neighbors {
-        			if abs(n.opinion - opinion) >= agent_repulsion_threshold {
-        				net_repulsion <- net_repulsion + (n.opinion > opinion ? -1.0: 1.0);
-        			}
-        		}
-        		net_repulsions << abs(net_repulsion);
-        	}
-        	mean_net_repulsion_abs <- length(net_repulsions) > 0 ? mean(net_repulsions) :
-        	0.0;
-        } else {
-        	neutral_zone_width <- 0.0;
-        	mean_net_repulsion_abs <- 0.0;
-        }
-        
-        // Save summary statistics
-        save [model_type, current_condition, selected_debate_id, debate_label, pro_count, anti_count, 
-              convergence_rate, confidence_threshold, repulsion_threshold, repulsion_strength, 
-              use_distinct_agents, convergence_rate_sd, confidence_threshold_sd, repulsion_threshold_sd, 
-              repulsion_strength_sd, seed, convergence_cycle, speaking_mode, initial_variance, mae, opinion_variance, polarization_index, num_clusters, 
-              initial_num_clusters, neutral_zone_width, mean_net_repulsion_abs, current_experiment_id]
-        to: "outputs/batch_summary.csv" rewrite: false;
-        
-        if debug_mode = true {
+    	if debug_mode = true {
     		write "=== Saving Results ===";
         	write "MAE: " + mae;
         	write "Condition: " + current_condition;
@@ -619,6 +578,18 @@ action debug_init_agents {
     	} else {
     		write "Results saved successfully for debate:" + selected_debate_id;
     	}
+    	
+        int pro_count <- opinion_agents count (each.pro_reduction = 1);
+        int anti_count <- opinion_agents count (each.pro_reduction = 0);
+        
+        // Save summary statistics
+        // removed subfactor weights as they are fixed by initial computation equation
+        save [model_type, current_condition, selected_debate_id, pro_count, anti_count, 
+              convergence_rate, confidence_threshold, repulsion_threshold, repulsion_strength, 
+              use_distinct_agents, convergence_rate_sd, confidence_threshold_sd, repulsion_threshold_sd, 
+              repulsion_strength_sd, seed, convergence_cycle, speaking_mode, initial_variance, mae, opinion_variance, polarization_index, num_clusters, 
+              initial_num_clusters, neutral_zone_width, mean_net_repulsion_abs]
+        to: "outputs/batch_summary.csv" rewrite: false;
       
         do save_agent_results;
         
@@ -658,7 +629,6 @@ action debug_init_agents {
                 model_type,
                 current_condition,
                 selected_debate_id,
-                debate_label,
                 agent_id,
                 pro_reduction,
                 pro_count,
@@ -705,9 +675,7 @@ action debug_init_agents {
                 repulsion_strength,
                 seed,
                 convergence_cycle,
-                use_distinct_agents,
-                experiment_id,
-                speaking_mode
+                use_distinct_agents
             ]
             to: "outputs/agent_level_results.csv" rewrite: false;
         }

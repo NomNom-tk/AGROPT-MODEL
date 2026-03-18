@@ -17,6 +17,21 @@ library(olsrr)
 # change from . to .. or the reverse if it doesn't work
 df_batch <- read.csv("./data/batch_summary.csv")
 df_orig <- read.csv("./data/data_complete_anonymised.csv")
+df_ag <- read.csv("./data/agent_level_results.csv")
+
+# agent conv speaking and distinct to bool (from string)
+df_ag <- df_ag %>%
+  mutate(
+    speaking_mode = speaking_mode == "true",
+    use_distinct_agents = use_distinct_agents == "true"
+  )
+
+# batch conv speaking and distinct to bool (from string)
+df_batch <- df_batch %>%
+  mutate(
+    speaking_mode = speaking_mode == "true",
+    use_distinct_agents = use_distinct_agents == "true"
+  )
 
 ## EXEC SUMMARY
 exec_summary <- data.frame(
@@ -27,9 +42,6 @@ exec_summary <- data.frame(
   Winner = c("X", "", "")
 )
 write_csv(exec_summary, "./results/exec-summary.csv")
-
-# ols regression initial factors on final factors
-ols_regress
 
 #### saving-to-be-done ####
 install.packages("flextable")
@@ -63,9 +75,6 @@ length(unique(df_batch$selected_debate_id))
 neutral_zone_exp <- df_batch %>%
   filter(model_type == "bipolarization" & neutral_zone_width < 0.0) 
 
-# homophily impact check (could lower homophily allow for better convergence to empirical targets?)
-cor(df_batch$homophily_strength, df_batch$mae)
-
 # check constraint violations (in bipol) check whenther repulsion threshold <= confidenc ethreshold
 constraint_violations <- df_batch %>%
   filter(model_type == "bipolarization") %>%
@@ -80,20 +89,55 @@ if (nrow(constraint_violations) > 0) {
 }
 
 
+#### linear regression comparison ####
+ols_model <- lm(final_attitude ~ initial_opinion, data = df_ag)
+df_ag$ols_error <- abs(final_attitude - predict(ols_model))
+
+# ols aggregation to debate level
+ols_mae_debate <- df_ag %>%
+  group_by(selected_debate_id, debate_label) %>%
+  summarize(
+    ols_mae = mean(ols_error)
+  )
+
+# aggregate ABM mae to debate level from df_batch
+abm_mae_debate <- df_batch %>%
+  group_by(selected_debate_id, model_type, debate_label,
+           speaking_mode, use_distinct_agents) %>%
+  summarize(
+    abm_mae = mean(mae))
+
+# join on selected deabte id and debate_label
+comparison_ols <- abm_mae_debate %>%
+  left_join(ols_mae_debate, by = c("selected_debate_id", "debate_label"))
+
+# compute delta / negative delta implies that ABM improve upon ols
+comparison <- comparison %>%
+  mutate(delta_mae = abm_mae - ols_mae)
+
+# significan of ols_model
+summary(ols_model)
+
+# wilcoxon test for abm and ols
+wilcox.text(comparison$abm_mae, comparison$ols_mae, paired = TRUE)
+
+# paired t-test
+t.test(comparison$abm_mae, comparison$ols_mae, paired = TRUE)
+
+### plot ABM mae vs regression mae scatter with debate_level as identifier
+
 #### parameters ####
 # parameter correlations with mae
 params_cor_full <- df_batch %>%
-  group_by(model_type, use_heterogeneous_agents) %>%
+  group_by(model_type, use_distinct_agents) %>%
   summarize(
     cor_convergence = cor(convergence_rate, mae),
-    cor_homophily = cor(homophily_strength, mae),
     cor_confidence = cor(confidence_threshold, mae),
     cor_repulsion_strength = cor(repulsion_strength, mae, use = "complete.obs"), # complete.obs correlations for complete observations
     cor_repulsion_threshold = cor(repulsion_threshold, mae, use = "complete.obs")
   )
 # save
 write_csv(params_cor_full, "./results/parameter-analyses.csv")
-
 
 # reshape params for heatmap
 params_long <- params_cor_full %>%
@@ -104,7 +148,6 @@ params_long <- params_cor_full %>%
 # parameter interaction regimes
 param_regimes <- df_batch %>%
   mutate(regimes = paste0(
-    ifelse(homophily_strength > 0.5, "High_hom", "Low_hom"), "_",
     ifelse(convergence_rate > 0.3, "Fast", "Slow"))) %>%
   group_by(regimes, model_type) %>%
   summarize(mae_mean = mean(mae))
@@ -134,13 +177,78 @@ conv_diff <- df_batch %>%
 print(conv_diff)
 write_csv(conv_diff, "./results/outcomes_by_condition.csv")
 
+#### debate composition ####
+# initial mutation create h and m groups
+df_batch <- df_batch %>%
+  mutate(debate_composition = substr(debate_label, 1, 1),
+         normalised_convergence = convergence_cycle / 300) # divided by 300 to normalize (max_cycles is constant)
+
+h_vs_m <- df_batch %>%
+  group_by(debate_composition, model_type, speaking_mode, use_distinct_agents) %>%
+  summarize(
+    mae_mean = mean(mae),
+    mae_sd = sd(mae),
+    n = n()
+  )
+
+# wilcoxon test over debate_level mae
+wilcox.test(mae ~ debate_composition, data = df_batch)
+# interpret: W = 23152, p-value < 2.2e-16 ----> sig diference, homogeneous debates systematiclal ylower mae
+
+#### speaking mode comparisons ####
+speaking_compar <- df_batch %>%
+  group_by(speaking_mode, debate_composition, model_type, use_distinct_agents) %>%
+  summarize(
+    mae_mean = mean(mae),
+    mae_sd = sd(mae),
+    mean_norm_convergence = mean(normalised_convergence),
+    n = n()
+  )
+# interp: speaking_mode = true, higher normalised convergence
+# speaking true and distinct true, higher normalised convergence (takes longer)
+# 
+
+# wilcox test speaking_mode predicting convergence_cycle
+wilcox.test(convergence_cycle ~ speaking_mode, data = df_batch)
+# interpretation: data:  convergence_cycle by speaking_mode
+# W = 18970, p-value < 2.2e-16 ---> significant differnece in convergence by speaking_cycle (probably mechanic, slower simulaiton)
+# speaking mode takes significantly more cycles to converge
+
+#### no change baseline ####
+inner_join(df_batch %>% filter(model_type != "no_change"),
+           df_no_change,
+           by = c("selected_debate_id", "debate_label")) %>%
+  distinct(selected_debate_id, debate_label)
+# shows tha tonly 6 debates cna be compared, need to rerun no_change_exp
+
+df_no_change <- df_batch %>%
+  filter(model_type == "no_change") %>%
+  group_by(selected_debate_id, debate_label, debate_composition, current_experiment_id) %>%
+  summarize(baseline_mae = mean(mae))
+
+nrow(df_batch$model_type == "no_change")
+print(df_no_change)
+
+
+# join with df_batch for baseline comparison
+baseline_comparison <- df_no_change %>%
+  left_join(abm_mae_debate, by = c("selected_debate_id", "debate_label"))
+
+nrow(baseline_comparison)
+
+baseline_comparison <- baseline_comparison %>%
+  mutate(delta_mae = abm_mae - baseline_mae)
+# interp: no change baselie is very competitive with regards to abm (better for the time being)
+write_csv(baseline_comparison, "./results/abm-baseline-compar.csv")
+
+
 #### failures of models and predictions ####
 # best parameters per model
 # use slice_min(mae, n=1) and then select by model and params
 best_params <- df_batch %>%
-  group_by(model_type, use_heterogeneous_agents) %>%
+  group_by(model_type, use_distinct_agents) %>%
   slice_min(mae, n=1) %>%
-  select(model_type, use_heterogeneous_agents, convergence_rate, confidence_threshold, repulsion_strength,
+  select(model_type, use_distinct_agents, convergence_rate, confidence_threshold, repulsion_strength,
          repulsion_threshold, mae, current_condition, selected_debate_id)
 
 print("Best parameters per model")
@@ -148,11 +256,11 @@ print(best_params)
 
 # top 10 best parameter sets for each model / group by moel, distinct, then slice_min(mae, n=10), then select model and params, mae
 top10_per_model <- df_batch %>%
-  group_by(model_type, use_heterogeneous_agents) %>%
+  group_by(model_type, use_distinct_agents) %>%
   distinct(convergence_rate, confidence_threshold, repulsion_strength,
            repulsion_threshold, .keep_all = TRUE) %>%
   slice_min(mae, n=10) %>%
-  select(model_type, use_heterogeneous_agents, convergence_rate, confidence_threshold, repulsion_strength,
+  select(model_type, use_distinct_agents, convergence_rate, confidence_threshold, repulsion_strength,
          repulsion_threshold, mae, selected_debate_id)
 
 print("top 10 parameters for each model")
@@ -169,7 +277,7 @@ clusters <- df_batch %>%
 #### debate level insights ####
 ## hardest debate to predict
 hardest_debates <- df_batch %>%
-  group_by(selected_debate_id, current_condition, use_heterogeneous_agents) %>%
+  group_by(selected_debate_id, current_condition, use_distinct_agents) %>%
   summarize(
     mae_mean = mean(mae),
     mae_min = min(mae),
@@ -185,7 +293,7 @@ write_csv(hardest_debates, "./results/hardes-debates.csv")
 
 ## easiest debates to predict
 easiest_debates <- df_batch %>%
-  group_by(selected_debate_id, current_condition, use_heterogeneous_agents) %>%
+  group_by(selected_debate_id, current_condition, use_distinct_agents) %>%
   summarize(
     mae_mean = mean(mae),
     mae_min = min(mae),
@@ -205,8 +313,7 @@ failures_comp <- df_batch %>%
   group_by(model_type, failures) %>%
   summarize(
     mean_convergence = mean(convergence_rate),
-    mean_homophily = mean(homophily_strength),
-    pct_hetero = mean(use_heterogeneous_agents == "true") * 100,
+    pct_hetero = mean(use_distinct_agents == "true") * 100,
     n_total = n()
   )
 write_csv(failures_comp, "./results/debate_failures.csv")
@@ -229,8 +336,7 @@ write_csv(var_compar, "./results/variance-debates.csv")
 # investigating why bipol runs fail?
 df_check <- df_batch %>%
   filter(opinion_variance > 0.1) %>%
-  select(model_type, repulsion_threshold, confidence_threshold, 
-         homophily_strength, use_heterogeneous_agents)
+  select(model_type, repulsion_threshold, confidence_threshold, use_distinct_agents)
 ### all bipol runs have homophily=1.0, repulsion_thresholhd & confidence < 0.2
 ### causes network fragmentation and extreme bipolarization
 ### 5x worse predictions
@@ -238,7 +344,7 @@ df_check <- df_batch %>%
 #### stochasticity impact ####
 # stochasticity check -- do different seeds give a different mae?
 stochasticity_check <- df_batch %>%
-  group_by(model_type, use_heterogeneous_agents, selected_debate_id, convergence_rate,
+  group_by(model_type, use_distinct_agents, selected_debate_id, convergence_rate,
            confidence_threshold, repulsion_threshold, repulsion_strength) %>%
   summarize(
     mae_mean = mean(mae),
@@ -254,7 +360,7 @@ print(stochasticity_check)
 
 ## USE THIS OVER PREV STOCH
 stochasticity_check_1 <- df_batch %>%
-  group_by(model_type, use_heterogeneous_agents, selected_debate_id) %>%
+  group_by(model_type, use_distinct_agents, selected_debate_id) %>%
   summarize(mae_sd = sd(mae), n = n())
 ## COMMENTS
 ### stochasticity is negligible (>90% of debates show SD=0 across seeds)
@@ -269,7 +375,7 @@ min(stochasticity_check_1$mae_sd, na.rm = TRUE)
 ## Heterogeneity impact
 ## does adding SD > 0 improve mae?
 heterogeneity_check <- df_batch %>%
-  group_by (model_type, use_heterogeneous_agents) %>%
+  group_by (model_type, use_distinct_agents) %>%
   summarize (
     mae_mean = mean(mae),
     mae_median = median(mae),
@@ -283,7 +389,7 @@ write_csv(heterogeneity_check, "./results/hetero-impact.csv")
 ## BOSS summary -- need model+hetero combinations, MAE (mean and best), convergence speed, failure rate
 ## sample size
 boss_table <- df_batch %>%
-  group_by(model_type, use_heterogeneous_agents) %>%
+  group_by(model_type, use_distinct_agents) %>%
   summarize(
     MAE = mean(mae),
     Best_MAE = min(mae),
@@ -298,7 +404,7 @@ view(boss_table)
 
 # which model performs the best overall
 model_comparison <- df_batch %>%
-  group_by(model_type, use_heterogeneous_agents) %>%
+  group_by(model_type, use_distinct_agents) %>%
   summarize(
     mae_mean = mean(mae),
     mae_sd = sd(mae),
@@ -311,21 +417,21 @@ print(model_comparison)
 
 # reformating in wide format
 model_wide_full <- model_comparison %>%
-  select(model_type, use_heterogeneous_agents, mae_mean) %>%
-  pivot_wider(names_from = use_heterogeneous_agents, values_from = mae_mean)
+  select(model_type, use_distinct_agents, mae_mean) %>%
+  pivot_wider(names_from = use_distinct_agents, values_from = mae_mean)
 
 names(model_wide_full)
 
 ## which model is best for each condition
 model_by_condition <- df_batch %>%
-  group_by(model_type, current_condition, use_heterogeneous_agents) %>%
+  group_by(model_type, current_condition, use_distinct_agents) %>%
   summarize (
     mae_mean = mean(mae),
     mae_min = min(mae),
     n_debates = n_distinct(selected_debate_id),
     .groups = 'drop'
   ) %>%
-  arrange(current_condition, use_heterogeneous_agents, mae_mean)
+  arrange(current_condition, use_distinct_agents, mae_mean)
 print(model_by_condition)
 write_csv(model_by_condition, "./results/model-by-condition.csv")
 
@@ -377,7 +483,7 @@ ggsave("Model Comparison.png",
        dpi = 300)
 
 # hetero impact plot
-ggplot(model_comparison, aes(x=model_type, y = mae_mean, fill=use_heterogeneous_agents)) +
+ggplot(model_comparison, aes(x=model_type, y = mae_mean, fill=use_distinct_agents)) +
   geom_col(position = "dodge") +
   scale_fill_discrete() +
   labs(title = "Heterogeneity Impact", x = "Model Type", y = "MAE", fill = "Agent Type") +
@@ -415,8 +521,8 @@ final_recommendations <- df_batch %>%
   group_by(model_type) %>%
   slice_min(mae, n=3) %>%
   select(model_type, mae, convergence_rate, confidence_threshold,
-         repulsion_threshold, repulsion_strength, homophily_strength,
-         use_heterogeneous_agents, current_condition
+         repulsion_threshold, repulsion_strength,
+         use_distinct_agents, current_condition
   ) %>%
   arrange(mae)
 
@@ -425,11 +531,11 @@ print(final_recommendations)
 
 # final results table
 results_table <- df_batch %>%
-  group_by(model_type, use_heterogeneous_agents) %>%
+  group_by(model_type, use_distinct_agents) %>%
   summarize(
     MAE = mean(mae), .groups = 'drop'
   ) %>%
-  arrange(model_type, use_heterogeneous_agents)
+  arrange(model_type, use_distinct_agents)
 
 write.csv(results_table, "results-presentation.csv")
 

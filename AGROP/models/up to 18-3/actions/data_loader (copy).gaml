@@ -1,6 +1,5 @@
 model data_loader 
 
-//import "../main-16-2-26-homophily fix.gaml"
 import "../Parameters.gaml"
 import "../Constants.gaml"
 
@@ -45,13 +44,14 @@ import "../Constants.gaml"
                 }*/
             }
             
-            if debug_mode = true {
+            if bool(debug_mode) {
             	write "Total rows in file: " + data_matrix.rows + ", cols=" + data_matrix.columns;
             	write "Total headers extracted: " + length(headers);
     	    	write "First 10 headers: " + headers;
-    	    	write "Column indices found";
+    	    	write "Successfully loaded " + length(agent_id_list) + " agents";
+            	
             }
-
+            
             int start_row <- 1; // data starts at row 1
 
             // Find column indices
@@ -70,6 +70,8 @@ import "../Constants.gaml"
                 idx_sub_t1[j-1] <- headers index_of ("DBFactor" + j + "T1");
                 idx_sub_t2[j-1] <- headers index_of ("DBFactor" + j + "T2");
             }
+
+            // write "Column indices found";
             
             // action for verbose error checking
 
@@ -154,15 +156,9 @@ import "../Constants.gaml"
                 }
             }
             
-
-            if debug_mode = true {
-            	write "Successfully loaded " + length(agent_id_list) + " agents";
-            	write "id_group_raw[0]: " + id_group_raw[0]; // check for debate_id identifier
-				write "id_group_raw[1]: " + id_group_raw[1];
-            }
         }
         
-        /// REVISIT AFTER INITIAL CHECK
+        // TODO REVISIT AFTER INITIAL CHECK -- initial debug clean done
         action debug_csv_load {
         	
         }

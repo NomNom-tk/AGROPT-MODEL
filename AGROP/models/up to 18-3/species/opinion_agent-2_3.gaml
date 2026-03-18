@@ -20,7 +20,7 @@ global {
     
     
     reflex speaking_turn when: length(opinion_agents) > 0 and !end_simulation {
-    	//write "cycle: " + cycle + " agents: " + length(opinion_agents) + " speaking_mode: " + speaking_mode;
+    	write "cycle: " + cycle + " agents: " + length(opinion_agents) + " speaking_mode: " + speaking_mode;
     	//write length(opinion_agents);
     	opinion_agent speaking_ag <- nil;
     	ask opinion_agents {
@@ -62,8 +62,6 @@ species opinion_agent virtual: true  {
     string group_type;                      // "Homogeneous", "Heterogeneous", "Control"
     float initial_opinion;                  // Starting opinion (computed from T1 subfactors)
     float final_attitude;                   // Target opinion (DB_IndexT2)
-    string debate_label;					// debate identifier for H and M
-    string experiment_id;					// identifies type of experiment
 	
 	// speakign attributes
 	list<int> recent_speech <- [];

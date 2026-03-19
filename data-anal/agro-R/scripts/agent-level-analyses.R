@@ -7,17 +7,32 @@ library(dplyr)
 
 # csv load and read //// make sure it is agent file!!!!
 df_ag <- read.csv("./data/agent_level_results.csv")
+df_orig <- read.csv("./data/data_complete_anonymised.csv")
 
 # initial check
 print(df_ag$conditions)
 nrow(df_ag)
 conditions <- unique(df_ag$current_condition)
 
+df_orig_modif <- df_orig %>%
+  rename(agent_id = ID)
 
-#### pre to post delib attitude prediction ####
+ols_modif <- lm(perceived_norms + self_control ~ abs(opinion_change), data = df_orig_modif)
+
+print(df_orig$perceived_norms)
+print(df_orig$self_control)
+
+#### pre to post delib attitude prediction // need to find a wya to include in ppt ####
 ols_mod <- lm(final_attitude ~ initial_opinion, data = df_ag)
 
 summary(ols_mod)
+
+ols_mod_summary <- summary(ols_mod)
+write.csv(ols_mod_summary, "./results/ols-agent-level.csv")
+
+#### H2 social norms and self control, merge df_ag with original csv ####
+df_merged <- merge(df_ag, df_orig_modif by = agent_id)
+print(df_merged)
 
 #### do agents with higher convergence rate change more? ####
 ## does convergence rate predict opinion change?

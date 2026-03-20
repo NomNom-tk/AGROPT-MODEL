@@ -2,37 +2,93 @@
 
 install.packages("tidyverse")
 install.packages("dplyr")
+install.packages("broom")
+install.packages("officer")
+install.packages("rvg")
+install.packages("flextable")
 library(tidyverse)
 library(dplyr)
+library(rvg)
+library(broom)
+library(officer)
+library(flextable)
 
 # csv load and read //// make sure it is agent file!!!!
 df_ag <- read.csv("./data/agent_level_results.csv")
 df_orig <- read.csv("./data/data_complete_anonymised.csv")
 
-# initial check
+# saving logic ####
+add_to_ppt <- function(ppt, content, title, type = "table") {
+  ppt <- add_slide(ppt, lyaout = "Title and Content", master = "Office Theme")
+  ppt <- ph_with(ppt, value = tile, location = ph_location_type(type = "title"))
+  
+  if (type == "table") {
+    # data frame or tidy regression output
+    ft <- flextable(content) %>%
+      theme_vanilla() %>%
+      autofit()
+    ppt <- ph_with(ppt, value = ft, location = ph_location_type(type = "body"))
+  } else if (type == "regression") {
+    ft <- tidy(content, conf.int = TRUE) %>%
+      mutate(across(where(is.numeric), ~round(., 3))) %>%
+      flextable() %>%
+      theme_vanilla() %>%
+      autofit()
+    ppt <- ph_with(ppt, value = ft, location = ph_location_type(type = "body"))
+  } else if (type == "plot") {
+    ## ggplot object
+    ppt <- ph_with(ppt,
+                   value = dml(ggobj = content),
+                   location = ph_location(width = 8, height = 5,
+                                          left = 1, top = 1.5))
+  }
+  return(ppt)
+}
+
+## use
+## ppt <- read_pptx()
+## add table example: 
+## ppt <- add_to_ppt(ppt, model_comparison, "Model Comparison), type = "table)
+## ppt <- add_to_ppt(ppt, boss_table, "Summary Results", type = "table)
+## save once
+# print(ppt, target = "relative path")
+
+
+# initial check ####
 print(df_ag$conditions)
 nrow(df_ag)
 conditions <- unique(df_ag$current_condition)
-
-df_orig_modif <- df_orig %>%
-  rename(agent_id = ID)
-
-ols_modif <- lm(perceived_norms + self_control ~ abs(opinion_change), data = df_orig_modif)
-
-print(df_orig$perceived_norms)
-print(df_orig$self_control)
 
 #### pre to post delib attitude prediction // need to find a wya to include in ppt ####
 ols_mod <- lm(final_attitude ~ initial_opinion, data = df_ag)
 
 summary(ols_mod)
 
-ols_mod_summary <- summary(ols_mod)
-write.csv(ols_mod_summary, "./results/ols-agent-level.csv")
+# add initial ols to ppt
+ppt <- add_to_ppt(ppt, ols_mod, "OLS on pre-delib attitude prediction", type = "table")
 
 #### H2 social norms and self control, merge df_ag with original csv ####
-df_merged <- merge(df_ag, df_orig_modif by = agent_id)
+df_orig_modif <- df_orig %>%
+  rename(agent_id = ID)
+
+df_merged <- merge(df_ag, df_orig_modif, by = "agent_id")
 print(df_merged)
+
+# h2 test basic ols
+ols_opin_norms_ctrl <- lm(abs(opinion_change) ~ perceived_norms + self_control, data = df_merged)
+summary(ols_opin_norms_ctrl)
+
+# add h2 basic to ppt
+ppt <- add_to_ppt(ppt, ols_opin_norms_ctrl, "OLS norms and self-control on abs opin change", type = "table")
+
+# h2 with initial_opin as moderator
+ols_opin_w_mod <- lm(abs(opinion_change) ~ perceived_norms * initial_opinion + self_control * initial_opinion,
+                     data = df_merged)
+
+summary(ols_opin_w_mod)
+# add h2 complete to ppt
+ppt <- add_to_ppt(ppt, ols_opin_w_mod, "full OLS with initial opinion as moderator", type = "table")
+
 
 #### do agents with higher convergence rate change more? ####
 ## does convergence rate predict opinion change?

@@ -1,17 +1,16 @@
 # load packages
 install.packages("tidyverse")
 install.packages("dplyr")
-install.packages("fixest") # use for regression given clustered data (i don't think so) 
-install.packages("gtsummary") # use for regression tables for regression comparison and models
-install.packages("performance") # used to compare models "compare_performance(m_sim, m_real)
-install.packages("broom") # used to extract regression characteristics and create a tidy table for plotting
-install.packages("tidyr")
-install.packages("kable")
-install.packages("olsrr")
-library(ggplot2)
+install.packages("broom")
+install.packages("officer")
+install.packages("rvg")
+install.packages("flextable")
 library(tidyverse)
 library(dplyr)
-library(olsrr)
+library(rvg)
+library(broom)
+library(officer)
+library(flextable)
 
 # csv import for debate level and agent-level
 # change from . to .. or the reverse if it doesn't work
@@ -22,7 +21,7 @@ df_ag <- read.csv("./data/agent_level_results.csv")
 # agent conv speaking and distinct to bool (from string)
 df_ag <- df_ag %>%
   mutate(
-    speaking_mode = speaking_mode == "true",
+    #speaking_mode = speaking_mode == "true",
     use_distinct_agents = use_distinct_agents == "true"
   )
 
@@ -43,23 +42,43 @@ exec_summary <- data.frame(
 )
 write_csv(exec_summary, "./results/exec-summary.csv")
 
-#### saving-to-be-done ####
-install.packages("flextable")
-install.packages("officer")
-library(flextable)
-library(officer)
-
-# Create formatted table
-ft <- flextable(boss_summary) %>%
-  theme_vanilla() %>%
-  autofit()
-
-# Save to PowerPoint
+#### saving logic ####
+# saving logic ####
+add_to_ppt <- function(ppt, content, title, type = "table") {
+  ppt <- add_slide(ppt, layout = "Title and Content", master = "Office Theme")
+  ppt <- ph_with(ppt, value = title, location = ph_location_type(type = "title"))
+  
+  if (type == "table") {
+    # data frame or tidy regression output
+    ft <- flextable(content) %>%
+      theme_vanilla() %>%
+      autofit()
+    ppt <- ph_with(ppt, value = ft, location = ph_location_type(type = "body"))
+  } else if (type == "regression") {
+    ft <- tidy(content, conf.int = TRUE) %>%
+      mutate(across(where(is.numeric), ~round(., 3))) %>%
+      flextable() %>%
+      theme_vanilla() %>%
+      autofit()
+    ppt <- ph_with(ppt, value = ft, location = ph_location_type(type = "body"))
+  } else if (type == "plot") {
+    ## ggplot object
+    ppt <- ph_with(ppt,
+                   value = dml(ggobj = content),
+                   location = ph_location(width = 8, height = 5,
+                                          left = 1, top = 1.5))
+  }
+  return(ppt)
+}
 ppt <- read_pptx()
-ppt <- add_slide(ppt, layout = "Title and Content", master = "Office Theme")
-ppt <- ph_with(ppt, value = ft, location = ph_location_type(type = "body"))
-print(ppt, target = "results.pptx")
 
+## use
+## ppt <- read_pptx()
+## add table example: 
+## ppt <- add_to_ppt(ppt, model_comparison, "Model Comparison), type = "table)
+## ppt <- add_to_ppt(ppt, boss_table, "Summary Results", type = "table)
+## save once
+# print(ppt, target = "relative path")
 
 #### basic exploration ####
 # use nrow to check rows, what type of model, unique debates, distribution of conditions
@@ -91,7 +110,7 @@ if (nrow(constraint_violations) > 0) {
 
 #### linear regression comparison ####
 ols_model <- lm(final_attitude ~ initial_opinion, data = df_ag)
-df_ag$ols_error <- abs(final_attitude - predict(ols_model))
+df_ag$ols_error <- abs(df_ag$final_attitude - predict(ols_model, df_ag))
 
 # ols aggregation to debate level
 ols_mae_debate <- df_ag %>%
@@ -112,24 +131,28 @@ comparison_ols <- abm_mae_debate %>%
   left_join(ols_mae_debate, by = c("selected_debate_id", "debate_label"))
 
 # compute delta / negative delta implies that ABM improve upon ols
-comparison <- comparison %>%
+comparison_ols <- comparison_ols %>%
   mutate(delta_mae = abm_mae - ols_mae)
 
 # significan of ols_model
 summary(ols_model)
 
-# wilcoxon test for abm and ols
-wilcox.text(comparison$abm_mae, comparison$ols_mae, paired = TRUE)
+ppt <- add_to_ppt(ppt, comparison_ols, "OLS abm and empirical", type = "table")
 
+# wilcoxon test for abm and ols
+wilcox_abm_ols <- wilcox.test(comparison_ols$abm_mae, comparison_ols$ols_mae, paired = TRUE)
+
+ppt <- add_to_ppt(ppt, wilcox_abm_ols, "Wilcox test for abm and empirical", type = "table")
 # paired t-test
 t.test(comparison$abm_mae, comparison$ols_mae, paired = TRUE)
 
 ### plot ABM mae vs regression mae scatter with debate_level as identifier
 
 #### parameters ####
-# parameter correlations with mae
+# parameter correlations with mae 
+#### SD is zero problem
 params_cor_full <- df_batch %>%
-  group_by(model_type, use_distinct_agents) %>%
+  group_by(model_type, use_distinct_agents, current_experiment_id) %>%
   summarize(
     cor_convergence = cor(convergence_rate, mae),
     cor_confidence = cor(confidence_threshold, mae),
@@ -151,11 +174,14 @@ param_regimes <- df_batch %>%
     ifelse(convergence_rate > 0.3, "Fast", "Slow"))) %>%
   group_by(regimes, model_type) %>%
   summarize(mae_mean = mean(mae))
+
+ppt <- add_to_ppt(ppt, param_regimes, "Parameter Regimes", type = "table")
+
 write_csv(param_regimes, "./results/param-regimes.csv")
 
 # convergence analysis
 convergence_anal <- df_batch %>%
-  group_by(model_type, current_condition) %>%
+  group_by(model_type, current_condition, speaking_mode) %>%
   summarize(
     cycles_mean = mean(convergence_cycle),
     cycles_sd = sd(convergence_cycle),
@@ -163,6 +189,8 @@ convergence_anal <- df_batch %>%
     cycles_max = max(convergence_cycle),
     .groups = 'drop'
   )
+
+ppt <- add_to_ppt(ppt, convergence_anal, "Convergence Analysis", type = "table")
 
 print("Convergence cycle analysis")
 print(convergence_anal)
@@ -173,6 +201,8 @@ conv_diff <- df_batch %>%
   mutate(outcome = ifelse(opinion_variance < 0.1, "Convergence", "Polarization")) %>%
   group_by(model_type, current_condition, outcome) %>%
   summarize(n = n())
+
+ppt <- add_to_ppt(ppt, conv_diff, "Convergence vs divergence, which models achieve conv", type = "table")
 
 print(conv_diff)
 write_csv(conv_diff, "./results/outcomes_by_condition.csv")
@@ -195,6 +225,8 @@ h_vs_m <- df_batch %>%
 wilcox.test(mae ~ debate_composition, data = df_batch)
 # interpret: W = 23152, p-value < 2.2e-16 ----> sig diference, homogeneous debates systematiclal ylower mae
 
+ppt <- add_to_ppt(ppt, h_vs_m, "Hetero vs homo mae", type = "table")
+
 #### speaking mode comparisons ####
 speaking_compar <- df_batch %>%
   group_by(speaking_mode, debate_composition, model_type, use_distinct_agents) %>%
@@ -206,7 +238,8 @@ speaking_compar <- df_batch %>%
   )
 # interp: speaking_mode = true, higher normalised convergence
 # speaking true and distinct true, higher normalised convergence (takes longer)
-# 
+
+ppt <- add_to_ppt(ppt, speaking_compar, "Convergence based on speaking", type = "table") 
 
 # wilcox test speaking_mode predicting convergence_cycle
 wilcox.test(convergence_cycle ~ speaking_mode, data = df_batch)
@@ -215,16 +248,20 @@ wilcox.test(convergence_cycle ~ speaking_mode, data = df_batch)
 # speaking mode takes significantly more cycles to converge
 
 #### no change baseline ####
-inner_join(df_batch %>% filter(model_type != "no_change"),
+df_no_change <- df_batch %>%
+  filter(model_type == "no_change") %>%
+  group_by(selected_debate_id, debate_label, debate_composition, current_experiment_id) %>%
+  summarize(baseline_mae = mean(mae))
+
+
+compar_for_no_change <- inner_join(df_batch %>% filter(model_type != "no_change"),
            df_no_change,
            by = c("selected_debate_id", "debate_label")) %>%
   distinct(selected_debate_id, debate_label)
 # shows tha tonly 6 debates cna be compared, need to rerun no_change_exp
 
-df_no_change <- df_batch %>%
-  filter(model_type == "no_change") %>%
-  group_by(selected_debate_id, debate_label, debate_composition, current_experiment_id) %>%
-  summarize(baseline_mae = mean(mae))
+ppt <- add_to_ppt(ppt, compar_for_no_change, "GA use of no_change, not always comparable", type = "table")
+
 
 nrow(df_batch$model_type == "no_change")
 print(df_no_change)
@@ -239,6 +276,8 @@ nrow(baseline_comparison)
 baseline_comparison <- baseline_comparison %>%
   mutate(delta_mae = abm_mae - baseline_mae)
 # interp: no change baselie is very competitive with regards to abm (better for the time being)
+
+ppt <- add_to_ppt(ppt, baseline_comparison, "No change comparison with ABM", type = "table")
 write_csv(baseline_comparison, "./results/abm-baseline-compar.csv")
 
 
@@ -263,6 +302,8 @@ top10_per_model <- df_batch %>%
   select(model_type, use_distinct_agents, convergence_rate, confidence_threshold, repulsion_strength,
          repulsion_threshold, mae, selected_debate_id)
 
+ppt <- add_to_ppt(ppt, top10_per_model, "top 10 params per model", type = "table")
+
 print("top 10 parameters for each model")
 print(top10_per_model)
 write_csv(top10_per_model, "./results/10-params-model.csv")
@@ -274,10 +315,12 @@ clusters <- df_batch %>%
   group_by(model_type, selected_debate_id) %>%
   summarize(mean_cluster_change = mean(cluster_change))
 
+ppt <- add_to_ppt(ppt, clusters, "Cluster formations and changes", type = "table")
+
 #### debate level insights ####
 ## hardest debate to predict
 hardest_debates <- df_batch %>%
-  group_by(selected_debate_id, current_condition, use_distinct_agents) %>%
+  group_by(current_experiment_id, current_condition, use_distinct_agents, debate_label) %>%
   summarize(
     mae_mean = mean(mae),
     mae_min = min(mae),
@@ -293,7 +336,7 @@ write_csv(hardest_debates, "./results/hardes-debates.csv")
 
 ## easiest debates to predict
 easiest_debates <- df_batch %>%
-  group_by(selected_debate_id, current_condition, use_distinct_agents) %>%
+  group_by(current_experiment_id, current_condition, use_distinct_agents, debate_label) %>%
   summarize(
     mae_mean = mean(mae),
     mae_min = min(mae),
@@ -316,6 +359,8 @@ failures_comp <- df_batch %>%
     pct_hetero = mean(use_distinct_agents == "true") * 100,
     n_total = n()
   )
+ppt <- add_to_ppt(ppt, failures_comp, "Overpredictions", type = "table")
+
 write_csv(failures_comp, "./results/debate_failures.csv")
 
 # predicting bipolarization does opinion variance chance bipol predictions?
@@ -345,7 +390,7 @@ df_check <- df_batch %>%
 # stochasticity check -- do different seeds give a different mae?
 stochasticity_check <- df_batch %>%
   group_by(model_type, use_distinct_agents, selected_debate_id, convergence_rate,
-           confidence_threshold, repulsion_threshold, repulsion_strength) %>%
+           confidence_threshold, repulsion_threshold, repulsion_strength, current_experiment_id) %>%
   summarize(
     mae_mean = mean(mae),
     mae_sd = sd(mae),
@@ -404,7 +449,7 @@ view(boss_table)
 
 # which model performs the best overall
 model_comparison <- df_batch %>%
-  group_by(model_type, use_distinct_agents) %>%
+  group_by(model_type, current_experiment_id, speaking_mode, use_distinct_agents) %>%
   summarize(
     mae_mean = mean(mae),
     mae_sd = sd(mae),
@@ -424,7 +469,7 @@ names(model_wide_full)
 
 ## which model is best for each condition
 model_by_condition <- df_batch %>%
-  group_by(model_type, current_condition, use_distinct_agents) %>%
+  group_by(model_type, current_condition, use_distinct_agents, current_experiment_id) %>%
   summarize (
     mae_mean = mean(mae),
     mae_min = min(mae),

@@ -188,4 +188,10 @@ structure (in gama there is no compartmentalization of global variables, loads i
 - archive of models pre-convergence fix (denoted in "archive" by 4-3-26) 
 
 
+# 23/3/26
+- started editing the ODD protocol (update speaking_mode dynamics and calibration strategy with LHS)
+- left to do for ODD -> add in parameters table and full elements model cleaned & save_batch and agent results list
+- updated protocol (almost ready) with necessary elements
+- revised slides with Nicolas and planned future analyses
+
 

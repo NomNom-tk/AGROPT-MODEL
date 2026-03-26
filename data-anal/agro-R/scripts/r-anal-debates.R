@@ -12,6 +12,8 @@ library(broom)
 library(officer)
 library(flextable)
 
+# collapsing logic (single - Alt+L, Shift,Alt,L / collapse all Alt,O)
+
 # csv import for debate level and agent-level
 # change from . to .. or the reverse if it doesn't work
 df_batch <- read.csv("./data/batch_summary.csv")
@@ -28,9 +30,10 @@ df_ag <- df_ag %>%
 # batch conv speaking and distinct to bool (from string)
 df_batch <- df_batch %>%
   mutate(
-    speaking_mode = speaking_mode == "true",
-    use_distinct_agents = use_distinct_agents == "true"
-  )
+    speaking_mode = factor(speaking_mode, levels = c("true", "false")), # changed to factor for wilcox tests
+    use_distinct_agents = use_distinct_agents == "true",
+    debate_composition = substr(debate_label, 1, 1),
+    normalised_convergence = convergence_cycle / 300) # divided by 300 to normalize (max_cycles is constant)
 
 ## EXEC SUMMARY
 exec_summary <- data.frame(
@@ -42,8 +45,78 @@ exec_summary <- data.frame(
 )
 write_csv(exec_summary, "./results/exec-summary.csv")
 
+# trial plotting of params over mae ####
+df_params_spread_long <- df_batch %>%
+  filter(model_type != "no_change") %>%
+  mutate(
+    confidence_threshold = ifelse(model_type == "consensus", NA, confidence_threshold),
+    repulsion_threshold = ifelse(model_type %in% c("consensus", "clustering"), NA, repulsion_threshold),
+    repulsion_strength = ifelse(model_type %in% c("consensus", "clustering"), NA, repulsion_strength)
+  ) %>%
+  pivot_longer(
+    cols = c(convergence_rate, confidence_threshold,
+            repulsion_strength, repulsion_threshold),
+    names_to = "parameter",
+    values_to = "value"
+  ) %>%
+  filter(!is.na(value))
+
+range(df_batch$mae)
+summary(df_params_spread_long$mae)
+
+### SKIP THIS PLOT
+ggplot(df_params_spread_long, aes(x = value, y = mae, color = current_experiment_id)) +
+  geom_point(alpha = 0.4, size = 1.5) +
+  geom_hline(yintercept = 0.10, linetype = "dashed", color = "red") +
+  #geom_smooth(method = "loess", se = TRUE) +
+  facet_grid(model_type ~ parameter, scales = "free_x") + 
+  labs(title = "Parameters vs Mae by model", x = "Parameter value", y = "mae") + 
+  theme_bw()
+
+# second try conditional histogram
+threshold <- 0.10
+
+df_good <- df_batch %>% filter(mae <= threshold, model_type != "no_change")
+df_all <- df_batch %>% filter(model_type != "no_change")
+
+# helper function to pivot longer / strip useless parameters
+pivot_params <- function(df) {
+  df %>%
+  mutate(
+    confidence_threshold = ifelse(model_type == "consensus", NA, confidence_threshold),
+    repulsion_threshold = ifelse(model_type %in% c("consensus", "clustering"), NA, repulsion_threshold),
+    repulsion_strength = ifelse(model_type %in% c("consensus", "clustering"), NA, repulsion_strength)
+  ) %>%
+  pivot_longer(
+    cols = c(convergence_rate, confidence_threshold,
+             repulsion_strength, repulsion_threshold),
+    names_to = "parameter",
+    values_to = "value"
+  ) %>%
+  filter(!is.na(value))
+}
+
+df_all_long <- pivot_params(df_all) %>% mutate(set = "All runs")
+df_good_long <- pivot_params(df_good) %>% mutate(set = "MAE < 0.10")
+
+df_param_complete <- bind_rows(df_all_long, df_good_long)
+
+# conditional histogram
+ggplot(df_param_complete, aes(x = value, fill = set)) +
+  geom_histogram(aes(y = after_stat(count)),
+                 position = "identity", alpha = 0.5, bins = 15) +
+  scale_fill_manual(values = c("All runs" = "grey60", "MAE < 0.10" = "steelblue")) +
+  facet_grid(model_type ~ parameter, scales = "free_x") +
+  labs(title = "Conditional parameter distributions",
+       subtitle = "Blue = high performance runs (MAE < 0.10), Grey = all runs", 
+       x = "Parameter Value", y = "Frequency", fill = "") +
+  theme_bw() +
+  theme(legend.position = "bottom")
+ggsave("preLHS parameter sampling_1.png",
+       path = "./graphics",
+       dpi = 300)
+
 #### saving logic ####
-# saving logic ####
 add_to_ppt <- function(ppt, content, title, type = "table") {
   ppt <- add_slide(ppt, layout = "Title and Content", master = "Office Theme")
   ppt <- ph_with(ppt, value = title, location = ph_location_type(type = "title"))
@@ -95,12 +168,9 @@ neutral_zone_exp <- df_batch %>%
   filter(model_type == "bipolarization" & neutral_zone_width < 0.0) 
 
 # check constraint violations (in bipol) check whenther repulsion threshold <= confidenc ethreshold
-constraint_violations <- df_batch %>%
-  filter(model_type == "bipolarization") %>%
-  filter(repulsion_threshold <= confidence_threshold)
-
-print(paste("Constraint violations (repulsion <= confidence):",
-            nrow(constraint_violations)))
+df_batch_post_filter <- df_batch %>%
+  filter(!(model_type == "bipolarization" & neutral_zone_width < 0))
+# 360 observations filtered out, need to redo model conditions in exp GAMA
 
 if (nrow(constraint_violations) > 0) {
   print("WARNING found invalid parameter combinations")
@@ -108,7 +178,9 @@ if (nrow(constraint_violations) > 0) {
 }
 
 
-#### linear regression comparison ####
+#### linear regression comparison - EMPIRICAL vs ABM####
+# initial comparison using ag data (compares empirical and ABM: final - from csv, initial - from csv)
+# then generalizes to batch_abm_mae so that abm mae gets compared with ols_mae
 ols_model <- lm(final_attitude ~ initial_opinion, data = df_ag)
 df_ag$ols_error <- abs(df_ag$final_attitude - predict(ols_model, df_ag))
 
@@ -116,7 +188,8 @@ df_ag$ols_error <- abs(df_ag$final_attitude - predict(ols_model, df_ag))
 ols_mae_debate <- df_ag %>%
   group_by(selected_debate_id, debate_label) %>%
   summarize(
-    ols_mae = mean(ols_error)
+    ols_mae = mean(ols_error),
+    .groups = "drop"
   )
 
 # aggregate ABM mae to debate level from df_batch
@@ -124,33 +197,76 @@ abm_mae_debate <- df_batch %>%
   group_by(selected_debate_id, model_type, debate_label,
            speaking_mode, use_distinct_agents) %>%
   summarize(
-    abm_mae = mean(mae))
+    abm_mae = mean(mae),
+    .groups = "drop")
 
 # join on selected deabte id and debate_label
-comparison_ols <- abm_mae_debate %>%
-  left_join(ols_mae_debate, by = c("selected_debate_id", "debate_label"))
-
 # compute delta / negative delta implies that ABM improve upon ols
-comparison_ols <- comparison_ols %>%
-  mutate(delta_mae = abm_mae - ols_mae)
+comparison_ols <- abm_mae_debate %>%
+  left_join(ols_mae_debate, by = c("selected_debate_id", "debate_label")) %>%
+  mutate(delta_mae = abm_mae - ols_mae,
+         abm_better = factor(delta_mae < 0, levels = c(FALSE,TRUE),
+                             labels = c("OLS BETTER", "ABM BETTER")))
+
+# delta computations, descriptives
+mean_delta = mean(comparison_ols$delta_mae)
+se_delta = sd(comparison_ols$delta_mae) / sqrt(length(comparison_ols$delta_mae)) # SD / sqrt(n)
+ci_lower = mean_delta - 1.96 * se_delta
+ci_upper = mean_delta + 1.96 * se_delta
+
+
+# wilcoxon test for abm and ols
+wilcox_abm_ols <- wilcox.test(comparison_ols$abm_mae, comparison_ols$ols_mae, paired = TRUE)
+t_test_abm_ols <- t.test(comparison_ols$abm_mae, comparison_ols$ols_mae, paired = TRUE)
+
+
+# combined summary (t test - for SE, CI and mean comparison (is mean delta mae different from zero))
+# Wilcoxon can confirm whether result is robust to skewed MAE distribution, median delta mae differs from zero
+delta_summary <- data.frame(
+  mean_delta = mean_delta,
+  se_delta = se_delta,
+  ci_lower = ci_lower,
+  ci_upper = ci_upper,
+  t_test_p_value = t_test_abm_ols$p.value,
+  wilcox_test_p_value = wilcox_abm_ols$p.value
+)
+
+print(delta_summary)
 
 # significan of ols_model
 summary(ols_model)
 
+# plot of delta mae per debate 
+base_mae_debate_plot <- ggplot(comparison_ols, aes(x=debate_label, y=delta_mae, fill=abm_better)) +
+  geom_col() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Delta MAE per debate",
+       x = "Debate Identifier (Label)",
+       y = "Delta MAE (ABM - OLS)")
+
+print(base_mae_debate_plot)
+
+# plot of delta_mae per debate, faceted by model_type
+model_mae_debate_plot <- ggplot(comparison_ols, aes(x=debate_label, y=delta_mae, fill=model_type)) +
+  geom_col(position = position_dodge()) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Delta MAE per debate by model type",
+       x = "Debate Identifier (Label)",
+       y = "Delta MAE (ABM - OLS)")
+
+print(model_mae_debate_plot)
+
+# add to slides
 ppt <- add_to_ppt(ppt, comparison_ols, "OLS abm and empirical", type = "table")
-
-# wilcoxon test for abm and ols
-wilcox_abm_ols <- wilcox.test(comparison_ols$abm_mae, comparison_ols$ols_mae, paired = TRUE)
-
-ppt <- add_to_ppt(ppt, wilcox_abm_ols, "Wilcox test for abm and empirical", type = "table")
-# paired t-test
-t.test(comparison$abm_mae, comparison$ols_mae, paired = TRUE)
-
-### plot ABM mae vs regression mae scatter with debate_level as identifier
+ppt <- add_to_ppt(ppt, delta_summary, "Wilcox test for abm and empirical", type = "table")
+ppt <- add_to_ppt(ppt, base_mae_debate_plot, "Delta MAE per debate", type = "plot")
+ppt <- add_to_ppt(ppt, model_mae_debate_plot, "Delta MAE per debate by model_type", type = "plot")
 
 #### parameters ####
 # parameter correlations with mae 
-#### SD is zero problem
+#### SD is zero for some models as they don't all use the same parameters
 params_cor_full <- df_batch %>%
   group_by(model_type, use_distinct_agents, current_experiment_id) %>%
   summarize(
@@ -159,8 +275,6 @@ params_cor_full <- df_batch %>%
     cor_repulsion_strength = cor(repulsion_strength, mae, use = "complete.obs"), # complete.obs correlations for complete observations
     cor_repulsion_threshold = cor(repulsion_threshold, mae, use = "complete.obs")
   )
-# save
-write_csv(params_cor_full, "./results/parameter-analyses.csv")
 
 # reshape params for heatmap
 params_long <- params_cor_full %>%
@@ -168,16 +282,20 @@ params_long <- params_cor_full %>%
                names_to = "parameter",
                values_to = "correlation")
 
+# parameter heatmap with geomtile
+params_heatmap <- ggplot(params_long, mapping = aes(x = parameter, y = model_type, fill = correlation)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", mid = "grey", high = "red", midpoint = 0) +
+  facet_wrap(~use_heterogeneous_agents) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
 # parameter interaction regimes
 param_regimes <- df_batch %>%
   mutate(regimes = paste0(
     ifelse(convergence_rate > 0.3, "Fast", "Slow"))) %>%
   group_by(regimes, model_type) %>%
   summarize(mae_mean = mean(mae))
-
-ppt <- add_to_ppt(ppt, param_regimes, "Parameter Regimes", type = "table")
-
-write_csv(param_regimes, "./results/param-regimes.csv")
 
 # convergence analysis
 convergence_anal <- df_batch %>%
@@ -190,11 +308,6 @@ convergence_anal <- df_batch %>%
     .groups = 'drop'
   )
 
-ppt <- add_to_ppt(ppt, convergence_anal, "Convergence Analysis", type = "table")
-
-print("Convergence cycle analysis")
-print(convergence_anal)
-
 # debate evolution
 # convergence vs divergence, shows which models and under which exp conditions models achieve convergence/bipol
 conv_diff <- df_batch %>%
@@ -202,17 +315,16 @@ conv_diff <- df_batch %>%
   group_by(model_type, current_condition, outcome) %>%
   summarize(n = n())
 
-ppt <- add_to_ppt(ppt, conv_diff, "Convergence vs divergence, which models achieve conv", type = "table")
+# additions to ppt
+ppt <- add_to_ppt(ppt, params_cor_full, "Full Parameter Correlations", type = "table")
+ppt <- add_to_ppt(ppt, params_heatmap, "Parameter Heatmap", type = "plot")
+ppt <- add_to_ppt(ppt, param_regimes, "Parameter Regimes", type = "table")
+ppt <- add_to_ppt(ppt, convergence_anal, "Convergence Analysis", type = "table")
+ppt <- add_to_ppt(ppt, conv_diff, "Convergence vs divergence - Models achieving convergence", type = "table")
 
-print(conv_diff)
-write_csv(conv_diff, "./results/outcomes_by_condition.csv")
 
 #### debate composition ####
-# initial mutation create h and m groups
-df_batch <- df_batch %>%
-  mutate(debate_composition = substr(debate_label, 1, 1),
-         normalised_convergence = convergence_cycle / 300) # divided by 300 to normalize (max_cycles is constant)
-
+# based on initial mutation to create h and m groups
 h_vs_m <- df_batch %>%
   group_by(debate_composition, model_type, speaking_mode, use_distinct_agents) %>%
   summarize(
@@ -222,10 +334,8 @@ h_vs_m <- df_batch %>%
   )
 
 # wilcoxon test over debate_level mae
-wilcox.test(mae ~ debate_composition, data = df_batch)
+mae_vs_comp_wilcox <- wilcox.test(mae ~ debate_composition, data = df_batch)
 # interpret: W = 23152, p-value < 2.2e-16 ----> sig diference, homogeneous debates systematiclal ylower mae
-
-ppt <- add_to_ppt(ppt, h_vs_m, "Hetero vs homo mae", type = "table")
 
 #### speaking mode comparisons ####
 speaking_compar <- df_batch %>%
@@ -239,13 +349,20 @@ speaking_compar <- df_batch %>%
 # interp: speaking_mode = true, higher normalised convergence
 # speaking true and distinct true, higher normalised convergence (takes longer)
 
-ppt <- add_to_ppt(ppt, speaking_compar, "Convergence based on speaking", type = "table") 
+levels(factor(df_batch$speaking_mode))
+table(df_batch$speaking_mode)
 
 # wilcox test speaking_mode predicting convergence_cycle
-wilcox.test(convergence_cycle ~ speaking_mode, data = df_batch)
+speakingmode_vs_convergence_wilcox <- wilcox.test(convergence_cycle ~ speaking_mode, data = df_batch)
 # interpretation: data:  convergence_cycle by speaking_mode
 # W = 18970, p-value < 2.2e-16 ---> significant differnece in convergence by speaking_cycle (probably mechanic, slower simulaiton)
 # speaking mode takes significantly more cycles to converge
+
+# additions to ppt
+ppt <- add_to_ppt(ppt, h_vs_m, "Hetero vs homo mae", type = "table")
+ppt <- add_to_ppt(ppt, mae_vs_comp_wilcox, "Wilcoxon rank sum for mae by debate composition", type = "regression")
+ppt <- add_to_ppt(ppt, speaking_compar, "Convergence based on speaking", type = "table")
+ppt <- add_to_ppt(ppt, speakingmode_vs_convergence_wilcox, "Convergence by speaking mode Wilcox rank sum", type = "regression")
 
 #### no change baseline ####
 df_no_change <- df_batch %>%
@@ -405,7 +522,7 @@ print(stochasticity_check)
 
 ## USE THIS OVER PREV STOCH
 stochasticity_check_1 <- df_batch %>%
-  group_by(model_type, use_distinct_agents, selected_debate_id) %>%
+  group_by(model_type, use_distinct_agents, selected_debate_id, seed) %>%
   summarize(mae_sd = sd(mae), n = n())
 ## COMMENTS
 ### stochasticity is negligible (>90% of debates show SD=0 across seeds)
@@ -499,18 +616,7 @@ ggsave("SD-MAE-convergence.png",
 ### models overlap heavily
 
 
-# parameter heatmap with geomtile
-ggplot(params_long, mapping = aes(x = parameter, y = model_type, fill = correlation)) +
-         geom_tile() +
-         scale_fill_gradient2(low = "blue", mid = "grey", high = "red", midpoint = 0) +
-         facet_wrap(~use_heterogeneous_agents) +
-         theme_minimal() +
-         theme(axis.text.x = element_text(angle = 45, hjust = 1))
-ggsave("Parameter heatmap.png",
-       path = "../graphics",
-       width = 12,
-       height = 6,
-       dpi = 600)
+
 
 ### interpretation
 ### false shows stronger correlations (convergence strong pos for consensus / homohily srong posi for bipol)

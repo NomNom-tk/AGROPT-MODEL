@@ -85,6 +85,8 @@ global {
     int num_anti_agents <- 0;               // Count of anti-reduction agents
     float mean_opinion_pro <- 0.0;          // Mean opinion of pro agents
     float mean_opinion_anti <- 0.0;         // Mean opinion of anti agents
+    int pro_count <- 0;                     // Count of pro-reduc agents for save logic
+    int anti_count <- 0;                    // Count of anti-reduc agents for save logic
     
     // BIPOLARIZATION DIAGNOSTICS
     

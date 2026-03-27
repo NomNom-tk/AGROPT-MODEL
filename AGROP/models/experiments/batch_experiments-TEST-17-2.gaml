@@ -24,10 +24,10 @@ experiment Bt_gen_cons_ndist type: batch repeat: 15 keep_seed: true until: end_s
         debug_mode <- false;
         current_experiment_id <- "cons_ndist_nospeak";
         
-        // zero value params
-        confidence_threshold <- 0.0; // unused
-        repulsion_threshold <- 0.0; // unused
-        repulsion_strength <- 0.0; // unused
+        // zero value params not used for consensus
+        confidence_threshold <- 0.0;
+        repulsion_threshold <- 0.0;
+        repulsion_strength <- 0.0;
     }
 }
 
@@ -50,11 +50,11 @@ experiment Bt_gen_cons_dist type: batch repeat: 15 keep_seed: true until: end_si
         debug_mode <- false;
         current_experiment_id <- "cons_dist_nospeak";
         
-        // zero value params
-        confidence_threshold <- 0.0; // unused
-        repulsion_threshold <- 0.0; // unused
-        repulsion_strength <- 0.0; // unused
-        confidence_threshold_sd <- 0.0; // unused
+        // zero value params not used for consensus
+        confidence_threshold <- 0.0;
+        repulsion_threshold <- 0.0;
+        repulsion_strength <- 0.0;
+        confidence_threshold_sd <- 0.0;
         repulsion_threshold_sd <- 0.0;
         repulsion_strength_sd <- 0.0;
     }
@@ -76,10 +76,10 @@ experiment Bt_gen_cons_ndist_speak type: batch repeat: 15 keep_seed: true until:
         debug_mode <- false;
         current_experiment_id <- "cons_ndist_speak";
         
-        // zero value params
-        confidence_threshold <- 0.0; // unused
-        repulsion_threshold <- 0.0; // unused
-        repulsion_strength <- 0.0; // unused
+        // zero value params not used for consensus
+        confidence_threshold <- 0.0;
+        repulsion_threshold <- 0.0;
+        repulsion_strength <- 0.0;
     }
 }
 
@@ -102,11 +102,11 @@ experiment Bt_gen_cons_dist_speak type: batch repeat: 15 keep_seed: true until: 
         debug_mode <- false;
         current_experiment_id <- "cons_dist_speak";
         
-        // zero value params
-        confidence_threshold <- 0.0; // unused
-        repulsion_threshold <- 0.0; // unused
-        repulsion_strength <- 0.0; // unused
-        confidence_threshold_sd <- 0.0; // unused
+        // zero value params not used for consensus
+        confidence_threshold <- 0.0;
+        repulsion_threshold <- 0.0;
+        repulsion_strength <- 0.0;
+        confidence_threshold_sd <- 0.0;
         repulsion_threshold_sd <- 0.0;
         repulsion_strength_sd <- 0.0;
     }
@@ -130,9 +130,9 @@ experiment Bt_gen_clst_ndist type: batch repeat: 15 keep_seed: true until: end_s
         debug_mode <- false;
         current_experiment_id <- "clst_ndist_nospeak";
         
-        // zero value params
-        repulsion_threshold <- 0.0; // unused
-        repulsion_strength <- 0.0; // unused
+        // zero value params not used for clustering
+        repulsion_threshold <- 0.0;
+        repulsion_strength <- 0.0;
     }
 }
 
@@ -157,9 +157,9 @@ experiment Bt_gen_clst_dist type: batch repeat: 15 keep_seed: true until: end_si
         debug_mode <- false;
         current_experiment_id <- "clst_dist_nospeak";
                 
-        // zero value params
-        repulsion_threshold <- 0.0; // unused
-        repulsion_strength <- 0.0; // unused
+        // zero value params not used for clustering
+        repulsion_threshold <- 0.0;
+        repulsion_strength <- 0.0;
         repulsion_threshold_sd <- 0.0;
         repulsion_strength_sd <- 0.0;
     }
@@ -182,9 +182,9 @@ experiment Bt_gen_clst_ndist_speak type: batch repeat: 15 keep_seed: true until:
         debug_mode <- false;
         current_experiment_id <- "clst_ndist_speak";
         
-        // zero value params
-        repulsion_threshold <- 0.0; // unused
-        repulsion_strength <- 0.0; // unused
+        // zero value params not used for clustering
+        repulsion_threshold <- 0.0;
+        repulsion_strength <- 0.0;
     }
 }
 
@@ -209,9 +209,9 @@ experiment Bt_gen_clst_dist_speak type: batch repeat: 15 keep_seed: true until: 
         debug_mode <- false;
         current_experiment_id <- "clst_dist_speak";
    
-        // zero value params
-        repulsion_threshold <- 0.0; // unused
-        repulsion_strength <- 0.0; // unused
+        // zero value params not used for clustering
+        repulsion_threshold <- 0.0; 
+        repulsion_strength <- 0.0;
         repulsion_threshold_sd <- 0.0;
         repulsion_strength_sd <- 0.0;
     }
@@ -237,9 +237,13 @@ experiment Bt_gen_bipol_ndist type: batch repeat: 15 keep_seed: true until: end_
         model_type <- "bipolarization";
         debug_mode <- false;
         current_experiment_id <- "bipol_ndist_nospeak";
-
-    }
+        
+        if repulsion_threshold <= confidence_threshold {
+            end_simulation <- true;
+    	}
+	}
 }
+
 
 experiment Bt_gen_bipol_dist type: batch repeat: 15 keep_seed: true until: end_simulation {
     parameter "Selected debate id" var: selected_debate_id min: 1 max: 100 step: 1;
@@ -267,6 +271,10 @@ experiment Bt_gen_bipol_dist type: batch repeat: 15 keep_seed: true until: end_s
         model_type <- "bipolarization";
         debug_mode <- false;
         current_experiment_id <- "bipol_dist_nospeak";
+        
+        if repulsion_threshold <= confidence_threshold {
+            end_simulation <- true;
+    	}
 
     }
 }
@@ -292,11 +300,15 @@ experiment Bt_gen_bipol_ndist_speak type: batch repeat: 15 keep_seed: true until
         debug_mode <- false;
         current_experiment_id <- "bipol_ndist_speak";
         
+        if repulsion_threshold <= confidence_threshold {
+            end_simulation <- true;
+    	}
+        
     }
 }
 
 experiment Bt_gen_bipol_dist_speak type: batch repeat: 15 keep_seed: true until: end_simulation {
-    parameter "Selected debate id" var: selected_debate_id min: 1 max: 100 step: 1;
+    parameter "Selected debate id" var: selected_debate_id min: 1 max: 100 step: 1; // set to 100 to consider more debates
     parameter "Convergence Rate" var: convergence_rate among: [0.1, 0.2, 0.3, 0.5];
     // ensuring that repulsion_threshold > confidence_threshold is ALWAYS TRUE
     parameter "Confidence Threshold" var: confidence_threshold among: [0.2, 0.3, 0.4, 0.5];
@@ -320,6 +332,11 @@ experiment Bt_gen_bipol_dist_speak type: batch repeat: 15 keep_seed: true until:
         model_type <- "bipolarization";
         debug_mode <- false;
         current_experiment_id <- "bipol_dist_speak";
+        
+        if repulsion_threshold <= confidence_threshold {
+            write "neutral zone is negative, skipping";
+            end_simulation <- true;
+    	}
         
     }
 }

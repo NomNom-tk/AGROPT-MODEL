@@ -177,6 +177,32 @@ if (nrow(constraint_violations) > 0) {
   print(constraint_violations)
 }
 
+#### GA REGION IDENTIFICATION ####
+# identify best performing parameter combinations per model
+# use this to set bounds for GA experiments in GAMA
+
+mae_threshold <- quantile(df_batch$mae, 0.25) # bottom 25% MAE = good region
+
+ga_regions <- df_batch %>%
+  filter(model_type != "no_change", mae <= mae_threshold) %>%
+  group_by(model_type, use_distinct_agents) %>%
+  summarize(
+    cr_min = min(convergence_rate),
+    cr_max = max(convergence_rate),
+    ct_min = min(confidence_threshold, na.rm = TRUE),
+    ct_max = max(confidence_threshold, na.rm = TRUE),
+    rs_min = min(repulsion_strength, na.rm = TRUE),
+    rs_max = max(repulsion_strength, na.rm = TRUE),
+    rt_min = min(repulsion_threshold, na.rm = TRUE),
+    rt_max = max(repulsion_threshold, na.rm = TRUE),
+    best_mae = min(mae),
+    n = n(),
+    .groups = "drop"
+  )
+
+print("GA parameter regions (use these as min/max in GAMA GA experiments):")
+print(ga_regions)
+write_csv(ga_regions, "./results/ga-parameter-regions.csv")
 
 #### linear regression comparison - EMPIRICAL vs ABM####
 # initial comparison using ag data (compares empirical and ABM: final - from csv, initial - from csv)
@@ -286,7 +312,7 @@ params_long <- params_cor_full %>%
 params_heatmap <- ggplot(params_long, mapping = aes(x = parameter, y = model_type, fill = correlation)) +
   geom_tile() +
   scale_fill_gradient2(low = "blue", mid = "grey", high = "red", midpoint = 0) +
-  facet_wrap(~use_heterogeneous_agents) +
+  facet_wrap(~use_distinct_agents) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 

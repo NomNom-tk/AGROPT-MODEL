@@ -218,7 +218,7 @@ experiment Bt_gen_clst_dist_speak type: batch repeat: 15 keep_seed: true until: 
 }
 
 // Batch Bipolarization (Genetic)
-experiment Bt_gen_bipol_ndist type: batch repeat: 15 keep_seed: true until: end_simulation {
+experiment Bt_gen_bipol_ndist type: batch repeat: 15 keep_seed: true until: end_simulation or (repulsion_threshold <= confidence_threshold) {
     parameter "Selected debate id" var: selected_debate_id min: 1 max: 100 step: 1;
     parameter "Convergence Rate" var: convergence_rate among: [0.1, 0.2, 0.3, 0.5];
     // ensuring that repulsion_threshold > confidence_threshold is ALWAYS TRUE
@@ -245,7 +245,7 @@ experiment Bt_gen_bipol_ndist type: batch repeat: 15 keep_seed: true until: end_
 }
 
 
-experiment Bt_gen_bipol_dist type: batch repeat: 15 keep_seed: true until: end_simulation {
+experiment Bt_gen_bipol_dist type: batch repeat: 15 keep_seed: true until: end_simulation or (repulsion_threshold <= confidence_threshold) {
     parameter "Selected debate id" var: selected_debate_id min: 1 max: 100 step: 1;
     parameter "Convergence Rate" var: convergence_rate among: [0.1, 0.2, 0.3, 0.5];
     // ensuring that repulsion_threshold > confidence_threshold is ALWAYS TRUE
@@ -279,7 +279,8 @@ experiment Bt_gen_bipol_dist type: batch repeat: 15 keep_seed: true until: end_s
     }
 }
 
-experiment Bt_gen_bipol_ndist_speak type: batch repeat: 15 keep_seed: true until: end_simulation {
+// until: condition modified so that it fires regardless of exp init
+experiment Bt_gen_bipol_ndist_speak type: batch repeat: 15 keep_seed: true until: end_simulation or (repulsion_threshold <= confidence_threshold) {
     parameter "Selected debate id" var: selected_debate_id min: 1 max: 100 step: 1;
     parameter "Convergence Rate" var: convergence_rate among: [0.1, 0.2, 0.3, 0.5];
     // ensuring that repulsion_threshold > confidence_threshold is ALWAYS TRUE
@@ -307,7 +308,7 @@ experiment Bt_gen_bipol_ndist_speak type: batch repeat: 15 keep_seed: true until
     }
 }
 
-experiment Bt_gen_bipol_dist_speak type: batch repeat: 15 keep_seed: true until: end_simulation {
+experiment Bt_gen_bipol_dist_speak type: batch repeat: 15 keep_seed: true until: end_simulation or (repulsion_threshold <= confidence_threshold) {
     parameter "Selected debate id" var: selected_debate_id min: 1 max: 100 step: 1; // set to 100 to consider more debates
     parameter "Convergence Rate" var: convergence_rate among: [0.1, 0.2, 0.3, 0.5];
     // ensuring that repulsion_threshold > confidence_threshold is ALWAYS TRUE

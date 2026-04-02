@@ -1,6 +1,5 @@
 /**
- * NETWORK BUILDER ACTIONS
- * Creates different network topologies
+* Network Set up
  */
  
 model opinion_agent_species
@@ -63,7 +62,7 @@ species opinion_agent virtual: true  {
     float initial_opinion;                  // Starting opinion (computed from T1 subfactors)
     float final_attitude;                   // Target opinion (DB_IndexT2)
     string debate_label;					// debate identifier for H and M
-    string experiment_id;					// identifies type of experiment
+    string current_experiment_id;			// identifies type of experiment
 	
 	// speakign attributes
 	list<int> recent_speech <- [];

@@ -1,0 +1,7 @@
+"","model_type","use_heterogeneous_agents","MAE"
+"1","bipolarization","false",0.0991361069045424
+"2","bipolarization","true",0.0997988020777228
+"3","clustering","false",0.0861795604576536
+"4","clustering","true",0.0965501531608448
+"5","consensus","false",0.098575341954568
+"6","consensus","true",0.10034897546804

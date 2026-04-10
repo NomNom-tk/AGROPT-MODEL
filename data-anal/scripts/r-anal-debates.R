@@ -43,7 +43,10 @@ library(lm.beta)
 
 #### csv import for debate level and agent-level #####
 # change from . to .. or the reverse if it doesn't work
-df_batch <- read.csv("./data/batch_summary.csv")
+df_batch <- read.csv("../data/batch_summary.csv")
+df_lhs <- read.csv("./data/lhs_batch_summary.csv")
+df_train <- read.csv("./data/train_data.csv")
+df_validation <- read.csv("./data/valid_batch_summary.csv")
 df_orig <- read.csv("./data/data_complete_anonymised.csv")
 df_ag <- read.csv("./data/agent_level_results.csv")
 
@@ -60,8 +63,29 @@ df_batch <- df_batch %>%
     speaking_mode = factor(speaking_mode, levels = c("true", "false")), # changed to factor for wilcox tests
     use_distinct_agents = use_distinct_agents == "true",
     debate_composition = substr(debate_label, 1, 1),
-    normalised_convergence = convergence_cycle / 300) # divided by 300 to normalize (max_cycles is constant)
+    normalised_convergence = convergence_cycle / 300, # divided by 300 to normalize (max_cycles is constant)
+    )
 
+df_lhs <- df_lhs %>%
+  mutate(
+    speaking_mode = factor(speaking_mode, levels = c("true", "false")), # changed to factor for wilcox tests
+    use_distinct_agents = use_distinct_agents == "true",
+    debate_composition = substr(debate_label, 1, 1),
+    normalised_convergence = convergence_cycle / 300, # divided by 300 to normalize (max_cycles is constant)
+  )
+
+# columsn to mutate to numeric
+conv_cols <- c("convergence_rate", "confidence_threshold", "repulsion_strength", "repulsion_threshold",
+               "convergence_rate_sd", "confidence_threshold_sd", "repulsion_strength_sd", "repulsion_threshold_sd",
+               "mae", "initial_variance", "opinion_variance", "seed", "polarization_index", "neutral_zone_width", "mean_net_repulsion_abs"
+               )
+
+# df batch numeric mutation
+df_batch <- df_batch %>%
+  mutate(across(all_of(conv_cols), ~ as.numeric(gsub(",", ".", trimws(.)))))
+
+df_lhs <- df_lhs %>%
+  mutate(across(all_of(conv_cols), ~ as.numeric(gsub(",", ".", trimws(.)))))
 
 ## EXEC SUMMARY
 exec_summary <- data.frame(
@@ -72,6 +96,8 @@ exec_summary <- data.frame(
   Winner = c("X", "", "")
 )
 write_csv(exec_summary, "./results/exec-summary.csv")
+
+
 
 # trial plotting of params over mae ####
 df_params_spread_long <- df_batch %>%
@@ -173,7 +199,7 @@ ppt <- read_pptx()
 ## save once
 # print(ppt, target = "relative path")
 
-#### basic exploration ####
+#### DEL basic exploration ####
 # use nrow to check rows, what type of model, unique debates, distribution of conditions
 nrow(df_batch)
 
@@ -651,6 +677,584 @@ gaml_output <- generate_gaml_bounds(ga_regions)
 writeLines(gaml_output, "gaml_GA_bounds.txt")
 cat(gaml_output, sep = "\n")  # also print to console
 
+#### GA_analysis ####
+# re-use initial pre-processing (col defs, up until and includign sensi_start)
+# data set up (changed to different df)
+df_ga <- df_batch
+
+# split data_set into low and high confidence_threshold regimes (0.2 and 0.8), identified in basic data_exploratiuon
+df_low <- df_ga %>%
+  filter(confidence_threshold <= 0.4)
+
+df_high <- df_ga %>%
+  filter(confidence_threshold >= 0.6)
+
+# sensi split for low and high
+sensi_start_low <- df_low %>%
+  filter(model_type != "no_change") %>%
+  group_by(model_type, use_distinct_agents) # filter no change condition, ensure you have distinct agent/debate combinations
+
+sensi_start_high <- df_high %>%
+  filter(model_type != "no_change") %>%
+  group_by(model_type, use_distinct_agents)
+
+# split df into pieces for analysis (for high and low)
+sensi_split_low <- group_split(sensi_start_low) # split df into groups defined by sensi_start
+
+sensi_split_high <- group_split(sensi_start_high) # split df into groups defined by sensi_start
+
+## LOW now also reuse same pcc and prcc logic 
+# Initialize storage
+pcc_results_low <- list()  # store results per key-output combination
+prcc_results_low <- list() # storage for prcc (pcc with rank)
+
+# Loop over each piece in the sensi_split
+for (df_piece in sensi_split_low) {
+  
+  # Generate key for lookup
+  model_type_val <- as.character(unique(df_piece$model_type)) # key value for results list - unique model type -converted into char
+  distinct_val   <- as.character(unique(df_piece$use_distinct_agents)) # value pair for results - distinct agents as chars
+  key <- paste(model_type_val, distinct_val, sep="_") # key creation [model, val] separated by _
+  
+  # Retrieve relevant parameter columns
+  param_cols <- param_cols_by_model[[key]]       # lookup mapping
+  if (is.null(param_cols)) next                 # skip if key not found
+  param_cols <- intersect(param_cols, colnames(df_piece))  # restrict param_cols to only columns existing in this df_piece
+  # guard againts mismatches between lookup list and actual data columns
+  # sensi split comes from df_batch (should have all columns, but just to be safe add the guard)
+  if (length(param_cols) == 0) next             # skip if no valid columns remain
+  
+  # Prepare parameter matrix X
+  X <- df_piece[, param_cols, drop=FALSE]       # inputs for PCC, list of parameter colums
+  # convert to numeric in case some columns are factors/logical
+  X[] <- lapply(X, function(col) as.numeric(col))
+  
+  # Loop over output columns
+  for (output in output_cols) {
+    
+    if (!output %in% colnames(df_piece)) next   # skip if output missing
+    y <- as.numeric(df_piece[[output]])        # define output as numeric, from df_piece associated with output key
+    
+    # skip outputs with constant values (PCC won't work) - requires variance in both X and Y
+    ## zero variance causes division by zero in correlation calc
+    if (length(unique(y)) < 2) next
+    
+    # PCC Handle single-parameter case
+    if (ncol(X) == 1) { # if the number of columns in input X is equal to 1
+      # PCC reduces to simple correlation
+      pcc_values <- cor(X[[1]], y)
+      prcc_values <- cor(X[[1]], y)
+      
+      pcc_results_low[[paste(key, output, sep="_")]] <- data.frame( # pasting key and pair, output defined as y, and pcc values in pcc list
+        key = rep(key, 1),
+        model_type = rep(model_type_val, 1),
+        use_distinct_agents = rep(distinct_val, 1),
+        output = rep(output, 1),
+        parameter = colnames(X),
+        PCC = pcc_values
+      )
+      
+      prcc_results_low[[paste(key, output, sep="_")]] <- data.frame( # pasting key and pair, output defined as y, and pcc values in pcc list
+        key = rep(key, 1),
+        model_type = rep(model_type_val, 1),
+        use_distinct_agents = rep(distinct_val, 1),
+        output = rep(output, 1),
+        parameter = colnames(X),
+        PRCC = prcc_values
+      )
+      next
+      
+    }
+    
+    # Compute PCC for multiple parameters partial pearson
+    pcc_res <- pcc(X, y) # Partial Pearson correlation coefficients using X (param cols input), and y column names converted to numeric
+    prcc_res <- pcc(X, y, rank = TRUE) # PRCC
+    print(str(prcc_res))
+    print(head(prcc_res$PCC))
+    
+    # flatten pcc results properly
+    param_names_pcc <- rownames(pcc_res$PCC) # extract parameter names (row labels) FIRST BEFORE VALUES
+    param_names_prcc <- rownames(prcc_res$PRCC) # separate for prcc (prcc names its output after method, not standardized)
+    pcc_values <- pcc_res$PCC[, "original"] # extrac pcc values column (original values)
+    prcc_values <- prcc_res$PRCC[, "original"] # extract prcc values column
+    
+    # safety check to ensure columns match
+    if (length(param_names_prcc) != length(prcc_values)) {
+      stop("PRCC rownames and values length mismatch")
+    }
+    
+    if (length(param_names_pcc) != length(pcc_values)) {
+      stop("PCC rownames and values length mismatch")
+    }
+    
+    
+    # PRCC storage
+    prcc_results_low[[paste(key, output, sep="_")]] <- data.frame(
+      key = rep(key, length(prcc_values)),
+      model_type = rep(model_type_val, length(prcc_values)),
+      use_distinct_agents = rep(distinct_val, length(prcc_values)),
+      output = rep(output, length(prcc_values)),
+      parameter = param_names_prcc,
+      PRCC = prcc_values
+    )
+    
+    # PCC Store results
+    pcc_results_low[[paste(key, output, sep="_")]] <- data.frame( # results paste, key, output, using "_" as a separator
+      # ensure it is a df for analysis, then repeat each value for paste to match all columns (df needs same column length)
+      key = rep(key, length(pcc_values)),
+      model_type = rep(model_type_val, length(pcc_values)),
+      use_distinct_agents = rep(distinct_val, length(pcc_values)),
+      output = rep(output, length(pcc_values)),
+      parameter = param_names_pcc, # distinct because prcc and pcc store cols names based on method
+      PCC = pcc_values
+    )
+    
+  }  # end output loop
+}
+
+# combined df
+pcc_results_ga_low_df <- do.call(rbind, pcc_results_low) # call a row bind for pcc_results to create a dataframe
+prcc_results_ga_low_df <- do.call(rbind, prcc_results_low) # same for prcc
+
+
+## LOW now also reuse same pcc and prcc logic 
+# Initialize storage
+pcc_results_high <- list()  # store results per key-output combination
+prcc_results_high <- list() # storage for prcc (pcc with rank)
+
+# Loop over each piece in the sensi_split
+for (df_piece in sensi_split_high) {
+  
+  # Generate key for lookup
+  model_type_val <- as.character(unique(df_piece$model_type)) # key value for results list - unique model type -converted into char
+  distinct_val   <- as.character(unique(df_piece$use_distinct_agents)) # value pair for results - distinct agents as chars
+  key <- paste(model_type_val, distinct_val, sep="_") # key creation [model, val] separated by _
+  
+  # Retrieve relevant parameter columns
+  param_cols <- param_cols_by_model[[key]]       # lookup mapping
+  if (is.null(param_cols)) next                 # skip if key not found
+  param_cols <- intersect(param_cols, colnames(df_piece))  # restrict param_cols to only columns existing in this df_piece
+  # guard againts mismatches between lookup list and actual data columns
+  # sensi split comes from df_batch (should have all columns, but just to be safe add the guard)
+  if (length(param_cols) == 0) next             # skip if no valid columns remain
+  
+  # Prepare parameter matrix X
+  X <- df_piece[, param_cols, drop=FALSE]       # inputs for PCC, list of parameter colums
+  # convert to numeric in case some columns are factors/logical
+  X[] <- lapply(X, function(col) as.numeric(col))
+  
+  # safety check remove constant columns before entering output loop
+  X <- X[, sapply(X, function(col) length(unique(col)) > 1), drop = FALSE]
+  # skip if no columsn remain
+  if (ncol(X) == 0) next
+  
+  # Loop over output columns
+  for (output in output_cols) {
+    
+    if (!output %in% colnames(df_piece)) next   # skip if output missing
+    y <- as.numeric(df_piece[[output]])        # define output as numeric, from df_piece associated with output key
+    
+    # skip outputs with constant values (PCC won't work) - requires variance in both X and Y
+    ## zero variance causes division by zero in correlation calc
+    if (length(unique(y)) < 2) next
+    
+    # PCC Handle single-parameter case
+    if (ncol(X) == 1) { # if the number of columns in input X is equal to 1
+      # PCC reduces to simple correlation
+      pcc_values <- cor(X[[1]], y)
+      prcc_values <- cor(X[[1]], y)
+      
+      pcc_results_high[[paste(key, output, sep="_")]] <- data.frame( # pasting key and pair, output defined as y, and pcc values in pcc list
+        key = rep(key, 1),
+        model_type = rep(model_type_val, 1),
+        use_distinct_agents = rep(distinct_val, 1),
+        output = rep(output, 1),
+        parameter = colnames(X),
+        PCC = pcc_values
+      )
+      
+      prcc_results_high[[paste(key, output, sep="_")]] <- data.frame( # pasting key and pair, output defined as y, and pcc values in pcc list
+        key = rep(key, 1),
+        model_type = rep(model_type_val, 1),
+        use_distinct_agents = rep(distinct_val, 1),
+        output = rep(output, 1),
+        parameter = colnames(X),
+        PRCC = prcc_values
+      )
+      next
+      
+    }
+    
+    # Compute PCC for multiple parameters partial pearson
+    pcc_res <- pcc(X, y) # Partial Pearson correlation coefficients using X (param cols input), and y column names converted to numeric
+    prcc_res <- pcc(X, y, rank = TRUE) # PRCC
+    print(str(prcc_res))
+    print(head(prcc_res$PCC))
+    
+    # flatten pcc results properly
+    param_names_pcc <- rownames(pcc_res$PCC) # extract parameter names (row labels) FIRST BEFORE VALUES
+    param_names_prcc <- rownames(prcc_res$PRCC) # separate for prcc (prcc names its output after method, not standardized)
+    pcc_values <- pcc_res$PCC[, "original"] # extrac pcc values column (original values)
+    prcc_values <- prcc_res$PRCC[, "original"] # extract prcc values column
+    
+    # safety check to ensure columns match
+    if (length(param_names_prcc) != length(prcc_values)) {
+      stop("PRCC rownames and values length mismatch")
+    }
+    
+    if (length(param_names_pcc) != length(pcc_values)) {
+      stop("PCC rownames and values length mismatch")
+    }
+    
+    
+    # PRCC storage
+    prcc_results_high[[paste(key, output, sep="_")]] <- data.frame(
+      key = rep(key, length(prcc_values)),
+      model_type = rep(model_type_val, length(prcc_values)),
+      use_distinct_agents = rep(distinct_val, length(prcc_values)),
+      output = rep(output, length(prcc_values)),
+      parameter = param_names_prcc,
+      PRCC = prcc_values
+    )
+    
+    # PCC Store results
+    pcc_results_high[[paste(key, output, sep="_")]] <- data.frame( # results paste, key, output, using "_" as a separator
+      # ensure it is a df for analysis, then repeat each value for paste to match all columns (df needs same column length)
+      key = rep(key, length(pcc_values)),
+      model_type = rep(model_type_val, length(pcc_values)),
+      use_distinct_agents = rep(distinct_val, length(pcc_values)),
+      output = rep(output, length(pcc_values)),
+      parameter = param_names_pcc, # distinct because prcc and pcc store cols names based on method
+      PCC = pcc_values
+    )
+    
+  }  # end output loop
+}
+
+# combined df
+pcc_results_ga_high_df <- do.call(rbind, pcc_results_high) # call a row bind for pcc_results to create a dataframe
+prcc_results_ga_high_df <- do.call(rbind, prcc_results_high) # same for prcc
+
+# facet viz using key and regime to cmpare param importance across two confi threhsolds
+# pivot individual results
+pcc_low_long <- pcc_results_ga_low_df %>%
+  mutate(method="PCC", regime="low_ct") %>%
+  rename(value=PCC)
+
+pcc_high_long <- pcc_results_ga_high_df %>%
+  mutate(method="PCC", regime="high_ct") %>%
+  rename(value=PCC)
+
+prcc_low_long <- prcc_results_ga_low_df %>%
+  mutate(method="PRCC", regime="low_ct") %>%
+  rename(value=PRCC)
+
+prcc_high_long <- prcc_results_ga_high_df %>%
+  mutate(method="PRCC", regime="high_ct") %>%
+  rename(value=PRCC)
+
+
+#recombine of all results after pivot
+combined_long <- bind_rows(
+  pcc_low_long,
+  pcc_high_long,
+  prcc_low_long,
+  prcc_high_long
+)
+
+# combined viz
+combined_viz <- ggplot(combined_long, aes(x=parameter, y=value, fill=output)) +
+  geom_bar(stat="identity", position="dodge") +
+  facet_wrap(~ key + regime, scales="free_x") +
+  geom_hline(yintercept=0, linetype="dashed") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_minimal() +
+  labs(title = "test combined viz",
+       x="parameter", y="correlation coefficient",
+       fill="output") +
+  facet_wrap(~ key + regime + method, scales = "free_x")
+
+print(combined_viz)
+
+ggsave("PCC-PRCC_CT_combined_bar.png",
+       path = "./graphics",
+       dpi = 300)
+
+#### GA for hypotheses ####
+# gA vs no change comparison test of h3 and h5
+ga_best <- df_ga %>%
+  filter(model_type != "no_change") %>%
+  group_by(model_type, selected_debate_id) %>% # removed use_distinct_agetns, no change baseline never selected runs with TRUE
+  slice_min(mae, n=1, with_ties = FALSE) %>%
+  ungroup()
+
+no_change_best <- df_ga %>%
+  filter(model_type == "no_change") %>%
+  group_by(selected_debate_id) %>%
+  summarise(no_change_mae = mean(mae), .groups = "drop")
+
+ga_vs_no_change <- ga_best %>%
+  left_join(no_change_best, by = c("selected_debate_id")) %>% # join only on debate id as no_change did not take the use_distinct in its lowest mae runs
+  mutate(delta_mae = mae - no_change_mae,
+         abm_wins = delta_mae < 0) 
+
+ga_vs_no_change %>%
+  group_by(model_type) %>%
+  summarise(n = n(), n_missing = sum(is.na(mae) | is.na(no_change_mae)), .groups = "drop")
+
+ga_best %>% count(model_type, selected_debate_id) %>% filter(n > 1)
+
+# summary per model
+ga_baseline_summary <- ga_vs_no_change %>%
+  group_by(model_type) %>%
+  summarise(
+    mean_delta = mean(delta_mae, na.rm = TRUE),
+    pct_abm_wins = mean(abm_wins, na.rm = TRUE) * 100,
+    wilcoxon_p = wilcox.test(mae, no_change_mae, paired = TRUE)$p.value,
+    .groups = "drop"
+  )
+# interpretation: removed use_distinct as no change never selected TRUE for best runs
+# no model beats the no_change baseline (bipol has 54.5% win rate but insignificant)
+# consensus is closest in p value: 0.08, so it beats no change but only in 38% of cases
+
+# plot for delta_mae per model, colored by win/loss
+p_ga_delta <- ga_vs_no_change %>%
+  mutate(group_label = paste0(model_type, 
+                              ifelse(use_distinct_agents, " (distinct)", " (homog.)"))) %>%
+  ggplot(aes(x = factor(selected_debate_id), y = delta_mae, fill = abm_wins)) +
+  geom_col() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_fill_manual(values = c("TRUE" = "#2ecc71", "FALSE" = "#e74c3c"),
+                    labels = c("TRUE" = "ABM wins", "FALSE" = "Baseline wins")) +
+  facet_wrap(~ group_label, ncol = 1) +
+  labs(
+    title = "GA Best MAE vs No-Change Baseline per Debate",
+    x     = "Debate ID",
+    y     = "Δ MAE (GA − Baseline)",
+    fill  = NULL
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 6, angle = 45, hjust = 1))
+
+print(p_ga_delta)
+# interpretation: baseline always wins no matter what
+
+# common debates comparison
+common_debates <- intersect(
+  unique(df_lhs$selected_debate_id),
+  unique(df_ga$selected_debate_id)
+)
+length(common_debates)
+# interpret: 40 common debates, only 4 were covered by lhs and not ga
+
+# filter using common debates
+df_lhs_common <- df_lhs %>% filter(selected_debate_id %in% common_debates)
+df_ga_common <- df_ga %>% filter(selected_debate_id %in% common_debates)
+
+## GA vs LHS improvement
+lhs_best_comp <- df_lhs_common %>%
+  group_by(model_type, use_distinct_agents) %>% # use_distinct_agetns here because we are asking across all debates did GA do better than LHS
+  #slice_min(mae, n=1, with_ties = FALSE) %>%
+  summarise(lhs_best_mae = min(mae), .groups = "drop")
+
+
+ga_best_comp <- df_ga_common %>%
+  group_by(model_type, use_distinct_agents) %>%
+  summarise(ga_best_mae = min(mae), .groups = "drop")
+
+lhs_vs_ga <- lhs_best_comp %>%
+  left_join(ga_best_comp, by = c("model_type", "use_distinct_agents")) %>%
+  filter(model_type != "no_change") %>% # no_change filterd out as there is are no calibration parameters
+  mutate(
+    improvement_pct = (lhs_best_mae - ga_best_mae) / lhs_best_mae * 100
+  )
+
+print(lhs_vs_ga)
+# interpretation: LHS consistently outperforms GA despite the 4 uncovered debates
+# GA struggled to optimise in the new config
+
+# plots for GA vs lhs
+p_lhs_ga <- lhs_vs_ga %>%
+  pivot_longer(cols = c(lhs_best_mae, ga_best_mae),
+               names_to  = "stage",
+               values_to = "best_mae") %>%
+  mutate(
+    stage       = recode(stage,
+                         "lhs_best_mae" = "LHS",
+                         "ga_best_mae"  = "GA"),
+    group_label = paste0(model_type,
+                         ifelse(use_distinct_agents, " (distinct)", " (homog.)"))
+  ) %>%
+  ggplot(aes(x = group_label, y = best_mae, fill = stage)) +
+  geom_col(position = "dodge") +
+  scale_fill_manual(values = c("LHS" = "#3498db", "GA" = "#9b59b6")) +
+  labs(
+    title = "Best MAE: LHS vs GA Calibration",
+    x     = NULL,
+    y     = "Best MAE",
+    fill  = "Stage"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 25, hjust = 1))
+
+print(p_lhs_ga)
+
+## selection of best parameters
+ga_best_params <- df_ga %>%
+  filter(model_type != "no_change") %>%
+  group_by(model_type, use_distinct_agents) %>%
+  slice_min(mae, n = 5, with_ties = FALSE) %>%
+  summarise(
+    best_mae = min(mae),
+    convergence_rate_mean = mean(convergence_rate),
+    convergence_rate_sd = sd(convergence_rate),
+    confidence_threshold_mean = mean(confidence_threshold),
+    confidence_threshold_sd = sd(confidence_threshold),
+    repulsion_threshold_mean = mean(repulsion_threshold),
+    repulsion_threshold_sd = sd(repulsion_threshold),
+    repulsion_strength_mean = mean(repulsion_strength),
+    repulsion_strength_sd = sd(repulsion_strength),
+    .groups = "drop"
+  )
+
+
+#### Annealing bounds selection ####
+# clamp regions to ensure only positive values for GA
+# Define the columns that need min/max clamping
+min_max_cols <- c(
+  "cr_min", "cr_max", "ct_min", "ct_max",
+  "rs_min", "rs_max", "rt_min", "rt_max",
+  "cr_min_sd", "cr_max_sd", "ct_min_sd", "ct_max_sd",
+  "rs_min_sd", "rs_max_sd", "rt_min_sd", "rt_max_sd"
+)
+
+# Optional buffer to expand ranges slightly
+buffer <- 0.05  # change to 0 if you don't want a buffer
+
+# identify best performing parameter combinations per model
+# use this to set bounds for GA experiments in GAMA
+annealing_regions <- df_ga %>%
+  filter(model_type != "no_change") %>%
+  group_by(model_type, use_distinct_agents) %>%
+  mutate(mae_threshold = quantile(mae, 0.25)) %>%
+  filter(mae <= mae_threshold) %>%
+  summarize(
+    cr_min = min(convergence_rate),
+    cr_max = max(convergence_rate),
+    cr_max_sd = max(convergence_rate_sd),
+    cr_min_sd = min(convergence_rate_sd),
+    ct_min = min(confidence_threshold, na.rm = TRUE),
+    ct_max = max(confidence_threshold, na.rm = TRUE),
+    ct_min_sd = min(confidence_threshold_sd, na.rm = TRUE),
+    ct_max_sd = max(confidence_threshold_sd, na.rm = TRUE),
+    rs_min = min(repulsion_strength, na.rm = TRUE),
+    rs_max = max(repulsion_strength, na.rm = TRUE),
+    rs_min_sd = min(repulsion_strength_sd, na.rm = TRUE),
+    rs_max_sd = max(repulsion_strength_sd, na.rm = TRUE),
+    rt_min = min(repulsion_threshold, na.rm = TRUE),
+    rt_max = max(repulsion_threshold, na.rm = TRUE),
+    rt_min_sd = min(repulsion_threshold_sd, na.rm = TRUE),
+    rt_max_sd = max(repulsion_threshold_sd, na.rm = TRUE),
+    best_mae = min(mae),
+    mae_threshold_used = first(mae_threshold), # for reference
+    n = n(),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    cr_min = pmax(cr_min, 0.05), # floor cap at 0.05
+    cr_max = pmin(cr_max, 0.5), # ceiling cap at 0.5
+    rs_max = pmin(rs_max, 0.2) # cap repulsion strength at 0.2 from first regions generations
+  ) %>%
+  mutate(across(all_of(min_max_cols), ~ pmax(0, pmin(1, .)))) # clamp to [0,1]
+
+# diagnostic - to check that n isn't too large and grouping works
+annealing_regions %>%
+  distinct(model_type, use_distinct_agents, mae_threshold_used) %>%
+  print()
+
+# minimum range check - flags parameters that are too narrow for GA search
+min_range <- 0.05
+
+range_check <- annealing_regions %>%
+  mutate(
+    cr_range_ok = (cr_max - cr_min) >= min_range,
+    ct_range_ok = (ct_max - ct_min) >= min_range,
+    rs_range_ok = (rs_max - rs_min) >= min_range,
+    rt_range_ok = (rt_max - rt_min) >= min_range,
+    cr_sd_range_ok = (cr_max_sd - cr_min_sd) >= min_range,
+    ct_sd_range_ok = (ct_max_sd - ct_min_sd) >= min_range,
+    rs_sd_range_ok = (rs_max_sd - rs_min_sd) >= min_range,
+    rt_sd_range_ok = (rt_max_sd - rt_min_sd) >= min_range,
+  ) %>% select(model_type, use_distinct_agents, ends_with("_range_ok"))
+
+# print warning for narrow ranges
+narrow_params <- range_check %>%
+  pivot_longer(
+    cols = ends_with("_range_ok"),
+    names_to = "paramter",
+    values_to = "range_ok"
+  ) %>%
+  filter(!range_ok)
+
+if (nrow(narrow_params) > 0) {
+  print("WARNING: the following parameters have ranges too narrow for Annealing search:")
+  print(narrow_params)
+} else {
+  print("All parameter ranges sufficient for Annealing search")
+}
+
+
+# bipolarization constraint check
+bipol_check <- annealing_regions %>%
+  filter(model_type == "bipolarization") %>%
+  mutate(constraint_ok = ct_max < rt_min,
+         gap = rt_min - ct_max) %>%
+  select(model_type, use_distinct_agents, ct_max, rt_min, gap, constraint_ok)
+
+if (any(!bipol_check$constraint_ok)) {
+  print("WARNING: bipolarization GA bounds violate repulsion/confidence constraint")
+  print("Adjust ct_max or rt_min manually before running GA")
+  print(bipol_check %>% filter(!constraint_ok))
+} else {
+  print("Bipolarization constraint satisfied in all GA bounds")
+  print(bipol_check)
+}
+
+# BOUNDS GENERATION run generator and write to file
+gaml_annealing_output <- generate_gaml_bounds(annealing_regions)
+writeLines(gaml_annealing_output, "gaml_ANNEALING_bounds.txt")
+cat(gaml_annealing_output, sep = "\n")  # also print to console
+
+
+
+#### validation and comparison ####
+df_validation <- df_validation %>% 
+  filter(selected_debate_id %in% c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"))
+
+df_no_change_valid <- df_validation %>%
+  filter(model_type == "no_change") %>%
+  group_by(debate_label) %>%
+  summarise(no_change_mae = mean(mae), .groups = "drop")
+
+valid_vs_baseline <- df_validation %>%
+  filter(model_type != "no_change") %>%
+  group_by(model_type, debate_label) %>%
+  slice_min(mae, n = 1, with_ties = FALSE) %>%
+  left_join(df_no_change_valid, by = "debate_label") %>%
+  mutate(delta_mae = mae - no_change_mae,
+         abm_wins = delta_mae < 0)
+
+print(valid_vs_baseline)
+
+valid_summary <- valid_vs_baseline %>%
+  group_by(model_type) %>%
+  summarise(
+    mean_delta = mean(delta_mae, na.rm = TRUE),
+    pct_abm_wins = mean(abm_wins, na.rm = TRUE) * 100,
+    wilcoxon_p = tryCatch(wilcox.test(mae, no_change_mae, paired = TRUE)$p.value, error=function(e) NA_real_),
+    .groups = "drop")
+
+write.csv(valid_summary, "validation-vs-baseline.csv")
 #### linear regression comparison - EMPIRICAL vs ABM####
 # initial comparison using ag data (compares empirical and ABM: final - from csv, initial - from csv)
 # then generalizes to batch_abm_mae so that abm mae gets compared with ols_mae
@@ -1118,6 +1722,21 @@ model_comparison <- df_batch %>%
 
 print(model_comparison)
 
+# which model performs the best overall ///// for presentaiton plot (either delete or refactor)
+model_comparison_1 <- df_batch %>%
+  group_by(model_type) %>%
+  summarize(
+    mae_mean = mean(mae),
+    mae_sd = sd(mae),
+    mae_min = min(mae),
+    mae_max = max(mae),
+    .groups = "drop"
+  ) %>%
+  mutate(model_type = factor(model_type, levels = model_type[order(mae_mean)])) %>%
+  arrange(mae_mean)
+
+print(model_comparison_1)
+
 # reformating in wide format
 model_wide_full <- model_comparison %>%
   select(model_type, use_distinct_agents, mae_mean) %>%
@@ -1138,7 +1757,7 @@ model_by_condition <- df_batch %>%
 print(model_by_condition)
 write_csv(model_by_condition, "./results/model-by-condition.csv")
 
-#### Plots ####
+#### Plots - two final ones for pres to refactor ####
 # plot of SD vs MAE for each parameter - started with convergence rate SD
 ggplot(data = df_batch, mapping = aes(convergence_rate_sd, mae, color = model_type)) +
   geom_point(alpha = 0.5) +
@@ -1156,7 +1775,62 @@ ggsave("SD-MAE-convergence.png",
 ### outlier at SD = 0.05 (homophily=1 case previously) / bipol run (MAE = 0.46)
 ### models overlap heavily
 
+# opinion comparison
+compar_all <- df_ag %>%
+  mutate(
+    empirical_change = final_attitude - initial_opinion,
+    agent_type = ifelse(pro_reduction == 1, "Pro", "Anti")
+  ) %>%
+  group_by(agent_type, model_type) %>%
+  summarize(
+    simulated = abs(mean(opinion_change)),
+    empirical = abs(mean(empirical_change)),
+    .groups = "drop"
+  ) %>%
+  pivot_longer(cols = c(simulated, empirical),
+               names_to = "source",
+               values_to = "change") %>%
+  # create a combined x-axis label for side-by-side bars
+  mutate(x_label = paste(model_type, agent_type, sep = " - "))
 
+# Plot: side-by-side bars for Pro vs Anti per model
+plot_anti_pro_compar <- ggplot(compar_all, aes(x = x_label, y = change, fill = source)) +
+  geom_col(position = "dodge") +
+  labs(
+    title = "Mean Opinion Change by Model Type and Agent",
+    x = "Model Type - Agent",
+    y = "Change"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_minimal()
+
+ggsave("anti_pro_compar.png", plot = plot_anti_pro_compar, path = "./graphics", width = 10, height = 5)
+
+
+# mae summary
+ggplot(df_batch %>%
+         distinct(model_type, debate_label, selected_debate_id,
+                  initial_variance, opinion_variance),
+       aes(x = model_type,
+           y = opinion_variance - initial_variance,
+           fill = model_type)) +
+  
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  
+  geom_violin(alpha = 0.4) +
+  geom_boxplot(width = 0.2, outlier.shape = NA) +
+  
+  coord_flip() +
+  
+  labs(
+    title = "Change in Opinion Variance Across Models",
+    subtitle = "Each point corresponds to one simulated debate",
+    x = NULL,
+    y = "Variance Change (Final - Initial)"
+  ) +
+  
+  theme_minimal() +
+  theme(legend.position = "none")
 
 
 ### interpretation
@@ -1173,6 +1847,23 @@ ggplot(model_comparison, aes(x = model_type, y = mae_mean), reorder(model_type, 
 ggsave("Model Comparison.png",
        path = "../graphics",
        dpi = 300)
+
+# model comparison_1 for presentation
+ggplot(model_comparison_1, aes(x = model_type, y = mae_mean, fill = model_type)) +
+  geom_col() +
+  geom_errorbar(aes(ymin = mae_mean - mae_sd, ymax = mae_mean + mae_sd), width = 0.1) +
+  geom_text(aes(label = round(mae_mean, 3)), hjust = -0.1, vjust = -0.2, size = 4) +
+  coord_flip() +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title = "Model Performance Comparison",
+    x = "Model Type",
+    y = "Mean Absolute Error (MAE)"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none") +
+  ylim(0, max(model_comparison$mae_mean + model_comparison$mae_sd)*1.1)
+
 
 # hetero impact plot
 ggplot(model_comparison, aes(x=model_type, y = mae_mean, fill=use_distinct_agents)) +

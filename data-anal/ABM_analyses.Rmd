@@ -43,10 +43,6 @@ When you click the **Knit** button a document will be generated that includes bo
 #[EXISTING] Final recommendations — keep
 ```
 
-```{sources}
-source("R/Functions.R)
-```
-
 ```{package import}
 library(tidyverse)
 library(dplyr)
@@ -56,6 +52,10 @@ library(officer)
 library(flextable)
 library(sensitivity)
 library(lm.beta)
+```
+
+```{sources}
+source("R/Functions.R)
 ```
 
 ```{data-import, cache = TRUE}

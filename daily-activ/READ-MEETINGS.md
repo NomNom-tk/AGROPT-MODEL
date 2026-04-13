@@ -147,3 +147,162 @@
 - OSF
     - start filling out protocol in OSF
     - important "hypotheses, method and how do we evaluate the results"
+    
+# RDV Nicolas 11/2/26
++ acknowledge the lack of literature in this domain, ask patrick for more
+    + model spec is incomplete
+    + sensitivity analysis is non-existent
++ how much sensitivity analysis is appropriate given the timeline?
+    + need to discuss with Patrick as well
++ Need more feedback in general
+    + based on your recommendations I will go back and send model spec in 1 week
+    + Patrick model review, then pilot results, revise protocol with everyone
++ seminaire mardi pro
++ MISS ABMS
+
+# RDV Nicolas, Thomas, Julien 12/2/26
++ filling in model elements (done 13/2)
++ send thomas protocol doc
++ Gabriella Pigozzi for ABM references
+
+# RDV Nicolas & Patrick 18/2/26
++ individual parameters done / agents with fixed or variable parameters?
++ next step is homophily
++ Toulouse
+    + prendre les billets
+    + keep receipts
++ Data analysis in R
+    + easiest debate
++ why does GA not show variations?
++ ODD protocol for modle communication
+
+# RDV Nicolas, Thomas, Julien, Sabrina 19/2/26
++ argument mining
++ set up vpn tutorial for Nicolas
+
+# RDV Nicolas et Patrick 9/3/26
++ hetero/homo (agents) -> change wording to be more clear
++ parameter distribution (in accordance with metric)
+    + how do distributions evolve graphically?
++ homophily (radical network re-assign)
++ TEST
+    + one speak to all (talking stick)
+    + who takes the speaker role?
+    + probability of speaking to each agent
++ Case when no_change in opinion
+    + will allow for a baseline to be established
++ opinion change by anti
+    + why is clustering change so high?
++ attitude change - agent level
+    + anti/pro how do empirical change occur
++ fin du mois ADEM
++ Seminaire neuro-behavior 10/3
++ Giovanni Squillero politecnico di torino
+
+# RDV Nicolas et Sylie 12/3/26
++ project with the idea of observing indiv & colelctive mouse society
++ start with ABM modelling to then test in the field
++ follow mice over lifetime?
++ mouse utopia (60s experiment)
+
+# RDV Patrick 12/3/26
++ role de parole (global reflex)
++ comparing models instead of experiments, we start from the same starting point
+    + could use particle swarm alg
++ openmole research group (GA)
++ action to talk to all
+    + ask all other to update, taking into account only his own opinion
++ next week meeting -> thursday afternoon
+
+# RDV Nicolas 14/3/26
++ draft summary quick check together
++ easter only the 3 or 6 or both
++ thesis email (theses suggested are mainly bio)
++ GAMA set up -> final gui test of no change and speaking mode
+
+# RDV Nicolas & Patrick 17/3/26
++ ADEM c'est rate // trouver un autre financement
++ Nicolas extension for 3 months
++ no change condition
+    + mae is not zero but pulled from csv
+    + speaking model (implement and check)
++ arguments
+    + thomas to send arugments to an ai, look into attack and defence relationships
++ meeting friday afternoon?
++ Recap:
+    + re-run all exps
+    + modify analysis for no_change
+    + properly rename exps
+    + issue how ot solve recent_speak
+        + speaking requires more than max_cycles
+        + could increase max cycles or accept that some debates might not converge
+
+# RDV Patrick 19/3/26
++ recent_speech+str is saving now
++ presentation
+    + do control agents change at all (in empirical csv)
+    + in a debate how many people speak? (ask thomas)
++ convergence
+    + check transcripts for how many people speak, normalize the time steps
+    + look into direciton of change, do we predict too much change in the wrong direction or not?
++ Nicolas contact miss ABMS
++ patrick doesn't think the lab is an issue
+
+# RDV Nicolas 23/3/26
++ what if i reduce the aount of cycles to see if it amounts to anything?
++ distribution of MAE for N rows in each model, vary by parameter for LHS
+
+# RDV ADAM Poland for RatRect 24/3
++ met phd student Wiktoria and Dominica
++ small description of RatRec use and how to operate the program
++ Meeting to analyse WAV together!
+
+# RDV Nicolas 25/3/26
++ TO implement
+    + constriant for neutral zone
+    + after remove filterin in R, remove_df_post_filter
++ check hp elitebook 840 g10
++ agenda
++ SVS -> check how much time I have, wait for nicolas feedback on summary and presentation
++ Thesis -> keep drafting ideas and moving
++ summary
+    + we present these 3 models
++ GAMA
+    + look at change in convergence threshold / re run and do analysis
++ prolong mission
+    + nicolas, to do admin side, 2 week agro close in august
+    + ask nicolas if it is obligatory from the 1-15 august
++ next mission -> still on veg consumption, how od people influence each other, try and connect Benoit Girard, Meritschel, Patrick, Sabrina, Nicolas
++ MISS ABMS, send email
++ ODD 
+    + exhaustive, then LHS and then GA
+    + mail to Nicolas, Patrick, Sabrina for when they are ready for feedback
+    
+# RDV Nicolas 1/4/26
++ agenda --> Emmanuelle (for prolongation: demande pour 4 mois sur financement HERMES)
++ Patrick rdv 7/4 
++ for 7/4
+    + finish LHS & GA
+    + peut etere convergence cycle changes
++ receive Nicolas summary feedback
++ Pres
+    + transition to sustainable diets
+    + modelling in ABM
+    + be visual
+    + present hypotheses
+    
+# RDV Nicolas & Patrick 7/4
++ presentation
+    + be more positive on outlook
+    + model motivation focus
+    + reduce context a little
++ I am interested in behavioral change and opinion evolution
++ what is a mini public
++ DOCS GAMA
+    + report issue for docs problem "" problem
+    + see wiki and check if you can edit it
+
+# RDV Nicolas & Sabrina 7/4/26
++ exp set up in June Crous, entry manipulation (time, composition of self-service area)
++ think abou thow to ask ppl their preferences without divulging info
+

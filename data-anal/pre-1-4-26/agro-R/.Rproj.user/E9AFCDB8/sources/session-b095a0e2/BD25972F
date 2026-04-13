@@ -1,0 +1,27 @@
+{
+    "id": "BD25972F",
+    "path": "~/AGROMOD/R-local/R-proj-1/agro-R/data_sectioning.R",
+    "project_path": "data_sectioning.R",
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1773661191880.0,
+    "source_on_save": false,
+    "relative_order": 5,
+    "properties": {
+        "tempName": "Untitled1",
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "36,0",
+        "scrollLine": "28"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1773675351,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1773675351377,
+    "read_only": false,
+    "read_only_alternatives": []
+}

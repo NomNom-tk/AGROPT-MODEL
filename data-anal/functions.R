@@ -1,7 +1,7 @@
 # Functions
 # TO INCLUDE: prepare_sensitivity_data / generate_gaml_bounds / add_to_ppt / pivot_params
 
-# CLEARED BUT TEST AGAIN pivot_parameters ####
+# CLEAR BUT TEST AGAIN pivot_params ####
 pivot_params <- function(df) {
   df %>%
     mutate(
@@ -16,6 +16,8 @@ pivot_params <- function(df) {
       values_to = "value"
     ) %>%
     filter(!is.na(value))
+  
+  return(df)
 }
 
 # TODO prepare sensitivity data (need to change or remove // sensitivity analyses no longe ruse this)
@@ -25,7 +27,7 @@ prepare_sensitivity_data <- function(df, param_cols, output_cols) {
            across(all_of(output_cols), ~ (. - mean(., na.rm = TRUE)) / sd(., na.rm = TRUE)))
 }
 
-# TODO-test saving logic ####
+# TODO-test saving logic add_to_ppt ####
 add_to_ppt <- function(ppt, content, title, type = "table") {
   ppt <- add_slide(ppt, lyaout = "Title and Content", master = "Office Theme")
   ppt <- ph_with(ppt, value = tile, location = ph_location_type(type = "title"))
@@ -61,19 +63,13 @@ add_to_ppt <- function(ppt, content, title, type = "table") {
 ## save once
 # print(ppt, target = "relative path")
 
-# CLEARED apply batch mutations ####
+# SEMI_CLEARED apply_batch_mutations / zero all non-useful params in GAMA exp (consensus has SD values) ####
 apply_batch_mutations <- function(df) {
   
-  # guard for required columns
-  required_cols <- c("speaking_mode", "use_distinct_agents", 
-                     "debate_label", "convergence_cycle")
-  missing <- setdiff(required_cols, colnames(df))
-  if (length(missing) > 0) {
-    stop(paste("apply_batch_mutations: missing required columns:", 
-               paste(missing, collapse = ", ")))
-  }
+  df <- df %>%
+    filter(model_type != "model_type")
   
-  # columsn to mutate to numeric
+  # columns to mutate to numeric
   conv_cols <- c("convergence_rate", "confidence_threshold", "repulsion_strength", "repulsion_threshold",
                  "convergence_rate_sd", "confidence_threshold_sd", "repulsion_strength_sd", "repulsion_threshold_sd",
                  "mae", "initial_variance", "opinion_variance", "seed", "polarization_index", "neutral_zone_width", "mean_net_repulsion_abs"
@@ -82,17 +78,54 @@ apply_batch_mutations <- function(df) {
   # guard to convert only columns that exist in the df
   existing_conv_cols <- intersect(conv_cols, colnames(df))
   
-  df %>%
+  # guard for required columns
+  required_cols <- c("speaking_mode", "use_distinct_agents", 
+                     "debate_label", "convergence_cycle")
+  missing <- setdiff(required_cols, colnames(df))
+  if (length(missing) > 0) {
+    stop(paste("apply_batch_mutations: missing required columns:", 
+               paste(missing, collapse = ", ")))
+  } else {
+    message("no missing required columns, proceeding with mutations")
+  }
+  
+  
+  # mutation for char and logical columns to numeric for future analysis
+  df <- df %>%
     mutate(across(all_of(existing_conv_cols), ~ as.numeric(gsub(",", ".", trimws(.))))) %>%
     mutate(
       speaking_mode = factor(speaking_mode, levels = c("true", "false")), # changed to factor for wilcox tests
-      use_distinct_agents = use_distinct_agents == "true",
+      use_distinct_agents = case_when(use_distinct_agents == "true" ~ TRUE,
+                                      use_distinct_agents == "false" ~ FALSE),
       debate_composition = substr(debate_label, 1, 1),
       normalised_convergence = convergence_cycle / 300, # divided by 300 to normalize (max_cycles is constant)
     )
+  
+  # count NAs // recheck logic
+  na_check <- colSums(is.na(df))
+  problematic <- na_check[na_check > 0]
+  print(na_check)
+  print(sum(na_check))
+  
+  # precise location of NAs
+  if (length(problematic) > 0) {
+    warning(paste("NAs found in columns:", 
+                  paste(names(problematic), collapse = ", ")))
+    for (col in names(problematic)) {
+      na_rows <- which(is.na(df[[col]]))
+      warning(paste("Cols:", col, "has NAs at rows:",
+                    paste(na_rows, collapse = ", ")))
+      }
+    } else {
+      message(paste("No NA values in rows or columns"))
+    }
+  
+  # return cleaned df
+  return(df)
+  
 }
 
-# pcc and prcc function ####
+# CLEAR pcc and prcc function run_sensi_analysis ####
 run_sensi_analysis <- function(df, param_cols_by_model, output_cols) {
   
   sensi_split <- df %>%
@@ -223,7 +256,7 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols) {
 }
 
 
-# fit_lm for regression and can be integrated into pcc and prcc, defaults are lists declared in data_processing ####
+# CLEAR fit_lm for regression and can be integrated into pcc and prcc, defaults are lists declared in data_processing ####
 # example call for bipol_true regressed onto mae and variance: test <- fit_lm(df_batch, param_cols = param_cols_by_model[["bipolarization_TRUE"]], 
 # output_cols = c("mae", "opinion_variance"))
 fit_lm <- function(df, param_cols, output_cols, standardize = FALSE) {
@@ -266,8 +299,8 @@ fit_lm <- function(df, param_cols, output_cols, standardize = FALSE) {
   # return results
   return(lm_results_df)
 }
-# TODO generate gaml bounds ####
-generate_gaml_bounds <- function(ga_regions, buffer = 0.05) {
+# CLEAR generate_gaml_bounds ####
+generate_gaml_bounds <- function(df, buffer = 0.05) {
   
   # Helper function: expands zero-width ranges
   expand_range <- function(min_val, max_val, buffer) {
@@ -282,8 +315,8 @@ generate_gaml_bounds <- function(ga_regions, buffer = 0.05) {
   
   output_lines <- c()
   
-  for (i in seq_len(nrow(ga_regions))) {
-    row <- ga_regions[i, ]
+  for (i in seq_len(nrow(df))) {
+    row <- df[i, ]
     
     # Header comment for reference
     header <- paste0(
@@ -386,4 +419,154 @@ bipol_constraint_filter <- function(df, verbose = TRUE) {
   # return filtered df
   df %>%
     filter(!(model_type == "bipolarization" & neutral_zone_width < 0))
+}
+
+# CLEAR param_region_extraction ####
+param_region_extraction <- function(df, percentile = 0.25,
+                                    cr_max_cap = NULL,
+                                    rs_max_cap = NULL,
+                                    min_range = 0.05) {
+  
+  # remove model_type problem row and bipol)constraints
+  df <- df %>%
+    filter(model_type != "model_type",
+               !(model_type == "bipolarization" & neutral_zone_width < 0),
+           model_type != "no_change")
+  
+  # group specific threhsold and filter
+  df <- df %>%
+    group_by(model_type, use_distinct_agents) %>%
+    mutate(mae_threshold = quantile(mae, percentile)) %>%
+    filter(mae <= mae_threshold) %>%
+    ungroup()
+  
+  # summarise per group of vars
+  df <- df %>% 
+    group_by(model_type, use_distinct_agents) %>%
+    summarize(
+      cr_min = min(convergence_rate),
+      cr_max = max(convergence_rate),
+      cr_max_sd = max(convergence_rate_sd),
+      cr_min_sd = min(convergence_rate_sd),
+      ct_min = min(confidence_threshold, na.rm = TRUE),
+      ct_max = max(confidence_threshold, na.rm = TRUE),
+      ct_min_sd = min(confidence_threshold_sd, na.rm = TRUE),
+      ct_max_sd = max(confidence_threshold_sd, na.rm = TRUE),
+      rs_min = min(repulsion_strength, na.rm = TRUE),
+      rs_max = max(repulsion_strength, na.rm = TRUE),
+      rs_min_sd = min(repulsion_strength_sd, na.rm = TRUE),
+      rs_max_sd = max(repulsion_strength_sd, na.rm = TRUE),
+      rt_min = min(repulsion_threshold, na.rm = TRUE),
+      rt_max = max(repulsion_threshold, na.rm = TRUE),
+      rt_min_sd = min(repulsion_threshold_sd, na.rm = TRUE),
+      rt_max_sd = max(repulsion_threshold_sd, na.rm = TRUE),
+      best_mae = min(mae),
+      mae_threshold_used = first(mae_threshold), # for reference
+      n = n(),
+      .groups = "drop"
+  )
+  
+  # apply caps if defined from prev runs
+  if (!is.null(cr_max_cap)) {
+    df <- df %>%
+      mutate(cr_max = pmin(cr_max, cr_max_cap))
+  }
+  if (!is.null(rs_max_cap)) {
+    df <- df %>%
+      mutate(rs_max = pmin(rs_max, rs_max_cap))
+  }
+  
+  # zero out useless params (max <= 0.01 means zeroed out in GAMA)
+  param_pairs <- list(
+    c("ct_min", "ct_max"),
+    c("ct_min_sd", "ct_max_sd"),
+    c("rs_min", "rs_max"),
+    c("rs_min_sd", "rs_max_sd"),
+    c("rt_min", "rt_max"),
+    c("rt_min_sd", "rt_max_sd")
+  )
+  
+  for (pair in param_pairs) {
+    min_col <- pair[1]
+    max_col <- pair[2]
+    df <- df %>%
+      mutate(
+        !!min_col := ifelse(.data[[max_col]] <= 0.01, NA, .data[[min_col]]),
+        !!max_col := ifelse(.data[[max_col]] <= 0.01, NA, .data[[max_col]])
+      )
+  }
+  
+  
+  # Define the columns that need min/max clamping
+  min_max_cols <- c(
+    "cr_min", "cr_max", "ct_min", "ct_max",
+    "rs_min", "rs_max", "rt_min", "rt_max",
+    "cr_min_sd", "cr_max_sd", "ct_min_sd", "ct_max_sd",
+    "rs_min_sd", "rs_max_sd", "rt_min_sd", "rt_max_sd"
+  )
+  
+  # Optional buffer to expand ranges slightly
+  buffer <- 0.05  # change to 0 if you don't want a buffer
+  
+  # Apply clamping and buffer
+  df <- df %>%
+    mutate(across(all_of(min_max_cols), ~ pmax(0, pmin(1, .)))) 
+  
+  # minimum range check - flags parameters that are too narrow for GA search
+  df <- df %>%
+    mutate(
+      cr_range_ok = (cr_max - cr_min) >= min_range,
+      ct_range_ok = (ct_max - ct_min) >= min_range,
+      rs_range_ok = (rs_max - rs_min) >= min_range,
+      rt_range_ok = (rt_max - rt_min) >= min_range,
+      cr_sd_range_ok = (cr_max_sd - cr_min_sd) >= min_range,
+      ct_sd_range_ok = (ct_max_sd - ct_min_sd) >= min_range,
+      rs_sd_range_ok = (rs_max_sd - rs_min_sd) >= min_range,
+      rt_sd_range_ok = (rt_max_sd - rt_min_sd) >= min_range,
+    ) 
+  #%>% select(model_type, use_distinct_agents, ends_with("_range_ok"))
+  
+  # print warning for narrow ranges
+  # assign a differnet df to checks
+  regions <- df
+  range_check <- regions %>%
+    pivot_longer(
+      cols = ends_with("_range_ok"),
+      names_to = "parameter",
+      values_to = "range_ok"
+    ) %>%
+    filter(!range_ok, is.na(range_ok))
+  
+  if (nrow(range_check) > 0) { # pulls df from warning prints (should equate to zero)
+    print("WARNING: the following parameters have ranges too narrow for follow up algorithm search:")
+    print(range_check)
+  } else {
+    print("All parameter ranges sufficient for follow up algorithm search")
+  }
+  
+  
+  # bipolarization constraint check
+  bipol_check <- regions %>%
+    filter(model_type == "bipolarization") %>%
+    mutate(constraint_ok = ct_max < rt_min,
+           gap = rt_min - ct_max) %>%
+    select(model_type, use_distinct_agents, ct_max, rt_min, gap, constraint_ok)
+  
+  if (any(!bipol_check$constraint_ok)) {
+    print("WARNING: bipolarization bounds violate repulsion/confidence constraint")
+    print("Adjust ct_max or rt_min manually before running follow up algorithm")
+    print(bipol_check %>% filter(!constraint_ok))
+  } else {
+    print("Bipolarization constraint satisfied in all algorithm bounds")
+    print(bipol_check)
+  }
+  
+  
+  # return check
+  return(list(
+    regions = regions,
+    range_check = range_check,
+    bipol_check = bipol_check
+  ))
+  
 }

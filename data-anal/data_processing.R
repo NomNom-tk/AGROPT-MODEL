@@ -3,18 +3,41 @@
 # functions source before proper integration
 source("./functions.R")
 
+# package imports
+library(tidyverse)
+library(dplyr)
+library(rvg)
+library(broom)
+library(officer)
+library(flextable)
+library(sensitivity)
+library(lm.beta)
+
+# df imports
+df_lhs <- read.csv("./data/lhs_batch_summary.csv") %>% 
+  apply_batch_mutations() %>%
+  bipol_constraint_filter()            
+
+df_ga <- read.csv("./data/batch_summary.csv") %>% # change to GA when orchestrating in md 
+  apply_batch_mutations() %>%
+  bipol_constraint_filter()
+
+#df_anneal <- read.csv("./data/annealing_summary.csv") %>% 
+#  apply_batch_mutations()              %>%
+#  bipol_constraint_filter()
+
 ## df declarations
 df_batch <- read.csv("./data/batch_summary.csv")
-df_lhs <- read.csv("./data/lhs_batch_summary.csv")
+#df_lhs <- read.csv("./data/lhs_batch_summary.csv")
 #df_ga <- read.csv("./data/ga_batch_summary.csv")
 #df_anneal <- read.csv("./data/annealing_batch_summary.csv")
 #df_train <- read.csv("./data/train_data.csv")
 #df_validation <- read.csv("./data/valid_batch_summary.csv")
 #df_orig <- read.csv("./data/data_complete_anonymised.csv")
-#df_ag <- read.csv("./data/agent_level_results.csv")
+df_ag <- read.csv("./data/agent_level_results.csv")
 
 # lists declaration for lm and sensitivity analyses
-# define input columns
+## define input columns ----
 param_cols_by_model <- list(
   consensus_FALSE = c("convergence_rate"),
   consensus_TRUE = c("convergence_rate", "convergence_rate_sd"),
@@ -28,5 +51,7 @@ param_cols_by_model <- list(
 
 # define output columns
 output_cols <- c("mae", "opinion_variance", "convergence_cycle")
+
+
 
 

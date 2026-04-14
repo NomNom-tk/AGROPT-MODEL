@@ -194,4 +194,9 @@ structure (in gama there is no compartmentalization of global variables, loads i
 - updated protocol (almost ready) with necessary elements
 - revised slides with Nicolas and planned future analyses
 
+# 13/4/26
+- started by updating meetings file and cleaning dev-test repo
+- thought about how to change convergence_threshold (increase to 0.1)
+- re-run all exps and in the meantime finish refactoring
+
 

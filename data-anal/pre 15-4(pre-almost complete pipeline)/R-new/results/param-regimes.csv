@@ -1,0 +1,13 @@
+regimes,model_type,mae_mean
+High_hom_Fast,bipolarization,0.12177248004422354
+High_hom_Fast,clustering,0.09349685251233714
+High_hom_Fast,consensus,0.12304878892574375
+High_hom_Slow,bipolarization,0.12148174073353869
+High_hom_Slow,clustering,0.09703151768945348
+High_hom_Slow,consensus,0.1117644012754572
+Low_hom_Fast,bipolarization,0.090574271001963
+Low_hom_Fast,clustering,0.09673490269790967
+Low_hom_Fast,consensus,0.11342739436233346
+Low_hom_Slow,bipolarization,0.07934157394207941
+Low_hom_Slow,clustering,0.08561005820209715
+Low_hom_Slow,consensus,0.0808443129365822

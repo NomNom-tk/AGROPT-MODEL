@@ -1,0 +1,223 @@
+============================================================
+LHS ANALYSIS PIPELINE — DOCUMENTATION
+============================================================
+
+PURPOSE
+-------
+This script performs full analysis of LHS simulation outputs,
+including:
+- Sensitivity analysis (PCC / PRCC)
+- OLS vs ABM comparison
+- Behavioral diagnostics
+- Convergence analysis
+- Model evaluation
+- Parameter region extraction for GA
+
+The script is designed to produce a structured output object
+(lhs_outputs) that is consumed by an R Markdown report.
+
+------------------------------------------------------------
+PIPELINE DESIGN
+------------------------------------------------------------
+
+The project follows separation of concerns:
+
+- data_processing.R → builds cleaned datasets
+- functions.R       → reusable functions
+- lhs_analysis.R    → analysis logic ONLY
+- R Markdown        → presentation layer ONLY
+
+No heavy computation should occur in R Markdown.
+
+------------------------------------------------------------
+CRITICAL STEPS
+------------------------------------------------------------
+
+1. TYPE NORMALISATION
+---------------------
+All selected_debate_id variables are converted to character.
+
+Purpose:
+- Prevent join failures due to mismatched types
+- Ensure compatibility across LHS, GA, and OLS datasets
+
+------------------------------------------------------------
+
+2. SENSITIVITY ANALYSIS
+----------------------
+Function: run_sensi_analysis()
+
+Outputs:
+- PCC (Partial Correlation Coefficients)
+- PRCC (Rank-based PCC)
+
+Purpose:
+- Identify which parameters influence model outputs
+- Compare sensitivity across model versions
+
+------------------------------------------------------------
+
+3. OLS vs ABM COMPARISON
+------------------------
+Steps:
+- Fit OLS baseline using empirical data
+- Aggregate both OLS and ABM results to debate level
+- Align datasets using selected_debate_id ONLY
+
+Key metric:
+- delta_mae = abm_mae - ols_mae
+
+Important:
+- Do NOT join on debate_label (can differ across pipelines)
+- Inner join ensures only comparable debates are used
+
+------------------------------------------------------------
+
+4. BEHAVIORAL ANALYSIS
+----------------------
+Includes:
+- Debate composition (homogeneous vs mixed)
+- Speaking mode effects
+- Convergence behavior
+
+Methods:
+- Group summaries
+- Wilcoxon tests
+
+------------------------------------------------------------
+
+5. CONVERGENCE ANALYSIS
+-----------------------
+Metrics:
+- convergence_cycle
+- normalised_convergence
+
+Includes:
+- Distribution analysis (violin plots)
+- Model comparison
+- Regression model:
+
+    mean_mae ~ mean_conv * speaking_mode + model_type
+
+Key insight:
+- Convergence speed does NOT strongly predict accuracy
+
+------------------------------------------------------------
+
+6. BASELINE COMPARISON (NO CHANGE)
+----------------------------------
+Compares ABM models to a "no_change" baseline.
+
+Purpose:
+- Evaluate whether complex models outperform trivial baseline
+
+Limitation:
+- Only comparable where debate overlap exists
+
+------------------------------------------------------------
+
+7. STOCHASTICITY CHECK
+----------------------
+Evaluates sensitivity to random seeds.
+
+Finding:
+- Very low variance across seeds
+- Model behavior is highly stable
+
+------------------------------------------------------------
+
+8. MODEL COMPARISON
+-------------------
+Ranks models by MAE across:
+- Conditions
+- Heterogeneity settings
+
+Outputs:
+- Best-performing models
+- Performance distributions
+
+------------------------------------------------------------
+
+9. FAILURE ANALYSIS
+-------------------
+Defines failure threshold (e.g. MAE > 0.18)
+
+Analyzes:
+- When models fail
+- Relationship with convergence and heterogeneity
+
+------------------------------------------------------------
+
+10. GA REGION EXTRACTION
+------------------------
+Function: param_region_extraction()
+
+Outputs:
+- Parameter bounds for high-performing regions
+- GAML-compatible parameter ranges
+
+Used for:
+- Follow-up optimization (GA / annealing)
+
+------------------------------------------------------------
+OUTPUT STRUCTURE (lhs_outputs)
+------------------------------------------------------------
+
+lhs_outputs is a structured list used by R Markdown.
+
+Structure:
+
+- inputs
+    raw        → full dataset
+    versions   → versioned datasets
+
+- results
+    sensitivity → PCC / PRCC
+    models      → regression + OLS models
+    comparisons → OLS vs ABM + rankings
+    behavioral  → composition, speaking, convergence
+    dynamics    → convergence behavior, failures, clusters
+    regions     → GA parameter bounds
+
+- plots
+    Stored as FUNCTIONS:
+        pcc()
+        prcc()
+        convergence()
+        tradeoff()
+
+Important:
+- Only plots are functions
+- All other elements are computed objects
+
+------------------------------------------------------------
+USAGE IN R MARKDOWN
+------------------------------------------------------------
+
+Access results:
+    lhs_outputs$results$comparisons$summary
+
+Generate plots:
+    lhs_outputs$plots$pcc()
+
+DO NOT recompute analysis in R Markdown.
+
+------------------------------------------------------------
+COMMON PITFALLS (RESOLVED)
+------------------------------------------------------------
+
+1. Join errors
+   → fixed via type normalization
+
+2. Debate mismatch across methods
+   → fixed via ID-only joins
+
+3. Plot execution errors
+   → fixed via function-based plot storage
+
+4. Pivot warnings
+   → fixed via pre-aggregation
+
+------------------------------------------------------------
+END OF DOCUMENT
+------------------------------------------------------------

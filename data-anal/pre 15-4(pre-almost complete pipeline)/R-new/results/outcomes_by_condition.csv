@@ -1,0 +1,8 @@
+model_type,current_condition,outcome,n
+bipolarization,heterogeneous,Convergence,435
+bipolarization,heterogeneous,Polarization,15
+bipolarization,homogeneous,Convergence,300
+clustering,heterogeneous,Convergence,435
+clustering,homogeneous,Convergence,315
+consensus,heterogeneous,Convergence,450
+consensus,homogeneous,Convergence,300

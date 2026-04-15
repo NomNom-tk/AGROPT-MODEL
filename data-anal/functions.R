@@ -27,6 +27,13 @@ prepare_sensitivity_data <- function(df, param_cols, output_cols) {
            across(all_of(output_cols), ~ (. - mean(., na.rm = TRUE)) / sd(., na.rm = TRUE)))
 }
 
+# data loading prepare_data ----
+prepare_data <- function(path, version) {
+  read.csv(path) %>%
+    apply_batch_mutations() %>%
+    bipol_constraint_filter() %>%
+    mutate(version = version)
+}
 # TODO-test saving logic add_to_ppt ####
 add_to_ppt <- function(ppt, content, title, type = "table") {
   ppt <- add_slide(ppt, lyaout = "Title and Content", master = "Office Theme")
@@ -63,6 +70,51 @@ add_to_ppt <- function(ppt, content, title, type = "table") {
 ## save once
 # print(ppt, target = "relative path")
 
+# TODO combine_df_versions ----
+# allows combination of different versions of tests for comparison e.g., convergence_threshold
+combine_df_versions <- function(dfs, version_names) {
+  
+  stopifnot(length(dfs) == length(version_names))
+  
+  dfs <- lapply(seq_along(dfs), function(i) {
+    df <- dfs[[i]]
+    df$version <- version_names[i]
+    df
+  })
+  
+  dplyr::bind_rows(dfs)
+}
+# TODO compute_ols_baseline ----
+compute_ols_baseline <- function(df_ag) {
+  model <- lm(final_attitude ~ initial_opinion, data = df_ag)
+  
+  # predictions
+  preds <- predict(model, newdata = df_ag)
+  
+  # attach error
+  df_ag_ols <- df_ag %>%
+    mutate(
+      ols_pred = preds,
+      ols_error = abs(final_attitude - ols_pred)
+    )
+  
+  # global performance metric to compare to abm
+  ols_mae_global <- mean(df_ag_ols$ols_error, na.rm = TRUE)
+  
+  list(model = model,
+       data = df_ag_ols,
+       ols_mae = ols_mae_global)
+}
+# TODO aggregae_abm_debate ----
+aggregate_abm_debate <- function(df, mae_col = "mae") {
+  df %>%
+    group_by(selected_debate_id, debate_label) %>%
+    summarize(
+      abm_mae = mean(.data[[mae_col]], na.rm = TRUE),
+      r_runs = n(),
+      .groups = "drop"
+    )
+}
 # SEMI_CLEARED apply_batch_mutations / zero all non-useful params in GAMA exp (consensus has SD values) ####
 apply_batch_mutations <- function(df) {
   
@@ -402,6 +454,11 @@ generate_gaml_bounds <- function(df, buffer = 0.05) {
 }
 # CLEAR bipol_constraint_filter ####
 bipol_constraint_filter <- function(df, verbose = TRUE) {
+  # check and reconvert any naming problems
+  if ("debate" %in% names(df)) {
+    df <- df %>% rename(selected_debate_id = debate)
+  }
+  
   violations <- df %>%
     filter(model_type == "bipolarization",
            neutral_zone_width < 0)
@@ -415,6 +472,13 @@ bipol_constraint_filter <- function(df, verbose = TRUE) {
   } else {
     message(paste("No violations found, good on ya ;-+"))
   }
+  
+  # only apply to bipolarization rows
+  df %>%
+    filter(
+      model_type != "bipolarization" |
+        (model_type == "bipolarization" & neutral_zone_width >= 0)
+    )
   
   # return filtered df
   df %>%
@@ -569,4 +633,60 @@ param_region_extraction <- function(df, percentile = 0.25,
     bipol_check = bipol_check
   ))
   
+}
+# TODO build_analysis_outputs ----
+build_analysis_outputs <- function(df,
+                              df_versions,
+                              sensi,
+                              models,
+                              comparisons,
+                              behavioral,
+                              dynamics,
+                              regions,
+                              plot_fns) {
+  
+  # --------
+  # LHS OUTPUT CONTRACT
+  # --------
+  lhs_outputs <- list(
+    
+    # DATA
+    data = list(
+      raw      = df,
+      versions = df_lhs_versions
+    ),
+    
+    # SENSITIVITY ANALYSIS
+    sensitivity = list(
+      pcc  = sensi$pcc,
+      prcc = sensi$prcc
+    ),
+    
+    # MODELS
+    models = models,
+    
+    # STATISTICAL COMPARISONS
+    # need to contain: selected_debate_id, ols_mae, abm_mae, delta_mae, abm_better
+    comparisons = list(
+      ols_abm = comparisons$ols_abm
+    ),
+    
+    # BEHAVIORAL ANALYSIS
+    behavioral = behavioral,
+    
+    # DYNAMICS / SYSTEM OUTPUTS
+    dynamics = dynamics,
+    
+    # PARAMETER SPACE / REGIONS
+    regions = regions,
+    
+    # PLOTS (FUNCTIONS, NOT OBJECTS)
+    plots = list(
+      pcc         = function() plot_fns$pcc(sensi$pcc),
+      prcc        = function() plot_fns$prcc(sensi$prcc),
+      convergence = function() plot_fns$convergence(df),
+      tradeoff    = function() plot_fns$tradeoff(df),
+      delta_mae   = function() plot_fns$delta_mae(comparisons$ols)
+    )
+  )
 }

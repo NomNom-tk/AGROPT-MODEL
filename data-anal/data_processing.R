@@ -13,18 +13,27 @@ library(flextable)
 library(sensitivity)
 library(lm.beta)
 
-# df imports
-df_lhs <- read.csv("./data/lhs_batch_summary.csv") %>% 
-  apply_batch_mutations() %>%
-  bipol_constraint_filter()            
+# data_loading
+df_lhs_v1 <- prepare_data("./data/lhs_batch_summary_v1.csv", version = "v1_threshold_0.001")
+df_lhs_v2 <- prepare_data("./data/lhs_batch_summary_v2.csv", version = "v2_threshold_0.01")
 
-df_ga <- read.csv("./data/batch_summary.csv") %>% # change to GA when orchestrating in md 
-  apply_batch_mutations() %>%
-  bipol_constraint_filter()
+df_lhs <- df_lhs_v2
 
-#df_anneal <- read.csv("./data/annealing_summary.csv") %>% 
-#  apply_batch_mutations()              %>%
-#  bipol_constraint_filter()
+names(df_lhs_v2)
+str(df_lhs_v2$model_type)
+
+## comparison for lhs, called form functions combined dfs
+lhs_versions <- combine_df_versions(
+  list(df_lhs_v1, df_lhs_v2),
+  c("v1_threshold_0.001", "v2_threshold_0.01")
+)
+
+df_ga <- prepare_data("./data/batch_summary.csv", version = "v1")
+# df_anneal < -prepare_data("./data/anneal_batch_summary.csv", version = "v1")
+
+# agent level does not have neutral zone with do only apply batch mutations
+df_ag <- read.csv("./data/agent_level_results.csv") %>%
+  apply_batch_mutations()
 
 ## df declarations
 df_batch <- read.csv("./data/batch_summary.csv")
@@ -34,7 +43,7 @@ df_batch <- read.csv("./data/batch_summary.csv")
 #df_train <- read.csv("./data/train_data.csv")
 #df_validation <- read.csv("./data/valid_batch_summary.csv")
 #df_orig <- read.csv("./data/data_complete_anonymised.csv")
-df_ag <- read.csv("./data/agent_level_results.csv")
+#df_ag <- read.csv("./data/agent_level_results.csv")
 
 # lists declaration for lm and sensitivity analyses
 ## define input columns ----

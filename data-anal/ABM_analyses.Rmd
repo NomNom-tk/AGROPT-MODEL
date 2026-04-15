@@ -8,15 +8,12 @@ output:
 date: "2026-04-02"
 ---
 
-```{r setup, include=FALSE}
+```{r, setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width = 10,
-                      fi.height = 6)
+                      fig.height = 6)
 ```
 
-## R Markdown
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{file layout}
+```{r, file_layout, echo = FALSE, }
 #[EXISTING] Basic exploration
 #[EXISTING] Parameter correlations — minor tweak
 #[NEW]      Sensitivity analysis SRC/PCC
@@ -40,41 +37,129 @@ When you click the **Knit** button a document will be generated that includes bo
 #[EXISTING] Final recommendations — keep
 ```
 
-```{sources}
-source("R/Functions.R")
-source("R/data_processing.R")
-source("R/lhs_analysis.R") # sensitivity, ga, annealing, plots
+```{r, setup_1, echo = FALSE}
+library(tidyverse)
+library(dplyr)
+library(rvg)
+library(broom)
+library(officer)
+library(flextable)
+library(sensitivity)
+library(lm.beta)
 ```
 
-```{data-import, cache = TRUE}
-# change from . to .. or the reverse if it doesn't work
-df_batch <- read.csv("./data/batch_summary.csv")
-df_orig <- read.csv("./data/data_complete_anonymised.csv")
-df_ag <- read.csv("./data/agent_level_results.csv")
+```{r, file-sourcing, include = FALSE, echo = FALSE, cache = TRUE}
+source("./functions.R")
+source("./data_processing.R")
+
+lhs_outputs <- source("./lhs_analysis_1.R")$value 
+#ga_outputs <- source("./ga_analysis.R")$value
+# sensitivity, ga, annealing, plots
 ```
 
-```{data processing}
-# run all of the mutations and factor ocnversion
+```{r lhs_analysis_comparison, cache = FALSE}
+# lhs_analysis comparison - v1 (threshold = 0.001), v2 (threshold = 0.01)
+
+# PCC and PRCC using v2 as df_lhs (combined in lhs_ouputs list)
+lhs_outputs$plots$pcc()
+lhs_outputs$plots$prcc()
+
+# combined visualization
+lhs_outputs$plots$pcc_all()
+lhs_outputs$plots$prcc_all()
+
+# include comparison plots and use df_versions
+#df_versions <- lhs_outputs$inputs$versions
+
+# interpretation:
+# model structure dominates behavior (so threshold is a second-order effect)
+# bipolarizaito is the only regime with meaningful sensitivity
+
+# comparison summary
+#lhs_outputs$comparisons$summary()
+
+# convergence plot
+#lhs_outputs$plots$convergence()
+
+
 ```
 
-```{functions}
+```{r, model-performance, echo = FALSE}
+# abm vs ols plots
+# summary table, comparison_clean
+lhs_outputs$plots$model_performance_rank()
 
+# version aware 
+lhs_outputs$plots$model_rank_versions()
+
+# tables
+## OLS vs ABM comparison (used comparison clean)
+lhs_outputs$results$comparisons$ols
+
+## performance ranking
+lhs_outputs$results$comparisons$ranking
+
+## Setting up a baseline comparison still results in no_change dominating
+
+
+```
+
+```{r, behavioral-effects, echo = FALSE}
+# Behavioral Effects
+## debate composition
+lhs_outputs$results$behavioral$composition
+
+## debate composition plot
+lhs_outputs$plots$debate_comp_errors()
+
+## speaking mode comparisons
+lhs_outputs$results$behavioral$speaking
+
+
+```
+
+```{r, convergence-dynamics, echo = FALSE}
+# Convergence Dynamics
+## Convergence analysis
+lhs_outputs$results$dynamics$conv_diff
+
+## Convergence violin plot 
+lhs_outputs$plots$convergence()
+
+## trade_off plot
+# TODO rework convergence_cycle 
+lhs_outputs$plots$tradeoff()
+
+# speakign comparisons
+lhs_outputs$plots$
+
+
+```
+
+```{r, robustness, echo = FALSE}
+# Robustness
+## stochasticitiy
+lhs_outputs$results$behavioral$stochastic
+
+##heterogeneity
+lhs_outputs$results$behavioral$heterogen
+
+```
+
+```{r, model-comparison, echo = FALSE}
+# Model Comparisons
+## Versions summary
+lhs_outputs$inputs$version_summary
+
+# ranking, condition-specific comparison /// work on
+```
+
+```{r, optimization insights, echo = FALSE}
+# GA regions, best configs
+lhs_outputs$results$regions$bounds
 ```
 
 ```{ppt function init}
-ppt <- read_pptx()
+#ppt <- read_pptx()
 ```
 
-```{Initial Regressions without sensitivity}
-
-
-```
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

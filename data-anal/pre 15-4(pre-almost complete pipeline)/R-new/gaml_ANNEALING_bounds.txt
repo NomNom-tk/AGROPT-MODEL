@@ -1,0 +1,33 @@
+
+// bipolarization | distinct: FALSE | best_mae: 0.0228 | n: 126
+parameter "Convergence Rate" var: convergence_rate min: 0.05 max: 0.5;
+parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.4;
+parameter "Repulsion Strength" var: repulsion_strength min: 0.1 max: 0.2;
+parameter "Repulsion Threshold" var: repulsion_threshold min: 0.5 max: 0.8;
+
+// bipolarization | distinct: TRUE | best_mae: 0.0189 | n: 65
+parameter "Convergence Rate" var: convergence_rate min: 0.05 max: 0.5;
+parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.4;
+parameter "Repulsion Strength" var: repulsion_strength min: 0.1 max: 0.2;
+parameter "Repulsion Threshold" var: repulsion_threshold min: 0.5 max: 0.8;
+parameter "SD Convergence Rate" var: convergence_rate_sd min: 0 max: 0.2;
+parameter "SD Confidence Threshold" var: confidence_threshold_sd min: 0 max: 0.3;
+parameter "SD Repulsion Strength" var: repulsion_strength_sd min: 0 max: 0.2;
+parameter "SD Repulsion Threshold" var: repulsion_threshold_sd min: 0 max: 0.3;
+
+// clustering | distinct: FALSE | best_mae: 0.0219 | n: 63
+parameter "Convergence Rate" var: convergence_rate min: 0.05 max: 0.5;
+parameter "Confidence Threshold" var: confidence_threshold min: 0.2 max: 0.8;
+
+// clustering | distinct: TRUE | best_mae: 0.0213 | n: 63
+parameter "Convergence Rate" var: convergence_rate min: 0.05 max: 0.5;
+parameter "Confidence Threshold" var: confidence_threshold min: 0.2 max: 0.8;
+parameter "SD Convergence Rate" var: convergence_rate_sd min: 0 max: 0.2;
+parameter "SD Confidence Threshold" var: confidence_threshold_sd min: 0 max: 0.3;
+
+// consensus | distinct: FALSE | best_mae: 0.0303 | n: 125
+parameter "Convergence Rate" var: convergence_rate min: 0.05 max: 0.5;
+
+// consensus | distinct: TRUE | best_mae: 0.0303 | n: 188
+parameter "Convergence Rate" var: convergence_rate min: 0.05 max: 0.5;
+parameter "SD Convergence Rate" var: convergence_rate_sd min: 0 max: 0.2;

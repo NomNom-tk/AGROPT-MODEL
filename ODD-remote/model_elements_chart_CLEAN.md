@@ -168,39 +168,6 @@
 | OUT12 | Repulsive Interactions | Count of repulsion zone interactions | Global | Bipolarization only |
 | OUT13 | Neutral Interactions | Count of neutral zone interactions | Global | Bipolarization only |
 
----
-
-## PRIORITY CLASSIFICATION FOR SENSITIVITY ANALYSIS
-
-### 🔴 High Priority (Test First - Essential for all hypotheses)
-
-- [x] **SI1** - convergence_rate (affects all models)
-- [x] **SI2** - confidence_threshold (clustering, bipolarization)
-- [x] **SI3** - repulsion_threshold (bipolarization)
-- [x] **SI4** - repulsion_strength (bipolarization)
-- [x] **MODEL1** - model_type (compare three models)
-- [ ] **NET1** - network_type (test robustness to topology)
-- [ ] **B1** - opinion update mechanism alternatives
-- [ ] **INIT3** - random seed variations (30-50 seeds)
-
-### 🟡 Medium Priority (Important for specific hypotheses)
-
-- [ ] **NET2** - connection_probability (if using random network)
-- [ ] **NET3** - small_world_k (if using small-world)
-- [ ] **NET4** - small_world_rewire (if using small-world)
-- [ ] **W1-W5** - subfactor weights (calibration target)
-- [ ] **SIM1** - max_cycles (sensitivity to stopping rule)
-- [ ] **SIM2** - convergence threshold
-- [ ] **TIME3** - update order (simultaneous vs sequential)
-
-### 🟢 Low Priority (Test if time/resources permit)
-
-- [ ] **TIME1** - interaction frequency alternatives
-- [ ] **INIT1** - initialization noise
-- [ ] **B5** - alternative subfactor combination rules
-- [ ] **ARG1-ARG6** - argumentation parameters (future work)
-
----
 
 ## PARAMETER SUMMARY FOR BATCH EXPERIMENTS
 

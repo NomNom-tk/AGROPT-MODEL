@@ -1,0 +1,5 @@
+model_type,variance_slice,n_debates,mean_mae,mean_convergence
+bipolarization,Low,735,0.09210557450521403,22.857142857142858
+bipolarization,High,15,0.460199573801142,25
+clustering,Low,750,0.09136485680924918,20.4
+consensus,Low,750,0.09946215871130384,27.3

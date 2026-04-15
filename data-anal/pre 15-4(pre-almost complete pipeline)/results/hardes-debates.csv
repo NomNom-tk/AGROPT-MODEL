@@ -1,0 +1,11 @@
+selected_debate_id,current_condition,use_heterogeneous_agents,mae_mean,mae_min,best_model
+7,heterogeneous,false,0.21591200779374162,0.0694419498702178,clustering
+55,heterogeneous,true,0.18077253965410434,0.180629004917588,consensus
+1,heterogeneous,true,0.175057335756913,0.175057335756913,clustering
+20,heterogeneous,true,0.172525620036862,0.168429353471969,consensus
+29,heterogeneous,true,0.16224405710088652,0.162143283814392,consensus
+42,heterogeneous,false,0.16153210786794567,0.144098619792963,bipolarization
+19,heterogeneous,false,0.15572658642625267,0.155372682947356,consensus
+19,heterogeneous,true,0.155606003438088,0.155606003438088,clustering
+4,heterogeneous,false,0.15459957158233867,0.154519289397391,consensus
+6,homogeneous,true,0.1479358346140365,0.146441488001123,consensus

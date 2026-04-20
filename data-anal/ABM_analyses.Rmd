@@ -127,11 +127,14 @@ lhs_outputs$results$dynamics$conv_diff
 lhs_outputs$plots$convergence()
 
 ## trade_off plot
+# tradeoff raw plot
+lhs_outputs$plots$tradeoff_raw()
+
 # TODO rework convergence_cycle 
 lhs_outputs$plots$tradeoff()
 
 # speakign comparisons
-lhs_outputs$plots$
+lhs_outputs$plots$convergence_compar()
 
 
 ```

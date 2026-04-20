@@ -55,10 +55,12 @@ prcc_all <- bind_rows(prcc_v1, prcc_v2)
 # PLOTS (UNCHANGED - PRESERVED)
 # ─────────────────────────────────────────────
 
+# TODO feedback on which plot is better for PCC and PRCC
 plot_pcc_all_heatmap <- function(df) {
   ggplot(df, aes(x=parameter, y=output, fill=PCC)) +
     geom_tile(width = 0.9, height = 0.9) +
-    facet_grid(~ version) +
+    #facet_grid(model_type ~ version) +
+    facet_wrap(model_type ~ version) +
     theme_minimal() +
     theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
           axis.text.y = element_text(size = 8))
@@ -293,11 +295,14 @@ plot_viol_conv_model_type <- function(df) {
 # aggreagte to show comparison between models
 # ─────────────────────────────────────────────
 
+# aggregated conv debate
 df_conv_debate <- df_lhs %>%
   group_by(model_type, selected_debate_id, speaking_mode) %>%
   summarize(
     mean_conv = mean(convergence_cycle),
     mean_mae = mean(mae),
+    sd_conv = sd(convergence_cycle),
+    sd_mae = sd(mae),
     .groups = "drop"
   )
 
@@ -318,7 +323,8 @@ plot_box_conv_compar_speak <- function(df) {
     theme_bw()
 }
 
-tradeoff_plot <- function(df) {
+# aggregated plot
+plot_tradeoff_aggregated <- function(df) {
   ggplot(df, aes(x = mean_conv, y = mean_mae, color = speaking_mode)) +
     geom_point(alpha = 0.7) +
     geom_smooth(method = "lm", se = TRUE) +
@@ -329,6 +335,18 @@ tradeoff_plot <- function(df) {
       y = "Mean Absolute Error (MAE)",
       color = "Speaking Mode"
     ) +
+    theme_bw()
+}
+
+# trade off plot raw
+plot_tradeoff_raw <- function(df) {
+  ggplot(df, aes(x = convergence_cycle, y = mae, color = speaking_mode)) +
+    geom_point(alpha = 0.3) +
+    geom_smooth(method = "lm", se = TRUE) +
+    facet_wrap(~ model_type) +
+    labs(title = "Speed-Accuracy Trade-off Raw",
+         x = "Convergence Cycles",
+         y = "MAE") +
     theme_bw()
 }
 
@@ -444,28 +462,32 @@ heterogeneity_check <- df_lhs %>%
 # MODEL COMPARISON
 # ─────────────────────────────────────────────
 
-model_comparison <- df_lhs %>%
-  group_by(model_type, current_experiment_id, speaking_mode, use_distinct_agents) %>%
+# replaces model_comaprison_2
+model_comparison_main <- lhs_versions %>%
+  group_by(model_type, version, speaking_mode) %>%
   summarize(
     mae_mean = mean(mae),
     mae_sd = sd(mae),
-    mae_min = min(mae),
-    mae_max = max(mae),
     .groups = "drop"
   ) %>%
   arrange(mae_mean)
 
-model_comparison_1 <- df_lhs %>%
-  group_by(model_type, speaking_mode) %>%
+# model comparison detailed
+model_comparison_detailed <- df_lhs %>%
+  group_by(model_type, version, speaking_mode, use_distinct_agents) %>%
   summarize(
     mae_mean = mean(mae),
     mae_sd = sd(mae),
-    mae_min = min(mae),
-    mae_max = max(mae),
     .groups = "drop"
+  )
+
+model_comparison_relative <- model_comparison_main %>%
+  group_by(version, speaking_mode) %>%
+  mutate(
+    best_mae = min(mae_mean),
+    delta_mae = mae_mean - best_mae
   ) %>%
-  #mutate(model_type = factor(model_type, levels = model_type[order(mae_mean)])) %>%
-  arrange(mae_mean)
+  ungroup()
 
 # version aware model comparison
 model_comparison_2 <- df_lhs %>%
@@ -480,7 +502,7 @@ model_comparison_2 <- df_lhs %>%
   arrange(version, mae_mean)
 
 # force uniqueness before pivot
-model_wide_full <- model_comparison %>%
+model_wide_full <- model_comparison_detailed %>%
   group_by(model_type, use_distinct_agents) %>%
   summarize(mae_mean = mean(mae_mean), .groups = "drop") %>%
   pivot_wider(names_from = use_distinct_agents, values_from = mae_mean)
@@ -499,26 +521,47 @@ model_by_condition <- df_lhs %>%
 # Model comparison plots
 # ─────────────────────────────────────────────
 
-plot_model_performance_rank <- function(df) { # use with model_compar_1
-  ggplot(df, aes(x=model_type, y=mae_mean)) +
+plot_model_performance_rank_main <- function(df) { # use with model_compar_main
+  ggplot(df, aes(x= reorder(model_type, mae_mean), y=mae_mean)) +
     geom_col(fill= "blue") +
     coord_flip() +
-    facet_wrap(~ speaking_mode) +
+    facet_grid(version ~ speaking_mode) +
     theme_bw() +
-    labs(Title = "Model Performance Ranking", y = "Mean MAE")
+    labs(Title = "Model Performance by Version",
+         x = "Model Type",
+         y = "Mean MAE")
 }
 
-#plot_model_rank_versions <- function(df) {
-#  ggplot(df, aes(x= reorder(model_type, mae_mean), y=mae_mean, fill = version)) +
-#    geom_col(position = position_dodge(width = 0.7)) +
-#    facet_wrap(~ speaking_mode) +
-#    coord_flip() +
-#    theme_minimal() +
-#    labs(Title = "Model Performance Ranking",
-#         x = "Model Type",
-#         y = "Mean MAE",
-#         fill = "version")
-#}
+plot_model_comparison_uncertainty <- function(df) { # use detailed version
+  ggplot(df, aes(x = reorder(model_type, mae_mean), y = mae_mean)) +
+    geom_point(size = 2.5, color = "blue") +
+    geom_errorbar(aes(
+      ymin = mae_mean - mae_sd,
+      ymax = mae_mean + mae_sd
+    ), width = 0.2) +
+    coord_flip() +
+    facet_grid(version ~ speaking_mode + use_distinct_agents) +
+    theme_minimal() +
+    labs(
+      title = "Model Performance with Distinct Agents",
+      subtitle = "Error bars = +- SD",
+      x = "Model Type",
+      y = "Mean MAE"
+    )
+}
+
+# how far is the performance gap compared to the best model
+plot_model_performance_rank_gap <- function(df) { # use with model_relative
+  ggplot(df, aes(x= reorder(model_type, delta_mae), y=delta_mae)) +
+    geom_col(fill = "darkred") +
+    coord_flip() +
+    facet_wrap(version ~ speaking_mode) +
+    theme_bw() +
+    labs(Title = "Performance Gap to Best Model",
+         subtitle = "0 = best model in each panel",
+         x = "Model Type",
+         y = "Delta MAE",)
+}
 
 plot_model_rank_versions <- function(df) {
   ggplot(df, aes(x = model_type, y = mae_mean, color = version)) +
@@ -675,9 +718,9 @@ lhs_outputs <- list(
     
     abm_vs_ols = function() plot_ols_abm_comp(comparison_clean),
     
-    model_performance_rank = function() plot_model_performance_rank(model_comparison_1),
-    
-    model_rank_versions = function() plot_model_rank_versions(model_comparison_2),
+    model_performance_rank_main = function() plot_model_performance_rank_main(model_comparison_main),
+    model_performance_uncertainty = function() plot_model_performance_rank_1(model_comparison_detailed),
+    model_performance_gap = function() plot_model_performance_rank_gap(model_comparison_relative),
     
     debate_comp_errors = function() plot_h_m_errors(df_lhs),
     
@@ -687,7 +730,8 @@ lhs_outputs <- list(
     convergence_compar = function() plot_box_conv_compar_speak(df_conv_debate),
       
     convergence = function() plot_viol_conv_model_type(df_lhs),
-    tradeoff = function() tradeoff_plot(df_conv_debate)
+    tradeoff_agg = function() plot_tradeoff_aggregated(df_conv_debate),
+    tradeoff_raw = function() plot_tradeoff_raw(df_lhs)
   )
 )
 

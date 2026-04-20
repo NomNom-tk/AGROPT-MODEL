@@ -306,3 +306,25 @@
 + exp set up in June Crous, entry manipulation (time, composition of self-service area)
 + think abou thow to ask ppl their preferences without divulging info
 
+# RDV Nicolas et Patrick 15/4/26
++ convergence_cycle could be a parameter?
++ need to start thinking about JASSS or PCI submission
++ think about an ODD summary for your paper
++ Empirical data critiques
+++ on which parameters do we play for us to reach the level of empirical change in the ABM models?
++++ implies setting a fixed stopping cycle or number of speaking steps
+++ why do some debates reach convergence under no change?
++++ could investigate why some really good and really bad debates deviate so much from the empirical changes
++++ given a specific set of params and a model, are there debates that are randomly better than no change or not?
++ need to redo label gen in GAMA (ensure it is static and consistent across batch experiments)
++ IT IS BETTER TO USE HOMOGENEOUS AGENTS THAN TO MAKE MISTAKES ABOUT ASSUMING AGENTS ARE HETEROGENEOUS
++ could use particle swarm algorithm with very low parameter values to test if there is a difference in mae
+
+# RDV Nicolas, Thomas, Sabrina 16/4/26
++ mistral to see how many agents you can run on different machines
++ thomas echange de parloe --> can only extract who is speaking and the valence of arguments
++ TODO
+++ need to work on model_comparison logic
+++ GAMA region bounds, non-used parameters need to be zeroed out in GAMA so that they don't generate NAs
+++ label generation rework in GAMA (set static creation so that it persists across lhs, ga, annealing)
+

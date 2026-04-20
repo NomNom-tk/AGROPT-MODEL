@@ -199,4 +199,23 @@ structure (in gama there is no compartmentalization of global variables, loads i
 - thought about how to change convergence_threshold (increase to 0.1)
 - re-run all exps and in the meantime finish refactoring
 
+# 14/4/26
+- almost finished refactoring, minor issues in RMD orchestration and plot viz
+- continued to draft ideas for convergence dynamic
+- meeting with Patrick and Nicolas on 15/4 to discuss
+
+# 15/4/26
+- meeting with Patrick and Nicolas regarding convergence cycle and JASSS
+- critical comments on empirical debate change compared with current ABM analyses (fair and improvements)
+- started updating the RMD for viz and orchestration, still need to generalize to ga pipeline
+
+# 16/4/26
+- continued to process data and orchestrate the rmd file
+- bugs and problems in the pcc/prcc and model-performance section
+
+# 20/4/26
+- finally started fixing dynamic debate label generation, almost done
+- continued working on RMD pipeline, might be doable by 21/4
+- updated local R files on work and home comp
+- meeting with Adam for RatRec
 

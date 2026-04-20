@@ -216,6 +216,9 @@ structure (in gama there is no compartmentalization of global variables, loads i
 # 20/4/26
 - finally started fixing dynamic debate label generation, almost done
 - continued working on RMD pipeline, might be doable by 21/4
+- managed to almost fix the static debate id generaiton, need to refactor to standardize from csv only, could ignore controls for now (given that input is a sectioned csv file)
+- implemented recency of influence and speaking turn logic (need to re-run gui to test and then batch)
+- continue debug using claude for static debate ids
 - updated local R files on work and home comp
 - meeting with Adam for RatRec
 

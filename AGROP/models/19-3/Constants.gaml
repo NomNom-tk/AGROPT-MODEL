@@ -9,7 +9,7 @@
 model opinion_dynamics
 
 global {
-    float step <- 1; // time step of simulation
+    float step <- 0.5; // time step of simulation
     
     int max_cycles <- 300; // max cycles for convergence
     

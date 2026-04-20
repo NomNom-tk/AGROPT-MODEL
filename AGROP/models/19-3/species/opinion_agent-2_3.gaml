@@ -68,18 +68,6 @@ species opinion_agent virtual: true  {
 	list<int> recent_speech <- [];
 	bool is_speaking <- false;
 	float speak_weight <- 0.0;
-
-    // Saturation tracking and total influence attributes (20/4/26)
-    int total_influences_received <- 0;
-    float retention_discount <- 1.0;
-    float cumulative_opinion_change <- 0.0; // tracks direction and magnitude
-    float initial_opinion_snapshot <- 0.0; // set at init and never change
-
-    // parent species tracking extras (20/4/26), declaration here to save later and possibly reuse in simulations
-    bool agent_is_saturated <- false;
-    bool agent_wrong_direction <- false;
-    float agent_net_change <- 0.0;
-    
 	
     // ====
     // Agent-level attributes (heterogeneous agents)
@@ -244,21 +232,12 @@ species consensus_agent parent: opinion_agent {
         }
     }
     action compute_opinion_speaker (float speaker_opinion) {
-            // snapshot creation (20/4/26)
-            float opinion_before <- opinion;
-
     		//write "neighbors: " + length(neighbors) + " group_type: " + group_type;
             // Average opinion of speaker plus own
             list<float> speak_own_opi <- [opinion] + [speaker_opinion];
             float new_opinion <- mean(speak_own_opi);
-            opinion <- max([0.0, min([1.0, 
-                opinion + agent_convergence_rate * retention_discount * (new_opinion - opinion)])]); // bounds creation retention addition
+            opinion <- max([0.0, min([1.0, opinion + agent_convergence_rate * (new_opinion - opinion)])]); // bounds creation
             
-            // post update opin tracking (20/4/26)
-            cumulative_opinion_change <- cumulative_opinion_change + (opinion + opinion_before);
-            total_influences_received <- total_influences_received + 1;
-            retention_discount <- 1.0 / (1.0 + total_influences_received * 0.1);
-
         }
     }
 
@@ -288,20 +267,10 @@ species clustering_agent parent: opinion_agent {
     
     action compute_opinion_speaker (float speaker_opinion) {
             if abs(speaker_opinion - self.opinion) <= agent_confidence_threshold {
-
-                // snapshot creation 20/4/26
-                float opinion_before <- opinion;
-
                 list<float> similar_speaker <- [opinion] + [speaker_opinion];
                 float avg_similar <- mean(similar_speaker);
-                opinion <- max([0.0, min([1.0, 
-                    opinion + agent_convergence_rate * retention_discount * (avg_similar - opinion)])]); // bounds creation, addition of retention_discount
+                opinion <- max([0.0, min([1.0, opinion + agent_convergence_rate * (avg_similar - opinion)])]); // bounds creation
                 color <- rgb(opinion * 255, 0, (1 - opinion) * 255); // standardized color scheme
-
-                // post update opin tracking (20/4/26)
-                cumulative_opinion_change <- cumulative_opinion_change + (opinion - opinion_before);
-                total_influences_received <- total_influences_received + 1;
-                retention_discount <- 1.0 / (1.0 + total_influences_received * 0.1);
             }
         }
     } 
@@ -368,7 +337,6 @@ species bipolarization_agent parent: opinion_agent {
         float repulsion_force <- 0.0;
         int attractive_count <- 0;
         int repulsive_count <- 0;
-        float opinion_before <- opinion; // snapshot creation
     	
     	float speaker_diff <- abs(speaker_opinion - self.opinion);
                 
@@ -389,13 +357,13 @@ species bipolarization_agent parent: opinion_agent {
                     // NEUTRAL ZONE: No influence
                     total_neutral_interactions <- total_neutral_interactions + 1;
                 }
-    	// Apply combined forces (retention discounts for repulsion as well as attraction 20/4/26)
+    	// Apply combined forces
             float opinion_change <- 0.0;
             if attractive_count > 0 {
-                opinion_change <- opinion_change + agent_convergence_rate * retention_discount * (attraction_force / attractive_count);
+                opinion_change <- opinion_change + agent_convergence_rate * (attraction_force / attractive_count);
             }
             if repulsive_count > 0 {
-                opinion_change <- opinion_change + agent_repulsion_strength * retention_discount * (repulsion_force / repulsive_count);
+                opinion_change <- opinion_change + agent_repulsion_strength * (repulsion_force / repulsive_count);
             }
             
             // Update opinion (clamped to [0,1])
@@ -403,11 +371,6 @@ species bipolarization_agent parent: opinion_agent {
             
             // Update color
             color <- rgb(opinion * 255, 0, (1 - opinion) * 255); // standardized color scheme
-
-            // post update opin tracking (20/4/26)
-            cumulative_opinion_change <- cumulative_opinion_change + (opinion - opinion_before);
-            total_influences_received <- total_influences_received + 1;
-            retention_discount <- 1.0 / (1.0 + total_influences_received * 0.1);
     
     }
 }

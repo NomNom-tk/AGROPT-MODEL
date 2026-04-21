@@ -22,6 +22,7 @@ global {
     bool mode_batch <- false; // Batch mode vs GUI mode
     bool speaking_mode <- false; // speaking flag
     bool debug_mode <- false; // show debug?
+    map<string, int> stable_group_map <- map<string, int>([]); // persistent group mapping for reproducibility
 
     // Opinion dynamics
     float convergence_rate <- 0.2 min: 0.0 max: 1.0;        // μ: Speed of opinion change

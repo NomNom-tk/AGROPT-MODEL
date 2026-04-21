@@ -15,7 +15,7 @@ global {
     	//do load_csv_data("/home/agropt/Gama_Workspace_new/thomas-social/models/data-dictionary/exp-dat/train_data.csv");
     	
         
-        // CREATE DEBATE ID MAPPING
+        /*/ CREATE DEBATE ID MAPPING
         // Control agents get unique IDs, others grouped by ID_Group_all
         debate_id_list <- [];
         map<string, int> group_to_id <- map<string, int>([]);
@@ -43,7 +43,7 @@ global {
                 }
                 debate_id_list << group_to_id[id_group];
             }
-        }
+        }*/
         
         // REPORT DEBATE DISTRIBUTION
         do debate_distribution;

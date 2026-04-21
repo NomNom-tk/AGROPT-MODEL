@@ -35,6 +35,8 @@ df_ga <- prepare_data("./data/batch_summary.csv", version = "v1")
 df_ag <- read.csv("./data/agent_level_results.csv") %>%
   apply_batch_mutations()
 
+df_agent_empir <- read.csv("./data/data_complete_anonymised.csv")
+
 ## df declarations
 df_batch <- read.csv("./data/batch_summary.csv")
 #df_lhs <- read.csv("./data/lhs_batch_summary.csv")

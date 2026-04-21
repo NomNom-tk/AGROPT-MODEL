@@ -678,8 +678,8 @@ lhs_outputs <- list(
     models = list(conv = run_conv_model(df_conv_debate), ols = ols_model),
     comparisons = list(
       ols = comparison_clean,
-      summary = comparison_summary,
-      ranking = model_comparison_1,
+      summary = model_comparison_main,
+      ranking = model_comparison_detailed,
       version_ranking = model_comparison_2,
       baseline = baseline_comparison
     ),

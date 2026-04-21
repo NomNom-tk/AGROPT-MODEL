@@ -67,14 +67,6 @@ global {
         if debug_mode = true{
         	ask opinion_agents {
     		write "Agent " + agent_id + " group_type: " + group_type + " neighbors: " + length(neighbors);
-
-            // debug check for debate MAPPING
-            write "Successfully loaded " + length(agent_id_list) + " agents";
-            write "id_group_raw[0]: " + id_group_raw[0];
-            write "id_group_raw[1]: " + id_group_raw[1];
-            // ADD THESE
-            write "id_group_raw as int sample: " + int(id_group_raw[0]) + ", " + int(id_group_raw[1]) + ", " + int(id_group_raw[2]);
-            write "unique group count: " + length(remove_duplicates(id_group_raw));
 			}
 		}
         
@@ -276,7 +268,6 @@ action debug_init {
 				final_attitude <- final_attitude_list[idx];
 				location <- {rnd(world_size), rnd(world_size)};
 				color <- rgb(opinion * 255, 0, (1 - opinion) * 255);
-                initial_opinion_snapshot <- opinion; // introduce in 20/4/26 pre and post update tracking
 			}
 		}
 	}
@@ -574,13 +565,6 @@ action save_agent_results {
         float individual_error <- abs(opinion - final_attitude);
         float opinion_change <- opinion - initial_opinion;
         
-        // derived opinion values 20/4/26
-        agent_net_change <- opinion - initial_opinion_snapshot;
-        agent_wrong_direction <- (pro_reduction = 1 and agent_net_change < 0)
-                                    or (pro_reduction = 0 and agent_net_change > 0);
-        agent_is_saturated <- retention_discount < 0.2;
-
-        
         // Calculate mean of T2 subfactors for comparison
         float mean_t2_subfactors <- (subfactor_1_t2 + subfactor_2_t2 +
                                         subfactor_3_t2 + subfactor_4_t2 + 
@@ -643,12 +627,6 @@ action save_agent_results {
             
             // speech
             //recent_speech_str,
-            total_influences_received,
-            retention_discount,
-            cumulative_opinion_change,
-            agent_net_change,
-            agent_wrong_direction,
-            agent_is_saturated,
             
             // Parameters
             convergence_rate,

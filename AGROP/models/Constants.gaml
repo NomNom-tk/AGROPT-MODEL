@@ -16,4 +16,10 @@ global {
     float mae_convergence_threshold <- 0.001 min: 0.0 max: 1.0; // Convergence Checking
     
     float world_size <- 100.0; // Spatial world size for visualization
+    
+    int n_bins <- 50; // bins for gui viz and gif generaiton
+    
+    int stats_bins <- 10; // bins for logical histogram calculation
+    
+    
 }

@@ -12,7 +12,7 @@ import time
 GAMA_HEADLESS = "/home/stolte/Gama_lite/headless/gama-headless.sh"
 MODEL_FILE    = "/home/stolte/GAMA_work/experiments/batch_exp_exh-20-3.gaml"
 LOG_FILE      = "gama_run_log.txt"
-MAX_PARALLEL  = 8   # ← set to 3 if server feels sluggish, 6 if 8 cores available
+MAX_PARALLEL  = 10   # ← set to 3 if server feels sluggish, 6 if 8 cores available
 
 experiments = [
     "Bt_lhs_no_change",

@@ -167,9 +167,19 @@ import "../Constants.gaml"
         }
 
         // build debate MAPPING 21/4/26
+        // control gets -1 as label, rest gets proper mapping, batch exp guard skips debates not found in list
         action build_debate_id_map {
+        	
+        	// filter out control agents
+        	list<string> non_control_labels <- [];
+        	loop i from: 0 to: length(id_group_raw) -1 {
+        		if group_type_list[i] != "Control" {
+        			non_control_labels << id_group_raw[i];
+        		}
+        	}
+        	
             // extract and sort unique labels
-            list<string> unique_labels <- remove_duplicates(id_group_raw) sort_by each;
+            list<string> unique_labels <- remove_duplicates(non_control_labels) sort_by each;
 
             // build stable map 
             stable_group_map <- map<string, int>([]);
@@ -177,19 +187,25 @@ import "../Constants.gaml"
                 stable_group_map[unique_labels[i]] <- i + 1;
             }
         
-            // populate debate_id_list
+            // populate debate_id_list, control agents get -1
             debate_id_list <- [];
             loop i from: 0 to: length(id_group_raw) - 1 {
-                debate_id_list << stable_group_map[id_group_raw[i]];
+                if group_type_list[i] = "Control" {
+					debate_id_list << -1;
+				} else {
+					debate_id_list << stable_group_map[id_group_raw[i]];
+				}
             }
 
-            // write mapping for R joins
+			// ONLY RUN IF NO MAPPING EXISTS
+            /*/ write mapping for R joins
             save stable_group_map.keys + stable_group_map.values
                 to: "./debate_id_mapping.csv";
+            */
             
-            // if debug_mode {
+            if debug_mode {
                 write "Debate ID mapping: " + stable_group_map;
                 write "Total unique debates: " + length(unique_labels);
             }
         }
-    }
+	}

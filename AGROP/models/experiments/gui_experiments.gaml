@@ -58,6 +58,7 @@ experiment social_influence type: gui {
             }
         }
         
+        
         // Monitors
         monitor "Current Cycle" value: cycle;
         monitor "Convergence Cycle" value: convergence_cycle;

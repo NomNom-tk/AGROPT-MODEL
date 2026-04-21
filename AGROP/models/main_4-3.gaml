@@ -11,8 +11,11 @@ global {
     // initialization ONLY for orchestration
     init {
     	// call data loader with file path parameter
-    	do load_csv_data("../data-dictionary/exp-dat/train_data.csv");
+    	do load_csv_data("../data-dictionary/data_complete_anonymised.csv");
     	//do load_csv_data("/home/agropt/Gama_Workspace_new/thomas-social/models/data-dictionary/exp-dat/train_data.csv");
+    	
+    	// create debate mapping
+    	do build_debate_id_map;
     	
         
         /*/ CREATE DEBATE ID MAPPING

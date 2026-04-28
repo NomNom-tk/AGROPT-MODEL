@@ -29,6 +29,7 @@ global {
     		list<float> weights <- opinion_agents collect each.speak_weight;
     		int chosen_index <- rnd_choice(weights);
     		speaking_ag <- (opinion_agents at chosen_index);
+    		//write "Speaking agent: " + speaking_ag.agent_id + " mode: " + speaking_mode;
     		ask speaking_ag {
     			do talk_to_all;
     		}
@@ -68,6 +69,18 @@ species opinion_agent virtual: true  {
 	list<int> recent_speech <- [];
 	bool is_speaking <- false;
 	float speak_weight <- 0.0;
+
+    // Saturation tracking and total influence attributes (20/4/26)
+    int total_influences_received <- 0;
+    float retention_discount <- 1.0;
+    float cumulative_opinion_change <- 0.0; // tracks direction and magnitude
+    float initial_opinion_snapshot <- 0.0; // set at init and never change
+
+    // parent species tracking extras (20/4/26), declaration here to save later and possibly reuse in simulations
+    bool agent_is_saturated <- false;
+    bool agent_wrong_direction <- false;
+    float agent_net_change <- 0.0;
+    
 	
     // ====
     // Agent-level attributes (heterogeneous agents)
@@ -93,12 +106,13 @@ species opinion_agent virtual: true  {
     float subfactor_5_t2;
     
     action compute_opinion virtual: true;
-    action compute_opinion_speaker (float speaker_opinion) virtual: true;
+    action compute_opinion_speaker (float speaker_opinion, opinion_agent sender) virtual: true;
     
     action talk_to_all {
     	float my_opinion <- opinion;
+        opinion_agent me <- self; // capture sender reference before ask block
     	ask opinion_agents where (each != self) {
-    		do compute_opinion_speaker speaker_opinion: my_opinion;
+    		do compute_opinion_speaker speaker_opinion: my_opinion sender: me;
     	}
     	recent_speech <+ 1;
     	if length(recent_speech) > length(opinion_agents) {
@@ -112,7 +126,15 @@ species opinion_agent virtual: true  {
     	
     	do compute_opinion;
     	
+        }
     }
+
+    // update tracking reflex (27/7/26) to pass through agents and write to log File
+    reflex update_tracking {
+        agent_net_change <- opinion - initial_opinion_snapshot;
+        agent_is_saturated <- retention_discount < 0.2;
+        agent_wrong_direction <- (pro_reduction = 1 and agent_net_change < 0)
+                              or (pro_reduction = 0 and agent_net_change > 0);
     }
     
     // ASPECTS: VISUALIZATION
@@ -206,8 +228,24 @@ species no_change_agent parent: opinion_agent {
 	action compute_opinion{
 		// do nothing, no update
 	}
-	action compute_opinion_speaker (float speaker_opinion) {
+	action compute_opinion_speaker (float speaker_opinion, opinion_agent sender) {
 		// do nothing
+        float opinion_before <- opinion;
+        
+        // inline tracking for log accuracry (agent_wrong dir updates one cycle too late) 28/4/26
+        bool wrong_dir <- (pro_reduction = 1 and (opinion - initial_opinion_snapshot) < 0)
+           			   or (pro_reduction = 0 and (opinion - initial_opinion_snapshot) > 0);
+		bool is_sat <- retention_discount < 0.2;
+
+        // interaction log introduction 27/4/26
+        interaction_log << string(speaking_mode) + "," + string(model_type) + "," + 
+            string(current_condition) + "," + string(debate_id) + "," + 
+            string(debate_label) + "," + string(current_experiment_id) + "," + 
+            string(use_distinct_agents) + "," + string(seed) + "," +
+            string(cycle) + "," + string(sender.agent_id) + "," + string(agent_id) + "," +
+            string(speaker_opinion) + "," + string(opinion_before) + "," +
+            string(opinion) + "," + string(opinion - opinion_before) + "," +
+            string(is_sat) + "," + string(wrong_dir);
 	}
 }
 
@@ -231,13 +269,38 @@ species consensus_agent parent: opinion_agent {
             
         }
     }
-    action compute_opinion_speaker (float speaker_opinion) {
+    action compute_opinion_speaker (float speaker_opinion, opinion_agent sender) {
+            // snapshot creation (20/4/26)
+            // debug 27/4/26 interaction log not firing
+            //write "LOG hit agent: " + agent_id;
+            float opinion_before <- opinion;
+
     		//write "neighbors: " + length(neighbors) + " group_type: " + group_type;
             // Average opinion of speaker plus own
             list<float> speak_own_opi <- [opinion] + [speaker_opinion];
             float new_opinion <- mean(speak_own_opi);
-            opinion <- max([0.0, min([1.0, opinion + agent_convergence_rate * (new_opinion - opinion)])]); // bounds creation
+            opinion <- max([0.0, min([1.0, 
+                opinion + agent_convergence_rate * retention_discount * (new_opinion - opinion)])]); // bounds creation retention addition
             
+            // post update opin tracking (20/4/26)
+            cumulative_opinion_change <- cumulative_opinion_change + (opinion - opinion_before);
+            total_influences_received <- total_influences_received + 1;
+            retention_discount <- 1.0 / (1.0 + total_influences_received * 0.1);
+            
+            // inline tracking for log accuracry (agent_wrong dir updates one cycle too late) 28/4/26
+            bool wrong_dir <- (pro_reduction = 1 and (opinion - initial_opinion_snapshot) < 0)
+               			   or (pro_reduction = 0 and (opinion - initial_opinion_snapshot) > 0);
+			bool is_sat <- retention_discount < 0.2;
+
+            // interaction log introduction 27/4/26
+            interaction_log << string(speaking_mode) + "," + string(model_type) + "," + 
+                string(current_condition) + "," + string(debate_id) + "," + 
+                string(debate_label) + "," + string(current_experiment_id) + "," + 
+                string(use_distinct_agents) + "," + string(seed) + "," +
+                string(cycle) + "," + string(sender.agent_id) + "," + string(agent_id) + "," +
+                string(speaker_opinion) + "," + string(opinion_before) + "," +
+                string(opinion) + "," + string(opinion - opinion_before) + "," +
+                string(is_sat) + "," + string(wrong_dir);
         }
     }
 
@@ -265,12 +328,37 @@ species clustering_agent parent: opinion_agent {
         }
     }
     
-    action compute_opinion_speaker (float speaker_opinion) {
+    action compute_opinion_speaker (float speaker_opinion, opinion_agent sender) {
             if abs(speaker_opinion - self.opinion) <= agent_confidence_threshold {
+
+                // snapshot creation 20/4/26
+                float opinion_before <- opinion;
+
                 list<float> similar_speaker <- [opinion] + [speaker_opinion];
                 float avg_similar <- mean(similar_speaker);
-                opinion <- max([0.0, min([1.0, opinion + agent_convergence_rate * (avg_similar - opinion)])]); // bounds creation
+                opinion <- max([0.0, min([1.0, 
+                    opinion + agent_convergence_rate * retention_discount * (avg_similar - opinion)])]); // bounds creation, addition of retention_discount
                 color <- rgb(opinion * 255, 0, (1 - opinion) * 255); // standardized color scheme
+
+                // post update opin tracking (20/4/26)
+                cumulative_opinion_change <- cumulative_opinion_change + (opinion - opinion_before);
+                total_influences_received <- total_influences_received + 1;
+                retention_discount <- 1.0 / (1.0 + total_influences_received * 0.1);
+                
+                // inline tracking for log accuracry (agent_wrong dir updates one cycle too late) 28/4/26
+	            bool wrong_dir <- (pro_reduction = 1 and (opinion - initial_opinion_snapshot) < 0)
+	               			   or (pro_reduction = 0 and (opinion - initial_opinion_snapshot) > 0);
+				bool is_sat <- retention_discount < 0.2;
+
+                // interaction log introduction 27/4/26
+                interaction_log << string(speaking_mode) + "," + string(model_type) + "," + 
+                    string(current_condition) + "," + string(debate_id) + "," + 
+                    string(debate_label) + "," + string(current_experiment_id) + "," + 
+                    string(use_distinct_agents) + "," + string(seed) + "," +
+                    string(cycle) + "," + string(sender.agent_id) + "," + string(agent_id) + "," +
+                    string(speaker_opinion) + "," + string(opinion_before) + "," +
+                    string(opinion) + "," + string(opinion - opinion_before) + "," +
+                    string(is_sat) + "," + string(wrong_dir);
             }
         }
     } 
@@ -332,11 +420,12 @@ species bipolarization_agent parent: opinion_agent {
         }
     }
     
-    action compute_opinion_speaker (float speaker_opinion) {
+    action compute_opinion_speaker (float speaker_opinion, opinion_agent sender) {
     	float attraction_force <- 0.0;
         float repulsion_force <- 0.0;
         int attractive_count <- 0;
         int repulsive_count <- 0;
+        float opinion_before <- opinion; // snapshot creation
     	
     	float speaker_diff <- abs(speaker_opinion - self.opinion);
                 
@@ -357,13 +446,13 @@ species bipolarization_agent parent: opinion_agent {
                     // NEUTRAL ZONE: No influence
                     total_neutral_interactions <- total_neutral_interactions + 1;
                 }
-    	// Apply combined forces
+    	// Apply combined forces (retention discounts for repulsion as well as attraction 20/4/26)
             float opinion_change <- 0.0;
             if attractive_count > 0 {
-                opinion_change <- opinion_change + agent_convergence_rate * (attraction_force / attractive_count);
+                opinion_change <- opinion_change + agent_convergence_rate * retention_discount * (attraction_force / attractive_count);
             }
             if repulsive_count > 0 {
-                opinion_change <- opinion_change + agent_repulsion_strength * (repulsion_force / repulsive_count);
+                opinion_change <- opinion_change + agent_repulsion_strength * retention_discount * (repulsion_force / repulsive_count);
             }
             
             // Update opinion (clamped to [0,1])
@@ -371,7 +460,25 @@ species bipolarization_agent parent: opinion_agent {
             
             // Update color
             color <- rgb(opinion * 255, 0, (1 - opinion) * 255); // standardized color scheme
-    
+
+            // post update opin tracking (20/4/26)
+            cumulative_opinion_change <- cumulative_opinion_change + (opinion - opinion_before);
+            total_influences_received <- total_influences_received + 1;
+            retention_discount <- 1.0 / (1.0 + total_influences_received * 0.1);
+            
+            // inline tracking for log accuracry (agent_wrong dir updates one cycle too late) 28/4/26
+            bool wrong_dir <- (pro_reduction = 1 and (opinion - initial_opinion_snapshot) < 0)
+               			   or (pro_reduction = 0 and (opinion - initial_opinion_snapshot) > 0);
+			bool is_sat <- retention_discount < 0.2;
+
+            // interaction log introduction 27/4/26
+            interaction_log << string(speaking_mode) + "," + string(model_type) + "," + 
+                string(current_condition) + "," + string(debate_id) + "," + 
+                string(debate_label) + "," + string(current_experiment_id) + "," + 
+                string(use_distinct_agents) + "," + string(seed) + "," +
+                string(cycle) + "," + string(sender.agent_id) + "," + string(agent_id) + "," +
+                string(speaker_opinion) + "," + string(opinion_before) + "," +
+                string(opinion) + "," + string(opinion - opinion_before) + "," +
+                string(is_sat) + "," + string(wrong_dir);
     }
 }
-

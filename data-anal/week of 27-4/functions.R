@@ -751,3 +751,28 @@ build_analysis_outputs <- function(source,
   )
   return(outputs)
 }
+# TODO prepare_direcitonal_df 29/4/26 ----
+prepare_directional <- function(df) { # use with df_ag
+  df_directional <- df %>%
+    filter(speaking_mode == "true") %>%
+    mutate(empirical_dir = sign(final_attitude - initial_opinion),
+           simulated_dir = sign(opinion - initial_opinion),
+           correct_dir = empirical_dir == simulated_dir,
+           empirical_moved = empirical_dir != 0
+           ) %>%
+    filter(empirical_moved) 
+}
+
+# TODO summarize_directional ----
+summarize_directional <- function(df) {
+  df %>%
+    group_by(model_type, current_condition) %>%
+    summarize(
+      pct_correct_dir = mean(correct_dir),
+      pct_wrong_dir = mean(agent_wrong_direction),
+      mean_mae = mean(abs(opinion - final_attitude)),
+      mean_baseline_mae = mean(abs(initial_opinion - final_attitude)),
+      n = n(),
+      .groups = "drop"
+    )
+}

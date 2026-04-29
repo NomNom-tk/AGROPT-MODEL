@@ -25,7 +25,9 @@ df_lhs <- df_lhs_v1
 
 # temp fix for lhs agent level
 df_ag <- read.csv("./data/lhs_agent_level_results.csv") %>%
-  apply_batch_mutations()
+  apply_batch_mutations() %>%
+  mutate(agent_wrong_direction = as.logical(agent_wrong_direction),
+        agent_is_saturated = as.logical(agent_is_saturated))
 
 ## comparison for lhs, called form functions combined dfs
 lhs_versions <- combine_df_versions(
@@ -45,6 +47,10 @@ df_lhs_interactions <- prepare_interactions("./data/lhs_interaction_log.csv") %>
 
 df_lhs_influence <- compute_influence_scores(df_lhs_interactions)
 df_lhs_susceptibility <- compute_susceptibility_scores(df_lhs_interactions)
+
+## LHS interactions directional 29/4/26
+df_lhs_directional_agents <- prepare_directional(df_ag) # unsummarized directional
+df_lhs_directional <- summarize_directional(df_lhs_directional_agents) # summarized version
 
 ## GA
 # GA equivalents 27/4/26 /// rename files for GA before analysis

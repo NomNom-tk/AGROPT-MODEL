@@ -8,7 +8,7 @@ output:
 date: "2026-04-02"
 ---
 
-```{r, setup, include=FALSE}
+```{r-setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width = 10,
                       fig.height = 6)
 ```
@@ -48,7 +48,7 @@ library(sensitivity)
 library(lm.beta)
 ```
 
-```{r, file-sourcing, include = FALSE, echo = FALSE, cache = TRUE}
+```{r, file-sourcing, include = FALSE, echo = FALSE, cache = FALSE}
 source("./functions.R")
 source("./data_processing.R")
 source("./plots.R")
@@ -59,7 +59,7 @@ source("./lhs_analysis_1.R")
 # sensitivity, ga, annealing, plots
 ```
 
-```{r lhs_analysis_comparison, cache = FALSE}
+```{r lhs-analysis-comparison, cache = FALSE}
 # lhs_analysis comparison - v1 (threshold = 0.001), v2 (threshold = 0.01)
 
 # PCC and PRCC using v2 as df_lhs (combined in lhs_ouputs list)
@@ -137,6 +137,9 @@ lhs_outputs$plots$convergence()
 # convergence_comparison
 lhs_outputs$plots$convergence_compar()
 
+# opinion variance by versions (v1 fixed, v2 previous iteration with greater threshold)
+lhs_outputs$plots$opin_var_versions()
+
 ## trade_off plot
 # tradeoff raw plot using df_lhs (base data)
 lhs_outputs$plots$tradeoff_raw()
@@ -161,11 +164,17 @@ lhs_outputs$results$behavioral$heterogen
 ## Versions summary
 lhs_outputs$inputs$version_summary
 
+# abm vs ols check
+lhs_outputs$plots$abm_vs_ols()
+
+# delta scatter for direction of agent evolution
+lhs_outputs$plots$delta_direction_sim_vs_empir()
+
 # ranking, condition-specific comparison /// work on
 ```
 
-```{r, micro interaction dynamics, echo = FALSE}
-# interaction plots to call
+```{r, micro-interaction-dynamics, echo = FALSE}
+# interaction of distribution by model type (density of influence score by model type)
 lhs_outputs$plots$influence_model_type()
 
 # saturation rate by condition
@@ -174,15 +183,18 @@ lhs_outputs$plots$saturation_by_condition()
 # wrong direction by anti/pro
 lhs_outputs$plots$direction_by_position()
 
+# directional accuracy by current condition, faceted by model type
+lhs_outputs$plots$directional_accuracy()
+
 
 ```
 
-```{r, optimization insights, echo = FALSE}
+```{r, optimization-insights, echo = FALSE}
 # GA regions, best configs
 lhs_outputs$results$regions$bounds
 ```
 
-```{ppt function init}
+```{r, ppt-function-init, echo = FALSE}
 #ppt <- read_pptx()
 ```
 

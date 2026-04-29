@@ -130,16 +130,12 @@ species opinion_agent virtual: true  {
     }
 
     // update tracking reflex (27/7/26) to pass through agents and write to log File
+    // 29/4/26 wrong dir points to reference point of t2 attitudes instead of relative change
     reflex update_tracking {
         agent_net_change <- opinion - initial_opinion_snapshot;
         agent_is_saturated <- retention_discount < 0.2;
-        agent_wrong_direction <- (pro_reduction = 1 and agent_net_change < 0)
-                              or (pro_reduction = 0 and agent_net_change > 0);
-        if cycle = 0 {
-            write "Agent " + agent_id + " snapshot" + initial_opinion_snapshot + 
-            " opinion: " + opinion + " net: " + agent_net_change +
-            " pro: " + pro_reduction + " wrong: " + agent_wrong_direction;
-        }
+        agent_wrong_direction <- (final_attitude > initial_opinion_snapshot and agent_net_change < 0)
+                              or (final_attitude < initial_opinion_snapshot and agent_net_change > 0);
     }
     
     // ASPECTS: VISUALIZATION
@@ -238,9 +234,9 @@ species no_change_agent parent: opinion_agent {
         float opinion_before <- opinion;
         
         // inline tracking for log accuracry (agent_wrong dir updates one cycle too late) 28/4/26
-        bool wrong_dir <- (pro_reduction = 1 and (opinion - initial_opinion_snapshot) < 0)
-   			   or (pro_reduction = 0 and (opinion - initial_opinion_snapshot) > 0);
-	bool is_sat <- retention_discount < 0.2;
+        bool wrong_dir <- (final_attitude > initial_opinion_snapshot and (opinion - initial_opinion_snapshot) < 0)
+           			   or (final_attitude < initial_opinion_snapshot  and (opinion - initial_opinion_snapshot) > 0);
+		bool is_sat <- retention_discount < 0.2;
 
         // interaction log introduction 27/4/26
         interaction_log << string(speaking_mode) + "," + string(model_type) + "," + 
@@ -293,9 +289,9 @@ species consensus_agent parent: opinion_agent {
             retention_discount <- 1.0 / (1.0 + total_influences_received * 0.1);
             
             // inline tracking for log accuracry (agent_wrong dir updates one cycle too late) 28/4/26
-            bool wrong_dir <- (pro_reduction = 1 and (opinion - initial_opinion_snapshot) < 0)
-       			   or (pro_reduction = 0 and (opinion - initial_opinion_snapshot) > 0);
-	    bool is_sat <- retention_discount < 0.2;
+            bool wrong_dir <- (final_attitude > initial_opinion_snapshot and (opinion - initial_opinion_snapshot) < 0)
+           			       or (final_attitude < initial_opinion_snapshot  and (opinion - initial_opinion_snapshot) > 0);
+			bool is_sat <- retention_discount < 0.2;
 
             // interaction log introduction 27/4/26
             interaction_log << string(speaking_mode) + "," + string(model_type) + "," + 
@@ -351,9 +347,9 @@ species clustering_agent parent: opinion_agent {
                 retention_discount <- 1.0 / (1.0 + total_influences_received * 0.1);
                 
                 // inline tracking for log accuracry (agent_wrong dir updates one cycle too late) 28/4/26
-            	bool wrong_dir <- (pro_reduction = 1 and (opinion - initial_opinion_snapshot) < 0)
-               			   or (pro_reduction = 0 and (opinion - initial_opinion_snapshot) > 0);
-		bool is_sat <- retention_discount < 0.2;
+	            bool wrong_dir <- (final_attitude > initial_opinion_snapshot and (opinion - initial_opinion_snapshot) < 0)
+           			           or (final_attitude < initial_opinion_snapshot  and (opinion - initial_opinion_snapshot) > 0);
+				bool is_sat <- retention_discount < 0.2;
 
                 // interaction log introduction 27/4/26
                 interaction_log << string(speaking_mode) + "," + string(model_type) + "," + 
@@ -472,9 +468,9 @@ species bipolarization_agent parent: opinion_agent {
             retention_discount <- 1.0 / (1.0 + total_influences_received * 0.1);
             
             // inline tracking for log accuracry (agent_wrong dir updates one cycle too late) 28/4/26
-            bool wrong_dir <- (pro_reduction = 1 and (opinion - initial_opinion_snapshot) < 0)
-       			       or (pro_reduction = 0 and (opinion - initial_opinion_snapshot) > 0);
-	    bool is_sat <- retention_discount < 0.2;
+            bool wrong_dir <- (final_attitude > initial_opinion_snapshot and (opinion - initial_opinion_snapshot) < 0)
+           			       or (final_attitude < initial_opinion_snapshot  and (opinion - initial_opinion_snapshot) > 0);
+			bool is_sat <- retention_discount < 0.2;
 
             // interaction log introduction 27/4/26
             interaction_log << string(speaking_mode) + "," + string(model_type) + "," + 

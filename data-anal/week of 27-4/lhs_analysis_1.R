@@ -702,7 +702,9 @@ lhs_outputs <- list(
     # Interaction plots
     influence_model_type = function() plot_influence_by_model(df_lhs_influence),
     saturation_by_condition = function() plot_satur_by_condition(df_lhs_susceptibility),
-    direction_by_position = function() plot_dir_by_pro(df_lhs_susceptibility)
+    direction_by_position = function() plot_dir_by_pro(df_lhs_susceptibility),
+    directional_accuracy = function() plot_directional_accuracy(df_lhs_directional),
+    delta_direction_sim_vs_empir = function() plot_delta_direction_scatter(df_lhs_directional_agents)
   )
 )
 

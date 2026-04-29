@@ -38,10 +38,8 @@ names(df_lhs_v2)
 str(df_lhs_v2$model_type)
 
 ## LHS interactions prep 27/4/26
-df_lhs_interactions <- prepare_interactions("./data/lhs_interaction_log.csv")
-
 # left join with df_ag to pull pro_reduciton before computing susceptibility
-df_lhs_interactions <- df_lhs_interactions %>%
+df_lhs_interactions <- prepare_interactions("./data/lhs_interaction_log.csv") %>%
   left_join(df_ag %>% select(agent_id, pro_reduction) %>% distinct(),
             by = c("receiver_id" = "agent_id"))
 

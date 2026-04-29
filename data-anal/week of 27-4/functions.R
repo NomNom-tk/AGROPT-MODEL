@@ -73,6 +73,9 @@ add_to_ppt <- function(ppt, content, title, type = "table") {
 # TODO prepare_interactions for df_interactions ----
 prepare_interactions <- function(path) {
   read.csv(path, sep = ",") %>%
+    mutate(across(where(~ all(grepl("^-?[0-9,\\.]+([Ee][+-]?[0-9]+)?$", 
+                                    na.omit(as.character(.))))), 
+                  ~ as.numeric(gsub(",", ".", trimws(.))))) %>%
     mutate(
       selected_debate_id = as.character(selected_debate_id),
       seed = as.character(seed),
@@ -162,8 +165,8 @@ apply_batch_mutations <- function(df) {
   # columns to mutate to numeric
   conv_cols <- c("convergence_rate", "confidence_threshold", "repulsion_strength", "repulsion_threshold",
                  "convergence_rate_sd", "confidence_threshold_sd", "repulsion_strength_sd", "repulsion_threshold_sd",
-                 "mae", "initial_variance", "opinion_variance", "seed", "polarization_index", "neutral_zone_width", "mean_net_repulsion_abs"
-  )
+                 "mae", "initial_variance", "opinion_variance", "seed", "polarization_index", "neutral_zone_width", "mean_net_repulsion_abs",
+                 "convergence_cycle")
   
   # guard to convert only columns that exist in the df
   existing_conv_cols <- intersect(conv_cols, colnames(df))
@@ -189,7 +192,12 @@ apply_batch_mutations <- function(df) {
                                       use_distinct_agents == "false" ~ FALSE),
       debate_composition = substr(debate_label, 1, 1),
       normalised_convergence = convergence_cycle / 300, # divided by 300 to normalize (max_cycles is constant)
-    )
+    ) %>%
+    mutate(selected_debate_id = as.character(selected_debate_id),
+           seed = as.character(seed)) %>%
+    mutate(across(where(~ all(grepl("^-?[0-9,\\.]+([Ee][+-]?[0-9]+)?$", 
+                                    na.omit(as.character(.))))), 
+                  ~ as.numeric(gsub(",", ".", trimws(.)))))
   
   # count NAs // recheck logic
   na_check <- colSums(is.na(df))

@@ -1,4 +1,8 @@
+# R ignores
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
+
+# Data for R ignores
+data-anal/'week of 27-4'/data/

@@ -37,7 +37,7 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width =
 #[EXISTING] Final recommendations — keep
 ```
 
-```{r, setup_1, echo = FALSE}
+```{r, setup_1, echo = FALSE, message = FALSE}
 library(tidyverse)
 library(dplyr)
 library(rvg)
@@ -160,18 +160,45 @@ lhs_outputs$results$behavioral$heterogen
 ```
 
 ```{r, model-comparison, echo = FALSE}
-# Model Comparisons
-## Versions summary
+# 1. Global accuracy first (context setter)
+df_lhs_directional %>%
+  summarize(mean_correct = mean(pct_correct_dir),
+            mean_mae = mean(mean_mae),
+            mean_baseline = mean(mean_baseline_mae)) %>%
+  flextable() %>% autofit()
+
+# 2. Version summary
 lhs_outputs$inputs$version_summary
 
-# abm vs ols check
+# 3. ABM vs OLS
 lhs_outputs$plots$abm_vs_ols()
 
-# delta scatter for direction of agent evolution
+# 4. Delta scatter
 lhs_outputs$plots$delta_direction_sim_vs_empir()
 
-# ranking, condition-specific comparison /// work on
+# 5. Directional summary table (top debates)
+lhs_outputs$results$comparisons$directional %>%
+  mutate(mae_improvement = mean_baseline_mae - mean_mae) %>%
+  slice_min(mean_mae, n = 10) %>%
+  flextable() %>% autofit()
+
+# 6. Variance by debate type (inline narrative reference only, drop the full table)
+# cite: homogeneous mean var 0.006 vs mixed 0.022
+
 ```
+
+# interpretation
+On average models achieve 52% directional accuracry, while producing higher MAE than no change
+- suggests that dynamics introduce noise that slightly exceeds predictive signal at aggregate level
+- the global average masks substantial debate level heterogeneity
+-- homogeneous debates consistently achieve ~80% directional accuracry -> mechanics are well specified for opinion proximate groups but poorly calibrated for high variance heterogeneous debates
+
+## Overall
+1. global performance is modest but above chance
+2. homogeneous conditions drive the positive signal
+3. pro reduction agents and heterogeneous debates are systematic failues modes
+
+
 
 ```{r, micro-interaction-dynamics, echo = FALSE}
 # interaction of distribution by model type (density of influence score by model type)
@@ -186,8 +213,62 @@ lhs_outputs$plots$direction_by_position()
 # directional accuracy by current condition, faceted by model type
 lhs_outputs$plots$directional_accuracy()
 
+# WIP - influence leaderboard
+lhs_outputs$inputs$influence %>%
+  slice_max(influence_score, n = 10) %>%
+  mutate(efficiency = (influence_score / n_broadcasts) * 10000) %>%
+  flextable() %>%
+  set_header_labels(efficiency = "efficiency (×10⁻⁴)") %>%
+  autofit()
+
+# anti-agent cross position table (new, answers the question)
+df_lhs_interactions %>%
+  filter(pro_reduction == 0) %>%
+  mutate(sender_is_pro = sender_opinion > 0.5) %>%
+  group_by(model_type, sender_is_pro) %>%
+  summarize(mean_delta = mean(abs(delta)), .groups = "drop") %>%
+  flextable() %>% autofit()
 
 ```
+
+# interpretation
+1. models beat direcitonal baseline ~80% in homogeneous conditions
+2. saturation is 6x higher in heterogeneous vs homogeneous
+3. pro reduction agenets show systematic wrong-direction bias
+
+# pro interpretation
+- pro leaning speakers move anti agents roughly 2x more than anti leaning speakers
+- bipolarization shows largest absolute cross position delta: shows highest wrong direction rates (may be moving anti agents more but not always in the right direction)
+- This suggests cross-position influence is operative within the bounded confidence framework, though the absolute magnitude remains small — reflecting the attenuating effect of inertia and retention discount mechanics on entrenched positions (Festinger 1957, Nowak & Vallacher 1998).
+
+```{r, debate-classifier, echo = FALSE}
+# variance threshold classifier
+df_classifier <- df_lhs %>%
+  group_by(selected_debate_id, debate_label) %>%
+  summarize(
+    mean_var = mean(initial_variance),
+    mean_mae = mean(mae),
+    best_model = model_type[which.min(mae)],
+    .groups = "drop"
+  ) %>%
+  mutate(predicted_type = ifelse(mean_var < 0.01,
+                                 "consensus", "bipolarization"))
+
+df_classifier %>%
+  mutate(correct = best_model == predicted_type) %>%
+  summarize(accuracy = mean(correct))
+
+```
+
+## debate classifier
+- LHS results suggest that initial variance plays a significant role in the predictor of model suitability.
+- one could use a preliminary classifier for GA runs to check which model would work "best" for a specific debate
+- debates with var < 0.01 are predicted to favor consensus, dynamics while high-variance favor bipolarization
+
+-- next stage set-up
+- could classify debate by initial variance, then apply GA optimization for that predicted model
+- preliminary classifier is too simple, variance is not the only predictor
+
 
 ```{r, optimization-insights, echo = FALSE}
 # GA regions, best configs

@@ -52,11 +52,14 @@ plot_influence_by_model <- function(df) { # use with df_lhs_influence
 ## saturation rate by condition
 ## bar chart of pct_saturated form df suscept, group by model type and current condition
 plot_satur_by_condition <- function(df) { # use with df_lhs_susceptibility
-  ggplot(df, aes(x = current_condition, y = pct_saturated, fill = model_type)) +
-    geom_bar(stat = "identity", position = "dodge") +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    labs(x = "Condition", y = "% saturated")
+  df %>%
+    group_by(model_type, current_condition) %>% # gropu/sum to take mean instead of stacking values to 1
+    summarize(pct_saturated = mean(pct_saturated), .groups = "drop") %>%
+    ggplot(aes(x = current_condition, y = pct_saturated, fill = model_type)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+      labs(x = "Condition", y = "% saturated")
 }
 
 ## plot direcitonal accuracry
@@ -64,6 +67,7 @@ plot_satur_by_condition <- function(df) { # use with df_lhs_susceptibility
 plot_directional_accuracy <- function(df) { # use with df_lhs_directional
   ggplot(df, aes(x = current_condition, y = pct_correct_dir, fill = model_type)) +
     geom_bar(stat = "identity", position = "dodge") +
+    geom_hline(yintercept = 0.5, linetype = "dashed", color = "red") +
     theme_minimal() +
     theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
     labs(x = "Condition", y = "% accurate agents")
@@ -79,9 +83,9 @@ plot_delta_direction_scatter <- function(df) { # use with df_lhs_directional
   
   ggplot(df, aes(x = simulated_delta, y = empirical_delta)) +
     geom_point(alpha = 0.3) +
-    geom_abline(slope = 1, int = 0) + # perfect prediction line
-    geom_hline(intercept = 0, linetype = "dashed") + # no empirical change
-    geom_vline(intercept = 0, linetype = "dashed") + # no simulated change
+    geom_abline(slope = 1, intercept = 0) + # perfect prediction line
+    geom_hline(yintercept = 0, linetype = "dashed") + # no empirical change
+    geom_vline(xintercept = 0, linetype = "dashed") + # no simulated change
     facet_wrap(~ model_type) +
     theme_minimal() +
     labs(x = "Simulated Change", y = "Empirical Change")
@@ -91,10 +95,13 @@ plot_delta_direction_scatter <- function(df) { # use with df_lhs_directional
 ## pct wrong direction from df suscept facet by model type, colored by pro_reduction
 ### is overestimation asymmetric between pro and anti agents
 plot_dir_by_pro <- function(df) { # use with df_lhs_susceptibility
-  ggplot(df, aes(x = model_type, y = pct_wrong_direction, 
-                 fill = factor(pro_reduction, labels = c("Anti", "Pro")))) +
-    geom_bar(stat = "identity", position = "dodge") +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    labs(x = "Model Type", y = "% Wrong Direction", fill = "Position")
+  df %>%
+    group_by(model_type, pro_reduction) %>% # 30-4-26 gropu/sum to take mean instead of stacking values to 1
+    summarize(pct_wrong_direction = mean(pct_wrong_direction), .groups = "drop") %>%
+    ggplot(aes(x = model_type, y = pct_wrong_direction, 
+                   fill = factor(pro_reduction, labels = c("Anti", "Pro")))) +
+      geom_bar(stat = "identity", position = "dodge") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+      labs(x = "Model Type", y = "% Wrong Direction", fill = "Position")
 }

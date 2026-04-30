@@ -766,7 +766,7 @@ prepare_directional <- function(df) { # use with df_ag
 # TODO summarize_directional ----
 summarize_directional <- function(df) {
   df %>%
-    group_by(model_type, current_condition) %>%
+    group_by(model_type, current_condition, selected_debate_id) %>%
     summarize(
       pct_correct_dir = mean(correct_dir),
       pct_wrong_dir = mean(agent_wrong_direction),

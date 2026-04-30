@@ -32,7 +32,7 @@ df_ag <- read.csv("./data/lhs_agent_level_results.csv") %>%
 ## comparison for lhs, called form functions combined dfs
 lhs_versions <- combine_df_versions(
   list(df_lhs_v1, df_lhs_v2),
-  c("v1_threshold_0.001", "v2_threshold_0.01")
+  c("v1_threshold_modif", "v2_threshold_old_0.01")
 )
 
 ## lhs data check

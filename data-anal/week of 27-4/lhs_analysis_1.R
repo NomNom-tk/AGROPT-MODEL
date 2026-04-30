@@ -632,7 +632,8 @@ lhs_outputs <- list(
   inputs = list(
     raw = df_lhs,
     versions = lhs_versions,
-    version_summary = df_version_summary
+    version_summary = df_version_summary,
+    influence = df_lhs_influence
   ),
   results = list(
     sensitivity = list(
@@ -645,7 +646,8 @@ lhs_outputs <- list(
       summary = comparison_summary,
       ranking = model_comparison_main,
       version_ranking = model_comparison_2,
-      baseline = baseline_comparison
+      baseline = baseline_comparison,
+      directional = df_lhs_directional
     ),
     behavioral = list(
       composition = h_vs_m,
@@ -711,6 +713,6 @@ lhs_outputs <- list(
 lhs_outputs
 
 # check that everything worked
-message("lhs_outputs built successfully, dataframes: ", length(lhs_outputs$inputs))
+message("lhs_outputs built successfully, inputs/dataframes: ", length(lhs_outputs$inputs))
 message("lhs_outputs built successfully, tables: ", length(lhs_outputs$results))
 message("lhs_outputs built successfully, plots: ", length(lhs_outputs$plots))

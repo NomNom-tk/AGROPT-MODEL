@@ -13,7 +13,10 @@ global {
     
     int max_cycles <- 300; // max cycles for convergence
     
-    float mae_convergence_threshold <- 0.001 min: 0.0 max: 1.0; // Convergence Checking
+    float mae_convergence_threshold <- 0.01; // Convergence Checking re-modified 4/5/26
+    // v1: mae_convergence_threshold = 0.001 (too tight, early stopping)
+    // v2: mae_convergence_threshold = 0.01 (order of magnitude relaxing)
+    // v3: fixed_cycles = N (no convergence check, fixed duration)
     
     float world_size <- 100.0; // Spatial world size for visualization
     

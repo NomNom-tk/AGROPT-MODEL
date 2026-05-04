@@ -1,8 +1,8 @@
 "","model_type","use_distinct_agents","MAE"
-"1","bipolarization",FALSE,0.0785209652142446
-"2","bipolarization",TRUE,0.0816129760555655
-"3","clustering",FALSE,0.0610525561922009
-"4","clustering",TRUE,0.0644769124669607
-"5","consensus",FALSE,0.0672213708185079
-"6","consensus",TRUE,0.0714762042095079
+"1","bipolarization",FALSE,0.071332419246119
+"2","bipolarization",TRUE,0.0732600203482014
+"3","clustering",FALSE,0.0501945892676655
+"4","clustering",TRUE,0.051458473751827
+"5","consensus",FALSE,0.0523683061739345
+"6","consensus",TRUE,0.0542410279208503
 "7","no_change",FALSE,0.0431192853357205

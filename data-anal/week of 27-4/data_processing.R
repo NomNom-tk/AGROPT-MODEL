@@ -16,8 +16,9 @@ library(lm.beta)
 # data_loading
 ## LHS
 ## temp trials for different lhs versions (to compare with baseline 28/4/26)
-df_lhs_v1 <- prepare_data("./data/lhs_batch_summary.csv", version = "v1_modif")
-df_lhs_v2 <- prepare_data("./data/lhs_batch_summary_v2.csv", version = "v2_threshold_0.01")
+## modif 5-4-26 --> thr_0.01 (correct cap), thr_0.001 (30-4-26 mistake with cap)
+df_lhs_v1 <- prepare_data("./data/lhs_batch_summary.csv", version = "v1_thr_0.01")
+df_lhs_v2 <- prepare_data("./data/lhs_batch_summary_v2.csv", version = "v2_thr_0.001")
 df_lhs <- df_lhs_v1
 
 ## TODO lhs agent level --> fix no neutral zone width and prepare_data function 

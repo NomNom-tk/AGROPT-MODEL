@@ -416,7 +416,7 @@ reflex update_prev_opinion {
 
 // REFLEX: FALLBACK - STOP AT MAX_CYCLES
 reflex max_cycles_reached when: cycle >= max_cycles and !end_simulation {
-    convergence_cycle <- max_cycles;
+    convergence_cycle <- cycle;
     write "Reached max_cycles without convergence";
     end_simulation <- true;
     

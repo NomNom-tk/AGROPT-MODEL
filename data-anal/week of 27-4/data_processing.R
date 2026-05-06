@@ -30,6 +30,10 @@ df_ag <- read.csv("./data/lhs_agent_level_results.csv") %>%
   mutate(agent_wrong_direction = as.logical(agent_wrong_direction),
         agent_is_saturated = as.logical(agent_is_saturated))
 
+df_ag %>% filter(speaking_mode == TRUE) %>%
+  count(current_condition, agent_is_saturated)
+
+
 ## comparison for lhs, called form functions combined dfs
 lhs_versions <- combine_df_versions(
   list(df_lhs_v1, df_lhs_v2),

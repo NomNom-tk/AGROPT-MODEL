@@ -51,12 +51,6 @@ prcc_v2 <- sensi_v2$prcc %>% mutate(version = "v2")
 
 prcc_all <- bind_rows(prcc_v1, prcc_v2)
 
-
-# ─────────────────────────────────────────────
-# PLOTS (UNCHANGED - PRESERVED)
-# ─────────────────────────────────────────────
-## exported into functions.r
-
 # ─────────────────────────────────────────────
 # Version Summary Tables
 # ─────────────────────────────────────────────
@@ -162,23 +156,6 @@ if (exists("wilcox_abm_ols")) print(wilcox_abm_ols)
 if (exists("t_test_abm_ols")) print(t_test_abm_ols)
 
 # ─────────────────────────────────────────────
-# OLS - ABM plots
-# ─────────────────────────────────────────────
-
-plot_ols_abm_comp <- function(df) { # use with comparison_clean
-  ggplot(df, aes(x=ols_mae, y=abm_mae)) +
-    geom_point(alpha = 0.6) +
-    geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
-    labs(
-      title = "ABM vs OLS Performance",
-      x = "OLS MAE",
-      y = "ABM MAE"
-    ) +
-    theme_bw()
-}
-
-
-# ─────────────────────────────────────────────
 # Debate composition (NO CHANGE LOGIC)
 # ─────────────────────────────────────────────
 
@@ -196,22 +173,6 @@ h_vs_m <- df_lhs %>%
 mae_vs_comp_wilcox <- wilcox.test(mae ~ debate_composition, data = df_lhs)
 
 # ─────────────────────────────────────────────
-# Debate composition Plots (NO CHANGE LOGIC)
-# ─────────────────────────────────────────────
-
-# upgraded with model type (within composition comparison), facet(speaking mode to control for behavioral regime and avoids confounding)
-plot_h_m_errors <- function(df) { # use with df lhs / could try with versions and compare
-  ggplot(df, aes(x = debate_composition, y = mae, fill = model_type)) +
-    geom_boxplot(position = position_dodge(0.8)) +
-    facet_wrap(~ speaking_mode) +
-    theme_bw() +
-    labs(title = "Effect of Debate Composition on Prediction Error",
-         x = "Debate Composition",
-         y = "MAE",
-         fill = "Model Type")
-}
-
-# ─────────────────────────────────────────────
 # Speaking mode (UNCHANGED)
 # ─────────────────────────────────────────────
 
@@ -225,6 +186,7 @@ speaking_compar <- df_lhs %>%
     .groups = "drop"
   )
 
+# for wilcox tests with speaking mode, wrap as logical
 speakingmode_vs_convergence_wilcox <- wilcox.test(
   convergence_cycle ~ speaking_mode,
   data = df_lhs
@@ -243,19 +205,6 @@ convergence_anal <- df_lhs %>%
   )
 
 # ─────────────────────────────────────────────
-# ALL PLOTS PRESERVED (VIOLIN INCLUDED)
-# ─────────────────────────────────────────────
-
-plot_viol_conv_model_type <- function(df) {
-  ggplot(df, aes(x=model_type, y=convergence_cycle)) +
-    geom_violin(trim=TRUE, scale="width", fill="grey85") +
-    geom_boxplot(width=0.12, outlier.shape=NA, fill="white") +
-    stat_summary(fun = median, geom="point", color="red", size=2) +
-    facet_wrap(~ speaking_mode) +
-    theme_bw()
-}
-
-# ─────────────────────────────────────────────
 # aggreagte to show comparison between models
 # ─────────────────────────────────────────────
 
@@ -269,50 +218,6 @@ df_conv_debate <- df_lhs %>%
     sd_mae = sd(mae),
     .groups = "drop"
   )
-
-plot_box_conv_compar <- function(df) { # use with df_conv_debate
-  ggplot(df, aes(x=model_type, y=mean_conv, fill = speaking_mode)) +
-    geom_boxplot(position = position_dodge(width = 0.8)) +
-    labs(title = "Convergence Rate Comparison by model type and speaking mode",
-         fill = "speaking mode") +
-    theme_bw()
-}
-
-plot_box_conv_compar_speak <- function(df) {
-  ggplot(df, aes(x=model_type, y=mean_conv, fill = speaking_mode)) +
-    geom_boxplot(position = position_dodge(width = 0.8)) +
-    facet_wrap(~ speaking_mode) +
-    labs(title = "Convergence Rate Comparison by model type and speaking mode",
-         fill = "speaking mode") +
-    theme_bw()
-}
-
-# aggregated plot
-plot_tradeoff_aggregated <- function(df) {
-  ggplot(df, aes(x = mean_conv, y = mean_mae, color = speaking_mode)) +
-    geom_point(alpha = 0.7) +
-    geom_smooth(method = "lm", se = TRUE) +
-    facet_wrap(~ model_type) +
-    labs(
-      title = "Speed–Accuracy Trade-off",
-      x = "Convergence Cycles",
-      y = "Mean Absolute Error (MAE)",
-      color = "Speaking Mode"
-    ) +
-    theme_bw()
-}
-
-# trade off plot raw
-plot_tradeoff_raw <- function(df) {
-  ggplot(df, aes(x = convergence_cycle, y = mae, color = speaking_mode)) +
-    geom_point(alpha = 0.3) +
-    geom_smooth(method = "lm", se = TRUE) +
-    facet_wrap(~ model_type) +
-    labs(title = "Speed-Accuracy Trade-off Raw",
-         x = "Convergence Cycles",
-         y = "MAE") +
-    theme_bw()
-}
 
 # ─────────────────────────────────────────────
 # regression model
@@ -330,21 +235,6 @@ conv_diff <- df_lhs %>%
   mutate(outcome = ifelse(opinion_variance < 0.1, "Convergence", "Polarization")) %>%
   group_by(model_type, current_condition, outcome) %>%
   summarize(n = n(), .groups = "drop")
-
-
-# ─────────────────────────────────────────────
-# convergence outcome analysis Plots
-# ─────────────────────────────────────────────
-
-plot_opin_var_versions <- function(df) { # use with df_versions
-  ggplot(df, aes(x = model_type, y = opinion_variance, fill = version)) +
-  geom_boxplot(position = position_dodge(0.75), width = 0.6) +
-  facet_wrap(~ version) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        strip.text = element_text(face = "bold")) +
-  labs(title = "Opinion Variance by model type", y = "Opinion Variance")
-  }
 
 # ─────────────────────────────────────────────
 # NO CHANGE BASELINE
@@ -482,73 +372,6 @@ model_by_condition <- df_lhs %>%
   arrange(current_condition, use_distinct_agents, mae_mean)
 
 # ─────────────────────────────────────────────
-# Model comparison plots
-# ─────────────────────────────────────────────
-
-plot_model_performance_rank_main <- function(df) { # use with model_compar_main
-  ggplot(df, aes(x= reorder(model_type, mae_mean), y=mae_mean)) +
-    geom_col(fill= "blue") +
-    coord_flip() +
-    facet_grid(version ~ speaking_mode) +
-    theme_bw() +
-    labs(Title = "Model Performance by Version",
-         x = "Model Type",
-         y = "Mean MAE")
-}
-
-plot_model_comparison_uncertainty <- function(df) { # use detailed version
-  ggplot(df, aes(x = reorder(model_type, mae_mean), y = mae_mean)) +
-    geom_point(size = 2.5, color = "blue") +
-    geom_errorbar(aes(
-      ymin = mae_mean - mae_sd,
-      ymax = mae_mean + mae_sd
-    ), width = 0.2) +
-    coord_flip() +
-    facet_grid(version ~ speaking_mode + use_distinct_agents) +
-    theme_minimal() +
-    labs(
-      title = "Model Performance with Distinct Agents",
-      subtitle = "Error bars = +- SD",
-      x = "Model Type",
-      y = "Mean MAE"
-    )
-}
-
-# how far is the performance gap compared to the best model
-plot_model_performance_rank_gap <- function(df) { # use with model_relative
-  ggplot(df, aes(x= reorder(model_type, delta_mae), y=delta_mae)) +
-    geom_col(fill = "darkred") +
-    coord_flip() +
-    facet_wrap(version ~ speaking_mode) +
-    theme_bw() +
-    labs(Title = "Performance Gap to Best Model",
-         subtitle = "0 = best model in each panel",
-         x = "Model Type",
-         y = "Delta MAE",)
-}
-
-plot_model_rank_versions <- function(df) { # use with main
-  ggplot(df, aes(x = model_type, y = mae_mean, color = version)) +
-    geom_point(position = position_dodge(width = 0.5), size = 3) +
-    geom_errorbar(aes(
-      ymin = mae_mean - mae_sd,
-      ymax = mae_mean + mae_sd,
-      color = version
-    ), width = 0.2) +
-    geom_line(aes(group = model_type), alpha = 0.4) +
-    coord_flip() +
-    facet_wrap(~ speaking_mode) +
-    theme_minimal() +
-    labs(
-      title = "Model Performance Across Versions",
-      x = "Model Type",
-      y = "Mean MAE",
-      color = "version"
-    )
-}
-
-
-# ─────────────────────────────────────────────
 # FAILURES
 # ─────────────────────────────────────────────
 
@@ -596,6 +419,13 @@ easiest_debates <- df_lhs %>%
   ) %>%
   arrange(mae_mean) %>%
   head(10)
+
+
+# ─────────────────────────────────────────────
+# NETWORK GENERATION
+# ─────────────────────────────────────────────
+
+network_outputs <- build_influence_network(df_lhs_interactions)
 
 # ─────────────────────────────────────────────
 # FINAL OUTPUTS
@@ -666,6 +496,11 @@ lhs_outputs <- list(
       bounds = lhs_regions$regions,
       range_check = lhs_regions$range_check,
       bipol_check = lhs_regions$bipol_check
+    ),
+    networks = list (
+      per_debate = network_outputs$per_debate,
+      aggregate = network_outputs$aggregate,
+      graphs = network_outputs$graphs
     )
   ),
   plots = list(

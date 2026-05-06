@@ -357,7 +357,7 @@ reflex compute_statistics when: every(10#cycle) {
         num_clusters <- histogram count (each > 0);
 
         // Compute polarization index (variance of pairwise distances)
-        do compute_pariwise_polarization;
+        do compute_pairwise_polarization;
     }
 }
 
@@ -381,7 +381,7 @@ reflex check_convergence when: cycle > 10 and every(5#cycle) and !end_simulation
             if debug_mode = true {
                 write "Converged at cycle " + convergence_cycle;
             }
-            end_simulation <- true;
+            /*end_simulation <- true;
             
             do compute_fit;
             do compute_final_statistics;
@@ -389,8 +389,9 @@ reflex check_convergence when: cycle > 10 and every(5#cycle) and !end_simulation
             if mode_batch {
                 do save_batch_results;
             }
-        }
-    }
+        }*/
+    	}
+	}
 }
 
 reflex update_prev_opinion {
@@ -416,7 +417,7 @@ reflex update_prev_opinion {
 
 // REFLEX: FALLBACK - STOP AT MAX_CYCLES
 reflex max_cycles_reached when: cycle >= max_cycles and !end_simulation {
-    convergence_cycle <- cycle;
+    convergence_cycle <- cycle; // record actual convergence cycle regardless of termination 4/5/26
     write "Reached max_cycles without convergence";
     end_simulation <- true;
     
@@ -488,7 +489,7 @@ action compute_pro_anti_counts {
 }
 
 // Action for pairwise polarization
-action compute_pariwise_polarization {
+action compute_pairwise_polarization {
     list<float> pairwise_distances <- [];
     loop a1 over: opinion_agents {
         loop a2 over: opinion_agents {
@@ -515,7 +516,7 @@ action compute_final_statistics {
         return;
     }
     
-    do compute_pariwise_polarization;
+    do compute_pairwise_polarization;
     final_stats_computed <- true;
     
     list<float> opinions <- opinion_agents collect each.opinion;

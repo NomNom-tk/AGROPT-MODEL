@@ -198,10 +198,11 @@ import "../Constants.gaml"
             }
 
 			// ONLY RUN IF NO MAPPING EXISTS
-            /*/ write mapping for R joins
-            save stable_group_map.keys + stable_group_map.values
-                to: "./debate_id_mapping.csv";
-            */
+            // write mapping for R joins modified 6/5/26, reverted to saving keys and values in csv
+            if !file_exists("../data-dictionary/debate_id_mapping.csv") {
+            	save stable_group_map.keys + stable_group_map.values 
+            	to: "../data-dictionary/debate_id_mapping.csv";
+            }
             
             if debug_mode {
                 write "Debate ID mapping: " + stable_group_map;

@@ -46,6 +46,7 @@ library(officer)
 library(flextable)
 library(sensitivity)
 library(lm.beta)
+library(igraph)
 ```
 
 ```{r, file-sourcing, include = FALSE, echo = FALSE, cache = FALSE}
@@ -240,6 +241,19 @@ df_lhs_interactions %>%
 - pro leaning speakers move anti agents roughly 2x more than anti leaning speakers
 - bipolarization shows largest absolute cross position delta: shows highest wrong direction rates (may be moving anti agents more but not always in the right direction)
 - This suggests cross-position influence is operative within the bounded confidence framework, though the absolute magnitude remains small — reflecting the attenuating effect of inertia and retention discount mechanics on entrenched positions (Festinger 1957, Nowak & Vallacher 1998).
+
+``` {r, network-analysis, echo = FALSE}
+# initial test of network per debate
+lhs_outputs$results$networks$per_debate
+
+# aggregate metrics
+lhs_outputs$results$networks$aggregate
+
+# graphs
+lhs_outputs$results$networks$graphs
+
+```
+
 
 ```{r, debate-classifier, echo = FALSE}
 # variance threshold classifier

@@ -425,7 +425,7 @@ easiest_debates <- df_lhs %>%
 # NETWORK GENERATION
 # ─────────────────────────────────────────────
 
-network_outputs <- build_influence_network(df_lhs_interactions)
+network_outputs <- build_influence_network(df_lhs_interactions, df_ag)
 
 # ─────────────────────────────────────────────
 # FINAL OUTPUTS

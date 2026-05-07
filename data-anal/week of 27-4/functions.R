@@ -1,6 +1,14 @@
 # Functions
 # TO INCLUDE: prepare_sensitivity_data / generate_gaml_bounds / add_to_ppt / pivot_params
 
+
+# CLEAR read_clean to clean colnames before all else 7/5/26 ----
+read_clean <- function(path) {
+  read_csv(path) %>% clean_names() %>%
+    mutate(across(where(~ all(grepl("^-?[0-9,\\.]+([Ee][+-]?[0-9]+)?$", 
+                                    na.omit(as.character(.))))), 
+                  ~ as.numeric(gsub(",", ".", trimws(.)))))
+}
 # CLEAR BUT TEST AGAIN pivot_params ####
 pivot_params <- function(df) {
   df %>%
@@ -29,7 +37,7 @@ prepare_sensitivity_data <- function(df, param_cols, output_cols) {
 
 # CLEAR data loading prepare_data ----
 prepare_data <- function(path, version) {
-  read.csv(path) %>%
+  read_clean(path) %>%
     apply_batch_mutations() %>%
     bipol_constraint_filter() %>%
     mutate(version = version)
@@ -70,16 +78,13 @@ add_to_ppt <- function(ppt, content, title, type = "table") {
 ## save once
 # print(ppt, target = "relative path")
 
+
 # CLEAR prepare_interactions for df_interactions ----
 prepare_interactions <- function(path) {
-  read.csv(path, sep = ",") %>%
-    mutate(across(where(~ all(grepl("^-?[0-9,\\.]+([Ee][+-]?[0-9]+)?$", 
-                                    na.omit(as.character(.))))), 
-                  ~ as.numeric(gsub(",", ".", trimws(.))))) %>%
+  read_csv(path, skip = 1) %>% # temp fix using skip lines and no read_clean 7/5/26
     mutate(
       selected_debate_id = as.character(selected_debate_id),
       seed = as.character(seed),
-      speaking_mode = factor(speaking_mode, levels = c("true", "false")),
       use_distinct_agents = case_when(
         use_distinct_agents == "true" ~ TRUE,
         use_distinct_agents == "false" ~ FALSE,
@@ -87,7 +92,7 @@ prepare_interactions <- function(path) {
       agent_is_saturated = as.logical(agent_is_saturated),
       agent_wrong_direction = as.logical(agent_wrong_direction)
     ) %>%
-    filter(speaking_mode == "true")
+    filter(speaking_mode == TRUE)
 }
 # TODO compute_influence_scores 27/4/26 ----
 compute_influence_scores <- function(df) { # use with df_interactions, establish broadcasts and influence
@@ -185,21 +190,18 @@ apply_batch_mutations <- function(df) {
   
   # mutation for char and logical columns to numeric for future analysis
   df <- df %>%
-    mutate(across(all_of(existing_conv_cols), ~ as.numeric(gsub(",", ".", trimws(.))))) %>%
+    mutate(across(all_of(existing_conv_cols), as.numeric)) %>%
     mutate(
       # for wilcox tests with speaking mode, wrap as logical
-      speaking_mode = case_when(speaking_mode == "true" ~ TRUE,
-                                speaking_mode == "false" ~ FALSE),
-      use_distinct_agents = case_when(use_distinct_agents == "true" ~ TRUE,
-                                      use_distinct_agents == "false" ~ FALSE),
+      #speaking_mode = case_when(speaking_mode == "true" ~ TRUE,
+      #                          speaking_mode == "false" ~ FALSE),
+      #use_distinct_agents = case_when(use_distinct_agents == "true" ~ TRUE,
+      #                                use_distinct_agents == "false" ~ FALSE),
       debate_composition = substr(debate_label, 1, 1),
       normalised_convergence = convergence_cycle / 100, # divided by 100 to normalize, updated to 100 6/5/26
     ) %>%
     mutate(selected_debate_id = as.character(selected_debate_id),
-           seed = as.character(seed)) %>%
-    mutate(across(where(~ all(grepl("^-?[0-9,\\.]+([Ee][+-]?[0-9]+)?$", 
-                                    na.omit(as.character(.))))), 
-                  ~ as.numeric(gsub(",", ".", trimws(.)))))
+           seed = as.character(seed))
   
   # count NAs // recheck logic
   na_check <- colSums(is.na(df))
@@ -780,7 +782,7 @@ summarize_directional <- function(df) {
 }
 
 # TODO build_influence_network 6/5/26 ----
-build_influence_network <- function(df) { # use with lhs_interactions
+build_influence_network <- function(df, df_attributes) { # use with lhs_interactions
   # prepare edge list
   edges <- df %>%
     group_by(sender_id, receiver_id, selected_debate_id, model_type) %>%
@@ -800,7 +802,7 @@ build_influence_network <- function(df) { # use with lhs_interactions
     debate <- unique(.x$selected_debate_id)[1]
     model <- unique(.x$model_type)[1]
     g <- graph_from_data_frame(.x, directed = TRUE)
-  
+    
     # metrics computations
     in_str <- strength(g, mode = "in", weights = E(g)$edge_weight) # weighted in-strength per node (total influence received)
     out_str <- strength(g, mode = "out", weights = E(g)$edge_weight) # weight out per node (total influence exerted)
@@ -821,11 +823,11 @@ build_influence_network <- function(df) { # use with lhs_interactions
       mean_out_strength = mean_out_str,
       isolated_nodes = isolated_nodes,
       selected_debate_id = debate,
-      model = model
+      model_type = model
     )
   }) %>%
     bind_rows()
-
+  
   # aggregate networks per condition
   debate_edges <- df %>%
     group_by(sender_id, receiver_id, current_condition, model_type) %>%
@@ -847,7 +849,7 @@ build_influence_network <- function(df) { # use with lhs_interactions
   
   # aggregated metrics
   aggregate_metrics <- map(agg_edge_split, .progress = TRUE, ~ {
-    condition <- unique(.x$current_condition)[1]
+    current_condition <- unique(.x$current_condition)[1]
     model <- unique(.x$model_type)[1]
     g <- graph_from_data_frame(.x, directed = TRUE)
     
@@ -870,15 +872,19 @@ build_influence_network <- function(df) { # use with lhs_interactions
       mean_in_strength = mean_in_str,
       mean_out_strength = mean_out_str,
       isolated_nodes = isolated_nodes,
-      condition = condition,
-      model = model
+      current_condition = current_condition,
+      model_type = model
     )
   }) %>%
     bind_rows()
   
   # join with df_ag on agent_id
   combined <- left_join(node_metrics %>% mutate(agent_id = as.numeric(agent_id)), 
-                        df_ag, by = "agent_id")
+                        df_attributes %>% select(-model_type), # disambiguate model type before joining (node metrics already has it)
+                        by = c("agent_id", "selected_debate_id"),
+                        relationship = "many-to-many")
+  print(colnames(combined))
+  print(nrow(combined))
   
   # table summary per debate
   per_debate_summary <- combined %>%
@@ -894,6 +900,9 @@ build_influence_network <- function(df) { # use with lhs_interactions
   
   # table summary for aggregate by condition
   per_condition_summary <- aggregate_metrics %>%
+    mutate(agent_id = as.numeric(agent_id)) %>%
+    left_join(df_attributes %>% select(agent_id, pro_reduction, agent_is_saturated) %>%
+                distinct(), by = "agent_id") %>%
     group_by(agent_id, current_condition, model_type, pro_reduction) %>%
     summarize(
       in_strength = mean(in_strength),
@@ -901,16 +910,38 @@ build_influence_network <- function(df) { # use with lhs_interactions
       betweenness = mean(betweenness),
       graph_density = first(graph_density),
       isolated_nodes = first(isolated_nodes),
+      agent_is_saturated = first(agent_is_saturated),
       .groups = "drop"
     )
   
   # outputs
   return(list(
     per_debate = per_debate_summary,
-    per_debate = combined, # node metrics joined with df_ag, per debate
+    per_debate_full = combined, # node metrics joined with df_ag, per debate
     aggregate_full = aggregate_metrics, # node metrics at condition level
-    aggregate = aggregate_summary,
+    aggregate = per_condition_summary, # summary of metrics per condition
     graphs = agg_edge_graphs # igraph objects for condition level viz
   ))
   
 }
+# TODO enrich_graph_vertices - Helper 7/5/26 ----
+enrich_graph_vertices <- function(g, df) {
+  vertex_ids <- as.numeric(V(g)$name) # agent_ids as characters converted to numeric
+  attributes_reordered <- df %>%
+    filter(agent_id %in% vertex_ids) %>% # filter to relevant vertex_id rows
+    distinct(agent_id, .keep_all = TRUE) %>%
+    mutate(agent_id = as.character(agent_id))
+
+  g_enriched <- as_tbl_graph(g) %>% 
+    activate(nodes) %>%
+    left_join(attributes_reordered, by = c("name" = "agent_id"))
+  
+  return(g_enriched)
+}
+
+#extract vertex names from g         # these are agent_ids as characters
+#filter df to only those agent_ids   # subset to relevant rows
+#for each attribute column in df:
+#  set that attribute on V(g)        # look up how to do this in igraph
+#return g
+

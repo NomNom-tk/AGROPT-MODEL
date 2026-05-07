@@ -12,6 +12,10 @@ library(officer)
 library(flextable)
 library(sensitivity)
 library(lm.beta)
+library(igraph)
+library(ggraph)
+library(janitor)
+library(tidygraph)
 
 # data_loading
 ## LHS
@@ -21,11 +25,16 @@ df_lhs_v1 <- prepare_data("./data/lhs_batch_summary.csv", version = "v1_thr_0.01
 df_lhs_v2 <- prepare_data("./data/lhs_batch_summary_v2.csv", version = "v2_thr_0.001")
 df_lhs <- df_lhs_v1
 
+df_raw <- read_clean("./data/lhs_batch_summary.csv")
+sapply(df_raw, class)
+problems(df_raw) %>% print(n = Inf)
+
+
 ## TODO lhs agent level --> fix no neutral zone width and prepare_data function 
 #df_lhs_ag <- apply_batch_mutations("./data/lhs_agent_level_results.csv")
 
 # temp fix for lhs agent level
-df_ag <- read.csv("./data/lhs_agent_level_results.csv") %>%
+df_ag <- read_clean("./data/lhs_agent_level_results.csv") %>%
   apply_batch_mutations() %>%
   mutate(agent_wrong_direction = as.logical(agent_wrong_direction),
         agent_is_saturated = as.logical(agent_is_saturated))
@@ -40,16 +49,13 @@ lhs_versions <- combine_df_versions(
   c("v1_threshold_modif", "v2_threshold_old_0.01")
 )
 
-## lhs data check
-names(df_lhs_v2)
-str(df_lhs_v2$model_type)
-
 ## LHS interactions prep 27/4/26
 # left join with df_ag to pull pro_reduciton before computing susceptibility
 df_lhs_interactions <- prepare_interactions("./data/lhs_interaction_log.csv") %>%
   left_join(df_ag %>% select(agent_id, pro_reduction) %>% distinct(),
             by = c("receiver_id" = "agent_id"))
 
+# Influence and susceptibility score calculations
 df_lhs_influence <- compute_influence_scores(df_lhs_interactions)
 df_lhs_susceptibility <- compute_susceptibility_scores(df_lhs_interactions)
 
@@ -65,21 +71,8 @@ df_lhs_directional <- summarize_directional(df_lhs_directional_agents) # summari
 
 #df_ga <- prepare_data("./data/ga_batch_summary.csv", version = "v1")
 
-
 ## ANNEALING
 # df_anneal < -prepare_data("./data/anneal_batch_summary.csv", version = "v1")
-
-
-
-## df declarations
-#df_batch <- read.csv("./data/batch_summary.csv")
-#df_lhs <- read.csv("./data/lhs_batch_summary.csv")
-#df_ga <- read.csv("./data/ga_batch_summary.csv")
-#df_anneal <- read.csv("./data/annealing_batch_summary.csv")
-#df_train <- read.csv("./data/train_data.csv")
-#df_validation <- read.csv("./data/valid_batch_summary.csv")
-#df_orig <- read.csv("./data/data_complete_anonymised.csv")
-#df_ag <- read.csv("./data/agent_level_results.csv")
 
 # lists declaration for lm and sensitivity analyses
 ## define input columns

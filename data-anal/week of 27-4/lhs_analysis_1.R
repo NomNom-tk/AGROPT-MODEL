@@ -17,6 +17,26 @@ df_lhs_v1$selected_debate_id <- as.character(df_lhs_v1$selected_debate_id)
 df_lhs_v2$selected_debate_id <- as.character(df_lhs_v2$selected_debate_id)
 
 # ─────────────────────────────────────────────
+# Empirical Comparisons
+# ─────────────────────────────────────────────
+
+# DF of empirical change across T0,T1,T2
+empirical_stat_check <- empirical_stats(df_empirical_check)
+
+colnames(empirical_stat_check)
+
+plot_empir <- plot_empir_compar(empirical_stat_check)
+print(plot_empir)
+
+# pivot verison for T0,t1,t2 comparison
+empirical_stat_pivot <- empirical_stat_check %>%
+  pivot_longer(
+    cols = c(mean_change_t0_t1, mean_change_t1_t2, mean_change_t0_t2),
+    names_to = "change_type",
+    values_to = "value") %>%
+  filter(change_type != "mean_change_t0_t2")
+
+# ─────────────────────────────────────────────
 # Sensitivity Analysis by version
 # ─────────────────────────────────────────────
 
@@ -472,6 +492,7 @@ lhs_outputs <- list(
       v2 = list(pcc = sensi_v2$pcc, prcc = sensi_v2$prcc)),
     models = list(conv = run_conv_model(df_conv_debate), ols = ols_model),
     comparisons = list(
+      empirical = empirical_stat_check,
       ols = comparison_clean,
       summary = comparison_summary,
       ranking = model_comparison_main,
@@ -518,6 +539,10 @@ lhs_outputs <- list(
     prcc_v2 = function() plot_prcc_heatmap(sensi_v2$prcc),
     
     abm_vs_ols = function() plot_ols_abm_comp(comparison_clean),
+    
+    # empirical comparisons
+    empirical_col = function() plot_empir_compar(df_empirical_check),
+    empirical_cross = function() plot_empir_cross(empirical_stat_pivot),
     
     
     model_rank_versions = function() plot_model_rank_versions(model_comparison_main), 

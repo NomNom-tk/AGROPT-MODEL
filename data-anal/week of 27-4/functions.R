@@ -9,6 +9,31 @@ read_clean <- function(path) {
                                     na.omit(as.character(.))))), 
                   ~ as.numeric(gsub(",", ".", trimws(.)))))
 }
+# TODO empirical_prep ----
+empirical_prep <- function(path) {
+  read_clean(path) %>%
+    mutate(index_t0_check = ((db_factor1t0 + db_factor2t0) / 2) - ((db_factor3t0 + db_factor4t0 + db_factor5t0) / 3),
+          composition = substr(id_group_all, 1, 1),
+          change_t0_t1 = (db_index_t1 - db_index_t0) / 6,
+          change_t1_t2 = (db_index_t2 - db_index_t1) / 6,
+          change_t0_t2 = (db_index_t2 - db_index_t0) / 6,
+          abs_change_t1_t2 = abs(change_t1_t2))
+}
+
+# TODO empirical_stats ----
+empirical_stats <- function(df) {
+  df <- df %>%
+    group_by(condition) %>%
+    summarize(
+      mean_change_t0_t1 = mean(change_t0_t1, na.rm = TRUE),
+      sd_change_t0_t1 = sd(change_t0_t1, na.rm = TRUE),
+      mean_change_t1_t2 = mean(change_t1_t2, na.rm = TRUE),
+      sd_change_t1_t2 = sd(change_t1_t2, na.rm = TRUE),
+      mean_change_t0_t2 = mean(change_t0_t2, na.rm = TRUE),
+      sd_change_t0_t2 = sd(change_t0_t2, na.rm = TRUE),
+      n = n()
+    )
+}
 # CLEAR BUT TEST AGAIN pivot_params ####
 pivot_params <- function(df) {
   df %>%

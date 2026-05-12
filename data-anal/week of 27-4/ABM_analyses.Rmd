@@ -63,6 +63,19 @@ source("./lhs_analysis_1.R")
 # sensitivity, ga, annealing, plots
 ```
 
+```{r, empirical_comparison, cache = FALSE}
+# df comparison test
+lhs_outputs$results$comparisons$empirical
+
+# plot of empirical distribution
+## needs to add labs/for title and axes and theme
+lhs_outputs$plots$empirical_col()
+
+# cross time col plot
+lhs_outputs$plots$empirical_cross()
+
+```
+
 ```{r lhs-analysis-comparison, cache = FALSE}
 # lhs_analysis comparison - v1 (threshold = 0.001), v2 (threshold = 0.01)
 

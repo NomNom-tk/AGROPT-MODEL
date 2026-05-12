@@ -42,6 +42,30 @@ plot_prcc_heatmap <- function(df){
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
 }
 
+# Empirical comparisons
+# empirical for t1_t2
+plot_empir_compar <- function(df) {
+  ggplot(df, aes(x = condition, y = mean_change_t1_t2)) +
+    geom_col() +
+    geom_errorbar(aes(ymin = mean_change_t1_t2 - sd_change_t1_t2, 
+                  ymax = mean_change_t1_t2 + sd_change_t1_t2)) +
+    geom_hline(yintercept = df %>% filter(condition == "Control") %>%
+                 pull(mean_change_t1_t2), linetype = "dashed") +
+    theme_minimal() +
+    scale_fill("t0_t1" = "brown", "t1_t2" = "blue")
+    labs(x = "Condition", y = "Avg Change T1->T2", 
+         title = "Opinion Change from T1 to T2")
+}
+
+# stacked column for cross-time comparisons
+plot_empir_cross <- function(df) {
+  ggplot(df, aes(x = condition, y = value, fill = change_type)) +
+    geom_col(position = "dodge") +
+    geom_hline(yintercept = 0) +
+    labs(x = "Condition", y = "Average Change",
+         title = "Opinion Change Across T0-T1-T2")
+}
+
 # Model Comparison
 ## OLS VS ABM
 plot_ols_abm_comp <- function(df) { # use with comparison_clean

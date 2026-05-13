@@ -75,6 +75,11 @@ lhs_outputs$plots$empirical_col()
 lhs_outputs$plots$empirical_cross()
 
 ```
+# Empirical data discovery
+- primary attitude change (8-17% of scale range) occurred between t0-t1
+- 3-4% left for simulation during debate (statistically indistinguishable from spontaneous drift in control)
+
+
 
 ```{r lhs-analysis-comparison, cache = FALSE}
 # lhs_analysis comparison - v1 (threshold = 0.001), v2 (threshold = 0.01)
@@ -102,6 +107,10 @@ lhs_outputs$plots$prcc_all()
 
 
 ```
+# Description of Data in LHS
+- v1: 100 fixed cycles 6-5-26
+- v2: dynamic conversion 4-5-26
+
 
 ```{r, model-performance, echo = FALSE}
 # abm vs ols plots

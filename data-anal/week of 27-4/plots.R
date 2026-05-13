@@ -49,10 +49,11 @@ plot_empir_compar <- function(df) {
     geom_col() +
     geom_errorbar(aes(ymin = mean_change_t1_t2 - sd_change_t1_t2, 
                   ymax = mean_change_t1_t2 + sd_change_t1_t2)) +
-    geom_hline(yintercept = df %>% filter(condition == "Control") %>%
-                 pull(mean_change_t1_t2), linetype = "dashed") +
+    geom_hline(yintercept = 0.042, linetype = "dashed") +
+    #geom_hline(yintercept = df %>% filter(condition == "Control") %>%
+   #              pull(mean_change_t1_t2), linetype = "dashed") +
     theme_minimal() +
-    scale_fill("t0_t1" = "brown", "t1_t2" = "blue")
+    scale_fill_manual(values = c("t0_t1" = "#2C3E50", "t1_t2" = "#E74C3C")) +
     labs(x = "Condition", y = "Avg Change T1->T2", 
          title = "Opinion Change from T1 to T2")
 }

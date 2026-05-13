@@ -33,8 +33,9 @@ empirical_stat_pivot <- empirical_stat_check %>%
   pivot_longer(
     cols = c(mean_change_t0_t1, mean_change_t1_t2, mean_change_t0_t2),
     names_to = "change_type",
-    values_to = "value") %>%
-  filter(change_type != "mean_change_t0_t2")
+    values_to = "value")
+
+colnames(empirical_stat_pivot)
 
 # ─────────────────────────────────────────────
 # Sensitivity Analysis by version
@@ -541,7 +542,7 @@ lhs_outputs <- list(
     abm_vs_ols = function() plot_ols_abm_comp(comparison_clean),
     
     # empirical comparisons
-    empirical_col = function() plot_empir_compar(df_empirical_check),
+    empirical_col = function() plot_empir_compar(empirical_stat_check),
     empirical_cross = function() plot_empir_cross(empirical_stat_pivot),
     
     

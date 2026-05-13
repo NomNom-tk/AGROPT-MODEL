@@ -21,7 +21,7 @@ library(tidygraph)
 ## temp trials for different lhs versions (to compare with baseline 28/4/26)
 ## modif 5-4-26 --> thr_0.01 (correct cap), thr_0.001 (30-4-26 mistake with cap)
 df_lhs_v1 <- prepare_data("./data/lhs_batch_summary.csv", version = "v1_7-5_100c")
-df_lhs_v2 <- prepare_data("./data/lhs_batch_summary_v2.csv", version = "v2_30-4_dyn")
+df_lhs_v2 <- prepare_data("./data/lhs_batch_summary_v2.csv", version = "v2_4-5_dyn")
 df_lhs <- df_lhs_v1
 
 df_raw <- read_clean("./data/lhs_batch_summary.csv")
@@ -31,7 +31,7 @@ problems(df_raw) %>% print(n = Inf)
 # empirical prep call
 df_empirical_check <- empirical_prep("./data/data_complete_anonymised.csv")
 
-
+colnames(df_empirical_check)
 
 ## TODO lhs agent level --> fix no neutral zone width and prepare_data function 
 #df_lhs_ag <- apply_batch_mutations("./data/lhs_agent_level_results.csv")

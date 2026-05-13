@@ -447,6 +447,24 @@ easiest_debates <- df_lhs %>%
 # ─────────────────────────────────────────────
 
 network_outputs <- build_influence_network(df_lhs_interactions, df_ag)
+network_outputs$graphs <- map(network_outputs$graphs, enrich_graph_vertices, network_outputs$aggregate)
+
+# test with filtering top nodes
+network_outputs$graphs <- map(network_outputs$graphs, filter_top_nodes, top_n = 10)
+
+g_filtered <- network_outputs$graphs[[1]]
+vcount(g_filtered)
+g_filtered %>% 
+  as_tbl_graph() %>%
+  activate(nodes) %>%
+  as_tibble() %>%
+  count(name) %>%
+  filter(n > 1)
+
+# test with plotting function
+build_test <- build_network_graph(network_outputs$graphs[[1]])
+
+print(build_test)
 
 # ─────────────────────────────────────────────
 # FINAL OUTPUTS

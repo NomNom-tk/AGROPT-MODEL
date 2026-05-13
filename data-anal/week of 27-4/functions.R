@@ -959,14 +959,26 @@ enrich_graph_vertices <- function(g, df) {
 
   g_enriched <- as_tbl_graph(g) %>% 
     activate(nodes) %>%
-    left_join(attributes_reordered, by = c("name" = "agent_id"))
+    left_join(attributes_reordered, by = c("name" = "agent_id")) %>%
+    distinct(name, .keep_all = TRUE)
   
   return(g_enriched)
 }
 
-#extract vertex names from g         # these are agent_ids as characters
-#filter df to only those agent_ids   # subset to relevant rows
-#for each attribute column in df:
-#  set that attribute on V(g)        # look up how to do this in igraph
-#return g
+# TODO filter_top_nodes 13/5//26 ----
+filter_top_nodes <- function(g, top_n) {
+  g_filtered <- g %>% 
+    as_tbl_graph() %>%
+    activate(nodes) %>%
+    slice_max(order_by = out_strength, n = top_n)
+  
+  return(g_filtered)
+}
 
+# TODO build_network_graph 13/5/26 ----
+build_network_graph <- function(g) {
+  ggraph(g, layout = "fr") +
+    geom_edge_arc(aes(width = edge_weight, alpha = n_interactions)) +
+    geom_node_point(aes(size = out_strength, color = pro_reduction, shape = agent_is_saturated)) +
+    theme_graph()
+}

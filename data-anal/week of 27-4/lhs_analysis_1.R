@@ -455,6 +455,7 @@ graphs_top_nodes <- map(network_outputs$graphs, filter_top_nodes, top_n = 10)
 
 # test with filtering edges - threshold chosen because edge weights range from 0.002-0.010
 # threshold on 75th percentile of the edge_weights considered, flexible to allow for graphical representation
+# hereafter designated as "adaptive threshold"
 graphs_edge_filter <- map(network_outputs$graphs, function(g) { 
                           threshold <- quantile(E(g)$edge_weight, 0.75)
                           filter_edges(g, threshold)
@@ -468,7 +469,7 @@ vcount(graphs_edge_filter[[1]])
 edge_plots <- imap(graphs_edge_filter, function(g, name)
                      build_network_graph(g) + labs(title = name))
 
-## segmented to homogeneous plots for clarity
+## segmented to homogeneous plots for clarity 15/5/26
 homogeneous_plots <- imap(graphs_edge_filter[c("homogeneous_consensus",
                                                "homogeneous_clustering",
                                                "homogeneous_bipolarization")],
@@ -478,6 +479,15 @@ homogeneous_plots <- imap(graphs_edge_filter[c("homogeneous_consensus",
 homogeneous_plots_combined <- wrap_plots(homogeneous_plots, ncol = 3)
 
 print(homogeneous_plots_combined)
+ggsave("network_attempt_100c_adaptive.png", homogeneous_plots_combined, width = 20, height = 10)
+# interpretation
+# consensus: small disconnected clusters, all pro reduction agents influencing other pro-reductions
+## no dominant broadcasters, agents only influence their local circle (debate centric)
+# clustering: small disconnected networks again, slightly larger, few saturated agents (still influence others)
+## saturated agents appear indicating potential opinion entrenchment
+# bipolarization: most dense and interconnected, multiple overlapping clusters, saturated agents influence each other
+## more saturated agents than other two models
+## overall: pro reduction agents dominate broadcasting regardless of model type
 
 # threshold check for all graphs
 map(network_outputs$graphs, ~ E(.x)$edge_weight %>% summary())

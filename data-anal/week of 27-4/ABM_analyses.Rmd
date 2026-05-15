@@ -235,6 +235,7 @@ lhs_outputs$plots$influence_model_type()
 lhs_outputs$plots$saturation_by_condition()
 
 # wrong direction by anti/pro
+# try and segment this by condition and by anti/pro 15/5/26
 lhs_outputs$plots$direction_by_position()
 
 # directional accuracy by current condition, faceted by model type

@@ -50,6 +50,7 @@ library(igraph)
 library(ggraph)
 library(janitor)
 library(tidygraph)
+library(patchwork)
 ```
 
 ```{r, file-sourcing, include = FALSE, echo = FALSE, cache = FALSE}

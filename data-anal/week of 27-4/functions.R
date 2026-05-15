@@ -975,10 +975,28 @@ filter_top_nodes <- function(g, top_n) {
   return(g_filtered)
 }
 
-# TODO build_network_graph 13/5/26 ----
+# TODO filter_edges 15/5/25 ----
+filter_edges <- function(g, threshold) {
+  g_filtered_edge <- g %>%
+    as_tbl_graph() %>%
+    activate(edges) %>%
+    filter(edge_weight > threshold) %>%
+    activate(nodes) %>%
+    filter(!node_is_isolated())
+  
+  return(g_filtered_edge)
+}
+
+# TODO build_network_graph 15/5/26 update, added arrows, node_text and continuous edges ----
 build_network_graph <- function(g) {
-  ggraph(g, layout = "fr") +
-    geom_edge_arc(aes(width = edge_weight, alpha = n_interactions)) +
+  ggraph(g, layout = "nicely") + # test with star instead of fr or even stress
+    geom_edge_link(aes(width = edge_weight),
+                   arrow = arrow(length = unit(3, "mm"), type = "closed"),
+                   end_cap = circle(3, "mm")) + # addition of arrows to indicate broadcast direction
+    geom_node_text(aes(label = name), repel = TRUE, size = 3) + # repel prevents overlap
+    #geom_edge_arc(aes(width = edge_weight, alpha = n_interactions)) +
     geom_node_point(aes(size = out_strength, color = pro_reduction, shape = agent_is_saturated)) +
+    scale_edge_width_continuous(range = c(0.5, 3)) +
+    theme(legend.position = "bottom") +
     theme_graph()
 }

@@ -532,7 +532,7 @@ action save_interaction_log {
 	if !file_exists("outputs/interaction_log.csv") { // if file doesn't exist create headers and save
     	save "speaking_mode,model_type,current_condition,selected_debate_id," +
     	"debate_label,current_experiment_id,use_distinct_agents,seed,cycle,sender_id,receiver_id," +
-    	"sender_opinion,opinion_before,opinion_after,delta,agent_is_saturated,agent_wrong_direction" 
+    	"sender_opinion,opinion_before,opinion_after,delta,agent_is_saturated,agent_wrong_direction, max_cycles" 
     	to: "outputs/interaction_log.csv" rewrite: false;
 	}
     
@@ -575,7 +575,7 @@ action save_batch_results {
     }
     
     // Save summary statistics
-    save [model_type, current_condition, selected_debate_id, debate_label, current_experiment_id, use_distinct_agents,
+    save [model_type, current_condition, selected_debate_id, debate_label, current_experiment_id, max_cycles, use_distinct_agents,
             speaking_mode, seed, pro_count, anti_count, convergence_rate, confidence_threshold, repulsion_threshold, 
             repulsion_strength, convergence_rate_sd, confidence_threshold_sd, repulsion_threshold_sd, repulsion_strength_sd, 
             convergence_cycle, initial_variance, mae, opinion_variance, polarization_index, num_clusters, 
@@ -638,6 +638,7 @@ action save_agent_results {
             selected_debate_id,
             debate_label,
             current_experiment_id,
+            max_cycles, // change max_cycles in constants when running sim 15/5/26
             use_distinct_agents,
             speaking_mode,
             seed,

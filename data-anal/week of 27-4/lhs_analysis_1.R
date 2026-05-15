@@ -446,25 +446,52 @@ easiest_debates <- df_lhs %>%
 # NETWORK GENERATION
 # ─────────────────────────────────────────────
 
+# standard calls for building influence network 15/5/26
 network_outputs <- build_influence_network(df_lhs_interactions, df_ag)
 network_outputs$graphs <- map(network_outputs$graphs, enrich_graph_vertices, network_outputs$aggregate)
 
 # test with filtering top nodes
-network_outputs$graphs <- map(network_outputs$graphs, filter_top_nodes, top_n = 10)
+graphs_top_nodes <- map(network_outputs$graphs, filter_top_nodes, top_n = 10)
 
-g_filtered <- network_outputs$graphs[[1]]
-vcount(g_filtered)
-g_filtered %>% 
-  as_tbl_graph() %>%
-  activate(nodes) %>%
-  as_tibble() %>%
-  count(name) %>%
-  filter(n > 1)
+# test with filtering edges - threshold chosen because edge weights range from 0.002-0.010
+# threshold on 75th percentile of the edge_weights considered, flexible to allow for graphical representation
+graphs_edge_filter <- map(network_outputs$graphs, function(g) { 
+                          threshold <- quantile(E(g)$edge_weight, 0.75)
+                          filter_edges(g, threshold)
+                          })
+
+# test count with edges and nodes  
+vcount(graphs_top_nodes[[1]])
+vcount(graphs_edge_filter[[1]])
+
+# edge plot iteration over models and conditions
+edge_plots <- imap(graphs_edge_filter, function(g, name)
+                     build_network_graph(g) + labs(title = name))
+
+## segmented to homogeneous plots for clarity
+homogeneous_plots <- imap(graphs_edge_filter[c("homogeneous_consensus",
+                                               "homogeneous_clustering",
+                                               "homogeneous_bipolarization")],
+                          function(g, name) build_network_graph(g) + labs(title = name))
+
+# wrap homogeneous plots
+homogeneous_plots_combined <- wrap_plots(homogeneous_plots, ncol = 3)
+
+print(homogeneous_plots_combined)
+
+# threshold check for all graphs
+map(network_outputs$graphs, ~ E(.x)$edge_weight %>% summary())
+
+# plot wrap for one combined plot
+network_plot_combined <- wrap_plots(edge_plots, ncol = 1) # 3 models X 2 conditions
 
 # test with plotting function
-build_test <- build_network_graph(network_outputs$graphs[[1]])
+build_nodes_graph <- build_network_graph(graphs_top_nodes[[1]])
+build_edges_graph <- build_network_graph(graphs_edge_filter[[1]])
 
-print(build_test)
+print(network_plot_combined)
+print(build_nodes_graph)
+print(build_edges_graph) # could be used to give an idea of what we can expect
 
 # ─────────────────────────────────────────────
 # FINAL OUTPUTS
@@ -540,7 +567,9 @@ lhs_outputs <- list(
     networks = list (
       per_debate = network_outputs$per_debate,
       aggregate = network_outputs$aggregate,
-      graphs = network_outputs$graphs
+      graphs = network_outputs$graphs,
+      graphs_edge_filter = graphs_edge_filter,
+      network_plots = network_plot_combined
     )
   ),
   plots = list(

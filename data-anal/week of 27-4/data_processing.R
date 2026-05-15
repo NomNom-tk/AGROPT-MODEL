@@ -15,6 +15,7 @@ library(igraph)
 library(ggraph)
 library(janitor)
 library(tidygraph)
+library(patchwork)
 
 # data_loading
 ## LHS

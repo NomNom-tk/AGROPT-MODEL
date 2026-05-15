@@ -222,3 +222,16 @@ structure (in gama there is no compartmentalization of global variables, loads i
 - updated local R files on work and home comp
 - meeting with Adam for RatRec
 
+# 21/4/26 - 11/5/26
+- continued to work on pipeline for analysis and determined that the sd in the empirical data was bigger than the effect size we are estimating
+- reduces to the question of whether it is worth adding complexity to the model given that we might be estimating noise
+- standardized R pipeline to integrate the empirical data and the network plots
+- first version of homogeneous plots generated (chose to add retention_discount as agents get more tired over the debate and are more resistant to change)
+- ran an initial test with 100 fixed cycles to check (conclusion: too many cycles given that debates converge dynamically at around 30 cycles)
+- improvement of cleaning functions in pipeline (read_clean and standardization of encoding of csvs and parsing the decimals vs commas for numeric columns)
+- attempted to continue with network plots
+- added max cycles to save logic of interaction, agent and batch results for sensitivity
+-- TODO
+- improve pipeline version awareness for sensitivity
+
+

@@ -26,7 +26,7 @@ empirical_stat_check <- empirical_stats(df_empirical_check)
 colnames(empirical_stat_check)
 
 plot_empir <- plot_empir_compar(empirical_stat_check)
-print(plot_empir)
+#print(plot_empir)
 
 # pivot verison for T0,t1,t2 comparison
 empirical_stat_pivot <- empirical_stat_check %>%
@@ -36,6 +36,41 @@ empirical_stat_pivot <- empirical_stat_check %>%
     values_to = "value")
 
 colnames(empirical_stat_pivot)
+
+# wilcoxon rank sum by composition
+## compares distribution in change t1_t2 between pro_reduction groups, ranks obs
+## q: does one rank systematically higher than the other (using p value)
+
+# one sided test for H change
+df_empirical_check %>%
+  filter(composition == "H") %>%
+  pull(change_t1_t2) %>%
+  wilcox.test(mu = 0)
+
+
+df_empirical_check %>%
+  filter(composition %in% c("H", "M")) %>%
+  wilcox.test(change_t1_t2 ~ composition, data = .)
+
+# cohen's d form lm.beta
+empir_cohen <- lm(change_t1_t2 ~ pro_reduction,
+                  data = df_empirical_check %>% filter(composition == "M")) %>%
+  lm.beta() %>%
+  tidy()
+
+#df_empirical_check %>%
+#  filter(composition %in% c("H", "M")) %>%
+#  group_by(composition) %>%
+#  summarise(
+#    w_result = list(wilcox.test(change_t1_t2 ~ pro_reduction, data = cur_data())),
+#    .groups = "drop"
+#  ) %>%
+#  mutate(
+#    W = map_dbl(w_result, ~ .x$statistic),
+#    p_value = map_dbl(w_result, ~ .x$p.value),
+#    n = map_int(w_result, ~ sum(.x$n))
+#  )
+
 
 # ─────────────────────────────────────────────
 # Sensitivity Analysis by version
@@ -191,7 +226,8 @@ h_vs_m <- df_lhs %>%
     .groups = "drop"
   )
 
-mae_vs_comp_wilcox <- wilcox.test(mae ~ debate_composition, data = df_lhs)
+# comment ou on 18/5/26 (test, TODO change)
+#mae_vs_comp_wilcox <- wilcox.test(mae ~ debate_composition, data = df_lhs)
 
 # ─────────────────────────────────────────────
 # Speaking mode (UNCHANGED)
@@ -478,7 +514,7 @@ homogeneous_plots <- imap(graphs_edge_filter[c("homogeneous_consensus",
 # wrap homogeneous plots
 homogeneous_plots_combined <- wrap_plots(homogeneous_plots, ncol = 3)
 
-print(homogeneous_plots_combined)
+#print(homogeneous_plots_combined)
 ggsave("network_attempt_100c_adaptive.png", homogeneous_plots_combined, width = 20, height = 10)
 # interpretation
 # consensus: small disconnected clusters, all pro reduction agents influencing other pro-reductions
@@ -499,9 +535,9 @@ network_plot_combined <- wrap_plots(edge_plots, ncol = 1) # 3 models X 2 conditi
 build_nodes_graph <- build_network_graph(graphs_top_nodes[[1]])
 build_edges_graph <- build_network_graph(graphs_edge_filter[[1]])
 
-print(network_plot_combined)
-print(build_nodes_graph)
-print(build_edges_graph) # could be used to give an idea of what we can expect
+#print(network_plot_combined)
+#print(build_nodes_graph)
+#print(build_edges_graph) # could be used to give an idea of what we can expect
 
 # ─────────────────────────────────────────────
 # FINAL OUTPUTS
@@ -549,6 +585,7 @@ lhs_outputs <- list(
     models = list(conv = run_conv_model(df_conv_debate), ols = ols_model),
     comparisons = list(
       empirical = empirical_stat_check,
+      empirical_cohen = empir_cohen,
       ols = comparison_clean,
       summary = comparison_summary,
       ranking = model_comparison_main,

@@ -9,8 +9,8 @@ date: "2026-04-02"
 ---
 
 ```{r-setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width = 10,
-                      fig.height = 6)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width = 15,
+                      fig.height = 10)
 ```
 
 ```{r, file_layout, echo = FALSE, }
@@ -67,6 +67,9 @@ source("./lhs_analysis_1.R")
 ```{r, empirical_comparison, cache = FALSE}
 # df comparison test
 lhs_outputs$results$comparisons$empirical
+
+# cohens d check
+lhs_outputs$results$comparisons$empirical_cohen
 
 # plot of empirical distribution
 ## needs to add labs/for title and axes and theme

@@ -62,7 +62,7 @@ experiment Bt_lhs_cons_dist type: batch repeat: 5 keep_seed: true until: end_sim
 
 experiment Bt_lhs_cons_ndist_speak type: batch repeat: 5 keep_seed: true until: end_simulation {
     parameter "Selected debate id" var: selected_debate_id min: 1 max: 44 step: 1;
-    parameter "Convergence Rate" var: convergence_rate among: [0.005, 0.01, 0.02, 0.05, 0.1];
+    parameter "Convergence Rate" var: convergence_rate <- 0.005 among: [0.005, 0.01, 0.02, 0.05, 0.1];
 
     method exploration sample: 200 sampling: "latinhypercube";
    
@@ -84,10 +84,10 @@ experiment Bt_lhs_cons_ndist_speak type: batch repeat: 5 keep_seed: true until: 
 
 experiment Bt_lhs_cons_dist_speak type: batch repeat: 5 keep_seed: true until: end_simulation {
     parameter "Selected debate id" var: selected_debate_id min: 1 max: 44 step: 1;
-    parameter "Convergence Rate" var: convergence_rate among: [0.005, 0.01, 0.02, 0.05, 0.1];
+    parameter "Convergence Rate" var: convergence_rate <- 0.005 among: [0.005, 0.01, 0.02, 0.05, 0.1];
 
     // agent-level parameters
-    parameter "SD Convergence Rate" var: convergence_rate_sd among: [0.0, 0.005, 0.01, 0.02];
+    parameter "SD Convergence Rate" var: convergence_rate_sd <- 0.005 among: [0.0, 0.005, 0.01, 0.02];
     
     method exploration sample: 200 sampling: "latinhypercube";
    

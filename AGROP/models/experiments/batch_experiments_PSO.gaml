@@ -8,12 +8,12 @@ import "../main_4-3.gaml" // relative path back to main
 // BATCH EXPERIMENTS: GENETIC ALGORITHM informed by LHS samples
  
 // Batch Consensus (Genetic) 
-experiment Bt_gen_cons_ndist type: batch repeat: 5 keep_seed: true until: end_simulation {
+experiment Bt_pso_cons_ndist type: batch repeat: 5 keep_seed: true until: end_simulation {
     parameter "Selected debate id" var: selected_debate_id min: 1 max: 44 step: 1;
-    parameter "Convergence Rate" var: convergence_rate min: 0.05 max: 0.5;
+    parameter "Convergence Rate" var: convergence_rate min: 0.0001 step: 0.0001 max: 0.5;
     
-    method genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
-    nb_prelim_gen: 5 max_gen: 10;
+   method pso num_particles: 10 weight_inertia:0.7 weight_cognitive: 1.5 weight_social: 1.5  iter_max: 1000 aggregation:"avr"  minimize: mae  ; 
+
    
     init {
         mode_batch <- true;
@@ -31,15 +31,15 @@ experiment Bt_gen_cons_ndist type: batch repeat: 5 keep_seed: true until: end_si
     }
 }
 
-experiment Bt_gen_cons_dist type: batch repeat: 15 keep_seed: true until: end_simulation {
+experiment Bt_pso_cons_dist type: batch repeat: 15 keep_seed: true until: end_simulation {
     parameter "Selected debate id" var: selected_debate_id min: 1 max: 44 step: 1;
-    parameter "Convergence Rate" var: convergence_rate min: 0.05 max: 0.5;
-    
+    parameter "Convergence Rate" var: convergence_rate min: 0.0001 step: 0.0001 max: 0.5;
+   
     // agent-level params
     parameter "SD Convergence Rate" var: convergence_rate_sd min: 0.0 max: 0.2;
     
-    method genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
-    nb_prelim_gen: 5 max_gen: 10;
+   method pso num_particles: 10 weight_inertia:0.7 weight_cognitive: 1.5 weight_social: 1.5  iter_max: 1000 aggregation:"avr"  minimize: mae  ; 
+
    
     init {
         mode_batch <- true;
@@ -60,14 +60,13 @@ experiment Bt_gen_cons_dist type: batch repeat: 15 keep_seed: true until: end_si
     }
 }
 
-experiment Bt_gen_cons_ndist_speak type: batch repeat: 15 keep_seed: true until: end_simulation {
+experiment Bt_pso_cons_ndist_speak type: batch repeat: 15 keep_seed: true until: end_simulation {
     parameter "Selected debate id" var: selected_debate_id min: 1 max: 44 step: 1;
-    parameter "Convergence Rate" var: convergence_rate min: 0.05 max: 0.5;
-
-    method genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
-    nb_prelim_gen: 5 max_gen: 10;
+   parameter "Convergence Rate" var: convergence_rate min: 0.0001 step: 0.0001 max: 0.5;
    
-    init {
+   method pso num_particles: 10 weight_inertia:0.7 weight_cognitive: 1.5 weight_social: 1.5  iter_max: 1000 aggregation:"avr"  minimize: mae  ; 
+
+   init {
         mode_batch <- true;
         convergence_cycle <- -1;
         speaking_mode <- true;

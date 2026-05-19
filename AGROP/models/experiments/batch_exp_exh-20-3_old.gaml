@@ -216,7 +216,7 @@ experiment Bt_lhs_bipol_ndist type: batch repeat: 5 keep_seed: true until: end_s
     parameter "Selected debate id" var: selected_debate_id min: 1 max: 44 step: 1;
     parameter "Convergence Rate" var: convergence_rate among: [0.05, 0.1, 0.2, 0.3, 0.4, 0.5];
     // ensuring that repulsion_threshold > confidence_threshold is ALWAYS TRUE
-    parameter "Confidence Threshold" var: confidence_threshold among: [0.1, 0.2, 0.3, 0.4];
+    parameter "Confidence Threshold" <- 0.1 var: confidence_threshold among: [0.1, 0.2, 0.3, 0.4];
     parameter "Repulsion Threshold" var: repulsion_threshold among: [0.5, 0.6, 0.7, 0.8];
     parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3];
 
@@ -238,7 +238,7 @@ experiment Bt_lhs_bipol_dist type: batch repeat: 5 keep_seed: true until: end_si
     parameter "Selected debate id" var: selected_debate_id min: 1 max: 44 step: 1;
     parameter "Convergence Rate" var: convergence_rate among: [0.05, 0.1, 0.2, 0.3, 0.4, 0.5];
     // ensuring that repulsion_threshold > confidence_threshold is ALWAYS TRUE
-    parameter "Confidence Threshold" var: confidence_threshold among: [0.1, 0.2, 0.3, 0.4];
+    parameter "Confidence Threshold" var: confidence_threshold <- 0.1 among: [0.1, 0.2, 0.3, 0.4];
     parameter "Repulsion Threshold" var: repulsion_threshold among: [0.5, 0.6, 0.7, 0.8];
     parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3];
     
@@ -267,7 +267,7 @@ experiment Bt_lhs_bipol_ndist_speak type: batch repeat: 5 keep_seed: true until:
     parameter "Selected debate id" var: selected_debate_id min: 1 max: 44 step: 1;
     parameter "Convergence Rate" var: convergence_rate among: [0.05, 0.1, 0.2, 0.3, 0.4, 0.5];
     // ensuring that repulsion_threshold > confidence_threshold is ALWAYS TRUE (constraint is set so that confi threshold is never greater than repulsion
-    parameter "Confidence Threshold" var: confidence_threshold among: [0.1, 0.2, 0.3, 0.4];
+    parameter "Confidence Threshold" var: confidence_threshold <- 0.1 among: [0.1, 0.2, 0.3, 0.4];
     parameter "Repulsion Threshold" var: repulsion_threshold among: [0.5, 0.6, 0.7, 0.8];
     parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3];
     
@@ -290,7 +290,7 @@ experiment Bt_lhs_bipol_dist_speak type: batch repeat: 5 keep_seed: true until: 
     parameter "Selected debate id" var: selected_debate_id min: 1 max: 44 step: 1;
     parameter "Convergence Rate" var: convergence_rate among: [0.05, 0.1, 0.2, 0.3, 0.4, 0.5];
     // ensuring that repulsion_threshold > confidence_threshold is ALWAYS TRUE
-    parameter "Confidence Threshold" var: confidence_threshold among: [0.1, 0.2, 0.3, 0.4];
+    parameter "Confidence Threshold" var: confidence_threshold <- 0.1 among: [0.1, 0.2, 0.3, 0.4];
     parameter "Repulsion Threshold" var: repulsion_threshold among: [0.5, 0.6, 0.7, 0.8];
     parameter "Repulsion Strength" var: repulsion_strength among: [0.1, 0.2, 0.3];
     

@@ -362,7 +362,7 @@ reflex compute_statistics when: every(10#cycle) {
 }
 
 // REFLEX: CHECK FOR CONVERGENCE (every 5 cycles after cycle 10)
-reflex check_convergence when: cycle > 10 and every(5#cycle) and !end_simulation {
+reflex check_convergence when: end_simulation_at_convergence and cycle > 10 and every(5#cycle) and !end_simulation {
     list<float> opinion_changes <- [];
     ask opinion_agents {
         opinion_changes << abs(opinion - previous_opinion);
@@ -380,8 +380,8 @@ reflex check_convergence when: cycle > 10 and every(5#cycle) and !end_simulation
             convergence_cycle <- cycle;
             if debug_mode = true {
                 write "Converged at cycle " + convergence_cycle;
-            }
-            /*end_simulation <- true;
+            } 
+            end_simulation <- true;
             
             do compute_fit;
             do compute_final_statistics;
@@ -389,7 +389,7 @@ reflex check_convergence when: cycle > 10 and every(5#cycle) and !end_simulation
             if mode_batch {
                 do save_batch_results;
             }
-        }*/
+        	
     	}
 	}
 }
@@ -484,8 +484,8 @@ action compute_fit {
 
 // Action ot compute pro-anti agents
 action compute_pro_anti_counts {
-    int pro_count <- opinion_agents count (each.pro_reduction = 1);
-    int anti_count <- opinion_agents count (each.pro_reduction = 0);
+     pro_count <- opinion_agents count (each.pro_reduction = 1);
+     anti_count <- opinion_agents count (each.pro_reduction = 0);
 }
 
 // Action for pairwise polarization
@@ -692,7 +692,7 @@ action save_agent_results {
             confidence_threshold,
             repulsion_threshold,
             repulsion_strength,
-            convergence_cycle
+            convergence_cycle 
         ]
         to: "outputs/agent_level_results.csv" rewrite: false;
     }
@@ -705,7 +705,7 @@ action save_agent_results {
 }
     
 // REFLEX: STOP GUI AT MAX_CYCLES
-reflex stop_gui when: (cycle >= max_cycles or end_simulation) and !mode_batch {
+reflex stop_gui when: end_simulation and !mode_batch {
     do pause;
     }
 }

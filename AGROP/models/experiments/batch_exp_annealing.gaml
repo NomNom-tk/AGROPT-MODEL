@@ -39,7 +39,7 @@ experiment Bt_anneal_cons_dist type: batch repeat: 5 keep_seed: true until: end_
     parameter "Convergence Rate" var: convergence_rate min: 0.05 max: 0.5;
     
     // agent level params
-    parameter "SD Convergence Rate" var: convergence_rate_sd min: 0 max: 0.2;
+    parameter "SD Convergence Rate" var: convergence_rate_sd min: 0.0 max: 0.2;
     
     method annealing minimize: mae nb_iter_cst_temp: 10 temp_decrease: 0.7 temp_init: 1.0
     temp_end: 0.05;
@@ -91,7 +91,7 @@ experiment Bt_anneal_cons_dist_speak type: batch repeat: 5 keep_seed: true until
     parameter "Convergence Rate" var: convergence_rate min: 0.05 max: 0.5;
     
     // agent level params
-    parameter "SD Convergence Rate" var: convergence_rate_sd min: 0 max: 0.2;
+    parameter "SD Convergence Rate" var: convergence_rate_sd min: 0.0 max: 0.2;
     
     method annealing minimize: mae nb_iter_cst_temp: 10 temp_decrease: 0.7 temp_init: 1.0
     temp_end: 0.05;
@@ -145,8 +145,8 @@ experiment Bt_anneal_clst_dist type: batch repeat: 5 keep_seed: true until: end_
     parameter "Confidence Threshold" var: confidence_threshold min: 0.2 max: 0.8;
     
     // agent level parameters
-    parameter "SD Convergence Rate" var: convergence_rate_sd min: 0 max: 0.2;
-    parameter "SD Confidence Threshold" var: confidence_threshold_sd min: 0 max: 0.3;
+    parameter "SD Convergence Rate" var: convergence_rate_sd min: 0.0 max: 0.2;
+    parameter "SD Confidence Threshold" var: confidence_threshold_sd min: 0.0 max: 0.3;
 
     method annealing minimize: mae nb_iter_cst_temp: 10 temp_decrease: 0.7 temp_init: 1.0
     temp_end: 0.05;
@@ -197,8 +197,8 @@ experiment Bt_anneal_clst_dist_speak type: batch repeat: 5 keep_seed: true until
     parameter "Confidence Threshold" var: confidence_threshold min: 0.2 max: 0.8;
     
     // agent level parameters
-    parameter "SD Convergence Rate" var: convergence_rate_sd min: 0 max: 0.2;
-    parameter "SD Confidence Threshold" var: confidence_threshold_sd min: 0 max: 0.3;
+    parameter "SD Convergence Rate" var: convergence_rate_sd min: 0.0 max: 0.2;
+    parameter "SD Confidence Threshold" var: confidence_threshold_sd min: 0.0 max: 0.3;
 
     method annealing minimize: mae nb_iter_cst_temp: 10 temp_decrease: 0.7 temp_init: 1.0
     temp_end: 0.05;
@@ -257,10 +257,10 @@ experiment Bt_anneal_bipol_dist type: batch repeat: 5 keep_seed: true until: end
     parameter "Repulsion Threshold" var: repulsion_threshold min: 0.5 max: 0.8;
     
     // agent level parameters
-    parameter "SD Convergence Rate" var: convergence_rate_sd min: 0 max: 0.2;
-    parameter "SD Confidence Threshold" var: confidence_threshold_sd min: 0 max: 0.3;
-    parameter "SD Repulsion Strength" var: repulsion_strength_sd min: 0 max: 0.2;
-    parameter "SD Repulsion Threshold" var: repulsion_threshold_sd min: 0 max: 0.3;
+    parameter "SD Convergence Rate" var: convergence_rate_sd min: 0.0 max: 0.2;
+    parameter "SD Confidence Threshold" var: confidence_threshold_sd min: 0.0 max: 0.3;
+    parameter "SD Repulsion Strength" var: repulsion_strength_sd min: 0.0 max: 0.2;
+    parameter "SD Repulsion Threshold" var: repulsion_threshold_sd min: 0.0 max: 0.3;
 
 
     method annealing minimize: mae nb_iter_cst_temp: 10 temp_decrease: 0.7 temp_init: 1.0
@@ -320,10 +320,10 @@ experiment Bt_anneal_bipol_dist_speak type: batch repeat: 5 keep_seed: true unti
     parameter "Repulsion Threshold" var: repulsion_threshold min: 0.5 max: 0.8;
     
     // agent level parameters
-    parameter "SD Convergence Rate" var: convergence_rate_sd min: 0 max: 0.2;
-    parameter "SD Confidence Threshold" var: confidence_threshold_sd min: 0 max: 0.3;
-    parameter "SD Repulsion Strength" var: repulsion_strength_sd min: 0 max: 0.2;
-    parameter "SD Repulsion Threshold" var: repulsion_threshold_sd min: 0 max: 0.3;
+    parameter "SD Convergence Rate" var: convergence_rate_sd min: 0.0 max: 0.2;
+    parameter "SD Confidence Threshold" var: confidence_threshold_sd min: 0.0 max: 0.3;
+    parameter "SD Repulsion Strength" var: repulsion_strength_sd min: 0.0 max: 0.2;
+    parameter "SD Repulsion Threshold" var: repulsion_threshold_sd min: 0.0 max: 0.3;
 
     method annealing minimize: mae nb_iter_cst_temp: 10 temp_decrease: 0.7 temp_init: 1.0
     temp_end: 0.05;
@@ -334,7 +334,7 @@ experiment Bt_anneal_bipol_dist_speak type: batch repeat: 5 keep_seed: true unti
         speaking_mode <- true;
         use_distinct_agents <- true;
         model_type <- "bipolarization";
-        debug_mode <- false;
+        debug_mode <- false; 
         current_experiment_id <- "bipol_dist_speak";
         
         if repulsion_threshold <= confidence_threshold {

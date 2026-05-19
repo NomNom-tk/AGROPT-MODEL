@@ -14,6 +14,23 @@ global {
     // INPUT PARAMS
     // =====
 
+ 	int max_cycles <- 100; // max cycles for convergence
+    bool end_simulation_at_convergence <- true;
+    // Convergence Constants
+    float mae_convergence_threshold <- 0.01; // Convergence Checking re-modified 4/5/26
+    // v1: mae_convergence_threshold = 0.001 (too tight, early stopping)
+    // v2: mae_convergence_threshold = 0.01 (order of magnitude relaxing)
+    // v3: fixed_cycles = N (no convergence check, fixed duration)
+    
+    // Environment
+
+    float world_size <- 100.0; // Spatial world size for visualization
+    
+    int n_bins <- 50; // bins for gui viz and gif generaiton
+    
+    int stats_bins <- 10; // bins for logical histogram calculation
+    
+    
     // Simulation Control
     int selected_debate_id <- 1;            // Which debate to simulate
     string model_type <- "consensus" among: ["consensus", "clustering", "bipolarization", 

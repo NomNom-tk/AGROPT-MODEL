@@ -26,7 +26,7 @@ experiment social_influence type: gui {
         // Spatial display
         display spatial_view type: 2d {
             agents value:opinion_agents aspect: default;
-        }
+        } 
         
         // Opinion distribution over time
         display opinion_timeline type: 2d refresh: every(5#cycles) {

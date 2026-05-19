@@ -15,7 +15,7 @@ global {
     		position <- flip(0.5) ? -1:1; // pro or con [-1,1]
     	}
     }
-    
+     
     
     
     reflex speaking_turn when: length(opinion_agents) > 0 and !end_simulation {
@@ -26,8 +26,8 @@ global {
     		speak_weight <- 1.0 / (sum(recent_speech) + 1);
     	}
     	if speaking_mode {
-    		list<float> weights <- opinion_agents collect each.speak_weight;
-    		int chosen_index <- rnd_choice(weights);
+    		list<float> weights_ <- opinion_agents collect each.speak_weight;
+    		int chosen_index <- rnd_choice(weights_);
     		speaking_ag <- (opinion_agents at chosen_index);
     		//write "Speaking agent: " + speaking_ag.agent_id + " mode: " + speaking_mode;
     		ask speaking_ag {

@@ -246,7 +246,7 @@ species no_change_agent parent: opinion_agent {
             string(cycle) + "," + string(sender.agent_id) + "," + string(agent_id) + "," +
             string(speaker_opinion) + "," + string(opinion_before) + "," +
             string(opinion) + "," + string(opinion - opinion_before) + "," +
-            string(is_sat) + "," + string(wrong_dir);
+            string(is_sat) + "," + string(wrong_dir) + "," + string(max_cycles);
 	}
 }
 
@@ -301,7 +301,7 @@ species consensus_agent parent: opinion_agent {
                 string(cycle) + "," + string(sender.agent_id) + "," + string(agent_id) + "," +
                 string(speaker_opinion) + "," + string(opinion_before) + "," +
                 string(opinion) + "," + string(opinion - opinion_before) + "," +
-                string(is_sat) + "," + string(wrong_dir);
+                string(is_sat) + "," + string(wrong_dir) + "," + string(max_cycles);
         }
     }
 
@@ -359,7 +359,7 @@ species clustering_agent parent: opinion_agent {
                     string(cycle) + "," + string(sender.agent_id) + "," + string(agent_id) + "," +
                     string(speaker_opinion) + "," + string(opinion_before) + "," +
                     string(opinion) + "," + string(opinion - opinion_before) + "," +
-                    string(is_sat) + "," + string(wrong_dir);
+                    string(is_sat) + "," + string(wrong_dir) + "," + string(max_cycles);
             }
         }
     } 
@@ -480,6 +480,6 @@ species bipolarization_agent parent: opinion_agent {
                 string(cycle) + "," + string(sender.agent_id) + "," + string(agent_id) + "," +
                 string(speaker_opinion) + "," + string(opinion_before) + "," +
                 string(opinion) + "," + string(opinion - opinion_before) + "," +
-                string(is_sat) + "," + string(wrong_dir);
+                string(is_sat) + "," + string(wrong_dir) + "," + string(max_cycles);
     }
 }

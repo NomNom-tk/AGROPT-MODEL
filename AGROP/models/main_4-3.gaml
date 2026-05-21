@@ -17,36 +17,11 @@ global {
         // debate mapping from data loader
         do build_debate_id_map;
 
+        // debate selection call
+        do build_debate_selection;
+        debate_coutner <- 0;
+        selected_debate_id <- m_debate_list[0];
         
-        // CREATE DEBATE ID MAPPING
-        /*/ Control agents get unique IDs, others grouped by ID_Group_all
-        debate_id_list <- [];
-        map<string, int> group_to_id <- map<string, int>([]);
-        int next_id <- 1;
-        
-        loop i from: 0 to: length(id_group_raw) - 1 {
-            string id_group <- id_group_raw[i];
-            string condition <- group_type_list[i];
-
-            // FIXED: Only use string comparison "Control" (removed numeric "3")
-            if condition = "Control" {
-                // Each control agent gets a unique debate_id
-                string unique_control_id <- "Control_" + agent_id_list[i];
-                if not (group_to_id.keys contains unique_control_id) {
-                    group_to_id[unique_control_id] <- next_id;
-                    next_id <- next_id + 1;
-                }
-                debate_id_list << group_to_id[unique_control_id];
-            }
-            else {
-                // Regular groups use ID_Group_all
-                if not (group_to_id.keys contains id_group) {
-                    group_to_id[id_group] <- next_id;
-                    next_id <- next_id + 1;
-                }
-                debate_id_list << group_to_id[id_group];
-            }
-        }*/
         
         // REPORT DEBATE DISTRIBUTION
         do debate_distribution;
@@ -113,6 +88,37 @@ action initial_diagnostics {
     
     // Guard for final stats
     final_stats_computed <- false;
+}
+
+action reset_debate_globals { // reset of globals for each debate 21/5/26
+    mae <- 0.0;                       // Mean Absolute Error (global)
+    mae_per_debate <- map<int, float>(map([]));
+
+    // Opinion Stats
+    opinion_variance <- 0.0;          // Variance of opinions
+    initial_variance;                 // variance of opin at init
+    num_clusters <- 0;                  // Number of opinion clusters
+    polarization_index <- 0.0;        // Measure of opinion polarization
+    initial_num_clusters <- 0;          // Opinion clusters at start
+
+    // PRO/ANTI REDUCTION METRICS
+    num_pro_agents <- 0;                // Count of pro-reduction agents
+    num_anti_agents <- 0;               // Count of anti-reduction agents
+    mean_opinion_pro <- 0.0;          // Mean opinion of pro agents
+    mean_opinion_anti <- 0.0;         // Mean opinion of anti agents
+    pro_count <- 0;                     // Count of pro-reduc agents for save logic
+    anti_count <- 0;                    // Count of anti-reduc agents for save logic
+    
+    // BIPOLARIZATION DIAGNOSTICS
+    
+    total_attractive_interactions <- 0; // Count of attractive interactions
+    total_repulsive_interactions <- 0;  // Count of repulsive interactions
+    total_neutral_interactions <- 0;    // Count of neutral zone interactions
+    neutral_zone_width <- 0.0;        // Width of neutral zone (repulsion - confidence)
+    mean_net_repulsion_abs <- 0.0;    // Mean absolute net repulsion force
+
+    final_stats_computed <- false;
+    end_simulation <- false;
 }
     
 action debug_init {
@@ -427,6 +433,15 @@ reflex max_cycles_reached when: cycle >= max_cycles and !end_simulation {
     if mode_batch {
         do save_batch_results;
     }
+
+    // modif 21/5/26
+    if debate_counter < length(m_debate_list) - 1 {
+        debate_counter <- debate_counter + 1;
+        selected_debate_id <- m_debate_list[debate_counter];
+        do init_debate;
+    } else {
+        do end_simulation;
+    }
 }
 
 // ACTION: COMPUTE MODEL FIT (MAE)
@@ -521,6 +536,14 @@ action compute_final_statistics {
     
     list<float> opinions <- opinion_agents collect each.opinion;
     
+}
+
+// resets the globals for each debate when cycling between debates 21/5/26
+action init_debate {
+    do reset_debate_globals;
+    do initialize_agents_for_debate(selected_debate_id);
+    do create_network;
+    do initial_diagnostics;
 }
 
 // ACTION: Interaction log 27/4/26

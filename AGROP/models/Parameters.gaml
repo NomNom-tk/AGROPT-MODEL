@@ -22,17 +22,18 @@ global {
     // v2: mae_convergence_threshold = 0.01 (order of magnitude relaxing)
     // v3: fixed_cycles = N (no convergence check, fixed duration)
     
+    // =====
     // Environment
-
+	// =====
+    
     float world_size <- 100.0; // Spatial world size for visualization
-    
     int n_bins <- 50; // bins for gui viz and gif generaiton
-    
     int stats_bins <- 10; // bins for logical histogram calculation
     
     
     // Simulation Control
     int selected_debate_id <- 1;            // Which debate to simulate
+    list<int> m_debate_list <- []; // debate list populated based on composition_scope or selection_mode 21/5/26
     string model_type <- "consensus" among: ["consensus", "clustering", "bipolarization", 
     "argumentative", "no_change"];
     bool use_distinct_agents <- true; // default: heterogeneous
@@ -69,6 +70,9 @@ global {
     int convergence_cycle <- -1;            // Cycle when convergence achieved
     bool final_stats_computed <- false;     // Guard for final statistics
     string current_experiment_id <- "";		// type of experiment for each batch 
+    string selection_mode <- "explicit" among: ["filter", "explicit"]; // run debates based on xml or composition_scope 21/5/26
+    string composition_scope <- "M" among: ["H", "M", "ALL"]; // filtering debate mapping, hetero, homo or all debates 21/5/26
+    string explicit_debates_path <- ""; // empty path to be populated in experiments for external debates list 21/5/26
 
     // =====
     // Raw Data Storage

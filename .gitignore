@@ -5,8 +5,8 @@
 .Ruserdata
 
 # Data for R ignores
-data-anal/'week of 27-4'/data/
+**/data/
 
 
-*.html
-*.html
+#*.html
+#*.html

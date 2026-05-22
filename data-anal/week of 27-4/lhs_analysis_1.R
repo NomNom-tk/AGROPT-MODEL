@@ -497,6 +497,8 @@ graphs_edge_filter <- map(network_outputs$graphs, function(g) {
                           filter_edges(g, threshold)
                           })
 
+names(graphs_edge_filter)
+
 # test count with edges and nodes  
 vcount(graphs_top_nodes[[1]])
 vcount(graphs_edge_filter[[1]])
@@ -514,8 +516,17 @@ homogeneous_plots <- imap(graphs_edge_filter[c("homogeneous_consensus",
 # wrap homogeneous plots
 homogeneous_plots_combined <- wrap_plots(homogeneous_plots, ncol = 3)
 
-#print(homogeneous_plots_combined)
-ggsave("network_attempt_100c_adaptive.png", homogeneous_plots_combined, width = 20, height = 10)
+## segmented to heterogeneous plots as well 22/5/26
+heterogeneous_plots <- imap(graphs_edge_filter[c("heterogeneous_consensus",
+                                                 "heterogeneous_clustering",
+                                                 "heterogeneous_bipolarization")],
+                            function(g, name) build_network_graph(g) + labs(title = name))
+
+# hetero plots combined
+heterogeneous_plots_combined <- wrap_plots(heterogeneous_plots, ncol = 3)
+
+ggsave("network_attempt_100c_adaptive_hetero.png", heterogeneous_plots_combined, width = 20, height = 10)
+ggsave("network_attempt_100c_adaptive_homo.png", homogeneous_plots_combined, width = 20, height = 10)
 # interpretation
 # consensus: small disconnected clusters, all pro reduction agents influencing other pro-reductions
 ## no dominant broadcasters, agents only influence their local circle (debate centric)
@@ -661,7 +672,11 @@ lhs_outputs <- list(
     saturation_by_condition = function() plot_satur_by_condition(df_lhs_susceptibility),
     direction_by_position = function() plot_dir_by_pro(df_lhs_susceptibility),
     directional_accuracy = function() plot_directional_accuracy(df_lhs_directional),
-    delta_direction_sim_vs_empir = function() plot_delta_direction_scatter(df_lhs_directional_agents)
+    delta_direction_sim_vs_empir = function() plot_delta_direction_scatter(df_lhs_directional_agents),
+    
+    # network plots
+    homogeneous_network_plots = homogeneous_plots_combined,
+    heterogeneous_network_plots = heterogeneous_plots_combined
   )
 )
 

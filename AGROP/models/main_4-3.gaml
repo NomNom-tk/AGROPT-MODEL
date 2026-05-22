@@ -19,7 +19,7 @@ global {
 
         // debate selection call
         do build_debate_selection;
-        debate_coutner <- 0;
+        debate_counter <- 0;
         selected_debate_id <- m_debate_list[0];
         
         
@@ -36,7 +36,7 @@ global {
         	// debug check for index computation
         	do debug_init;
         	
-        	do debug_init_agents;	
+        	do debug_init_agents;
         }
         
         // CREATE NETWORK
@@ -96,10 +96,11 @@ action reset_debate_globals { // reset of globals for each debate 21/5/26
 
     // Opinion Stats
     opinion_variance <- 0.0;          // Variance of opinions
-    initial_variance;                 // variance of opin at init
+    initial_variance <- 0.0;                 // variance of opin at init
     num_clusters <- 0;                  // Number of opinion clusters
     polarization_index <- 0.0;        // Measure of opinion polarization
     initial_num_clusters <- 0;          // Opinion clusters at start
+    convergence_cycle <- -1;            // Cycle when convergence achieved
 
     // PRO/ANTI REDUCTION METRICS
     num_pro_agents <- 0;                // Count of pro-reduction agents
@@ -331,7 +332,7 @@ action create_network {
 }
 
 // REFLEX: COMPUTE PRO/ANTI STATS (every 10 cycles for heterogeneous)
-reflex compute_pro_anti_stats when: every(10#cycle) and current_condition = "heterogeneous" {
+reflex compute_pro_anti_stats when: ((cycle - debate_start_cycle) mod 10 = 0) and current_condition = "heterogeneous" {
     list<opinion_agent> pro_agents <- opinion_agents where (each.pro_reduction = 1);
     list<opinion_agent> anti_agents <- opinion_agents where (each.pro_reduction = 0);
     
@@ -347,7 +348,7 @@ reflex compute_pro_anti_stats when: every(10#cycle) and current_condition = "het
 }
 
 // REFLEX: COMPUTE STATISTICS (every 10 cycles)
-reflex compute_statistics when: every(10#cycle) {
+reflex compute_statistics when: ((cycle - debate_start_cycle) mod 10 = 0) { // 22/5/26 change to debate_start_cycle, mod -- cycle divisible by 10
     list<float> opinions <- opinion_agents collect each.opinion;
     if length(opinions) > 0 {
         float mean_opinion <- mean(opinions);
@@ -368,7 +369,7 @@ reflex compute_statistics when: every(10#cycle) {
 }
 
 // REFLEX: CHECK FOR CONVERGENCE (every 5 cycles after cycle 10)
-reflex check_convergence when: end_simulation_at_convergence and cycle > 10 and every(5#cycle) and !end_simulation {
+reflex check_convergence when: end_simulation_at_convergence and ((cycle - debate_start_cycle) > 10) and ((cycle - debate_start_cycle) mod 5 = 0) and !end_simulation { // 22/5/526 change to debate_start_cycle
     list<float> opinion_changes <- [];
     ask opinion_agents {
         opinion_changes << abs(opinion - previous_opinion);
@@ -395,7 +396,17 @@ reflex check_convergence when: end_simulation_at_convergence and cycle > 10 and 
             if mode_batch {
                 do save_batch_results;
             }
-        	
+            
+            // modif 21/5/26 implement sequential counter
+		    if debate_counter < length(m_debate_list) - 1 {
+		        debate_counter <- debate_counter + 1;
+		        selected_debate_id <- m_debate_list[debate_counter];
+                ask opinion_agents {do die;}
+                write "remaining after die: " + length(opinion_agents);
+		        do init_debate;
+		    } else {
+		        end_simulation <- true;
+		    }
     	}
 	}
 }
@@ -422,7 +433,7 @@ reflex update_prev_opinion {
 }*/
 
 // REFLEX: FALLBACK - STOP AT MAX_CYCLES
-reflex max_cycles_reached when: cycle >= max_cycles and !end_simulation {
+reflex max_cycles_reached when: (cycle - debate_start_cycle) >= max_cycles and !end_simulation {
     convergence_cycle <- cycle; // record actual convergence cycle regardless of termination 4/5/26
     write "Reached max_cycles without convergence";
     end_simulation <- true;
@@ -438,9 +449,11 @@ reflex max_cycles_reached when: cycle >= max_cycles and !end_simulation {
     if debate_counter < length(m_debate_list) - 1 {
         debate_counter <- debate_counter + 1;
         selected_debate_id <- m_debate_list[debate_counter];
+        ask opinion_agents {do die;}
+        write "remaining after die: " + length(opinion_agents);
         do init_debate;
     } else {
-        do end_simulation;
+        end_simulation <- true;
     }
 }
 
@@ -540,6 +553,7 @@ action compute_final_statistics {
 
 // resets the globals for each debate when cycling between debates 21/5/26
 action init_debate {
+    debate_start_cycle <- cycle; // 22/5/26 introduce local debate cycle count
     do reset_debate_globals;
     do initialize_agents_for_debate(selected_debate_id);
     do create_network;

@@ -10,9 +10,8 @@ import "../main_4-3.gaml" // relative path back to main
 // force dmax 44 cycles given 44 debates in training data
 
 // Consensus non-distinct
-experiment Bt_lhs_cons_ndist type: batch repeat: 5 keep_seed: true until: end_simulation {
+experiment Bt_lhs_cons_ndist type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
 
-    parameter "Selected debate id" var: selected_debate_id min: 1 max: 44 step: 1;
     parameter "Convergence Rate" var: convergence_rate among: [0.005, 0.01, 0.02, 0.05, 0.1];
 
     method exploration sample: 200 sampling: "latinhypercube";
@@ -28,6 +27,10 @@ experiment Bt_lhs_cons_ndist type: batch repeat: 5 keep_seed: true until: end_si
         confidence_threshold <- 0.0;
         repulsion_threshold <- 0.0;
         repulsion_strength <- 0.0;
+        
+        // experiment labels path declaration
+        explicit_debates_path <- ""; // empty path because not using specific debates
+        end_simulation_at_convergence <- true;
     }
 }
 

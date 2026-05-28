@@ -209,4 +209,30 @@ import "../Constants.gaml"
                 write "Total unique debates: " + length(unique_labels);
             }
         }
+        
+        // Debate map composition scope filter 21/5/26
+        action build_debate_selection {
+        	
+        	if selection_mode = "filter" {
+        		list<string> map_keys <- stable_group_map.keys;
+        		loop label over: map_keys {   			
+    			// guard to skip the all label and add all debates 22/5/26
+    			if composition_scope = "all" {
+    				m_debate_list << stable_group_map[label];
+    			} else {
+    				if first(label) = composition_scope {
+    				m_debate_list << stable_group_map[label];
+    					}
+    				}
+        		}
+        	} else if selection_mode = "explicit" {
+        		if explicit_debates_path != "" {
+	        		matrix external_label_matrix <- matrix(csv_file(explicit_debates_path, ",", string, false));
+	        		list<string> external_labels <- external_label_matrix column_at 0;
+	        		loop i from: 0 to: length(external_labels) - 1 {
+	        			m_debate_list << stable_group_map[external_labels[i]];
+	        		}
+        		}
+        	}
+        }
 	}

@@ -15,24 +15,26 @@ global {
     // =====
 
  	int max_cycles <- 100; // max cycles for convergence
-    bool end_simulation_at_convergence <- true;
+    int debate_start_cycle <- 0; // global to track debate-local cycle counter 22/5/26
+    bool end_simulation_at_convergence <- true; //22/5/26 SET in BATCH (true: dynamic convergence, false: run until max_cycles)
     // Convergence Constants
     float mae_convergence_threshold <- 0.01; // Convergence Checking re-modified 4/5/26
     // v1: mae_convergence_threshold = 0.001 (too tight, early stopping)
     // v2: mae_convergence_threshold = 0.01 (order of magnitude relaxing)
     // v3: fixed_cycles = N (no convergence check, fixed duration)
     
+    // =====
     // Environment
-
+	// =====
+    
     float world_size <- 100.0; // Spatial world size for visualization
-    
     int n_bins <- 50; // bins for gui viz and gif generaiton
-    
     int stats_bins <- 10; // bins for logical histogram calculation
     
     
     // Simulation Control
     int selected_debate_id <- 1;            // Which debate to simulate
+    list<int> m_debate_list <- []; // debate list populated based on composition_scope or selection_mode 21/5/26
     string model_type <- "consensus" among: ["consensus", "clustering", "bipolarization", 
     "argumentative", "no_change"];
     bool use_distinct_agents <- true; // default: heterogeneous
@@ -69,6 +71,10 @@ global {
     int convergence_cycle <- -1;            // Cycle when convergence achieved
     bool final_stats_computed <- false;     // Guard for final statistics
     string current_experiment_id <- "";		// type of experiment for each batch 
+    string selection_mode <- "filter" among: ["filter", "explicit"]; // run debates based on xml or composition_scope 21/5/26
+    string composition_scope <- "M" among: ["H", "M", "ALL"]; // filtering debate mapping, hetero, homo or all debates 21/5/26
+    string explicit_debates_path <- ""; // empty path to be populated in experiments for external debates list 21/5/26
+    int debate_counter <- 0; // incremental counter for debates and repeated init 22/5/26
 
     // =====
     // Raw Data Storage
@@ -94,7 +100,7 @@ global {
 
     // Opinion Stats
     float opinion_variance <- 0.0;          // Variance of opinions
-    float initial_variance;                 // variance of opin at init
+    float initial_variance <- 0.0;                 // variance of opin at init
     int num_clusters <- 0;                  // Number of opinion clusters
     float polarization_index <- 0.0;        // Measure of opinion polarization
     int initial_num_clusters <- 0;          // Opinion clusters at start

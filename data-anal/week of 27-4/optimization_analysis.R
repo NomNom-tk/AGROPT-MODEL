@@ -1,12 +1,21 @@
-#lhs analysis
-# depends on: functions.r and data_processing.r
+# optimization_analysis - used for GA and PSO param optimization
+# same structure as lhs_analysis1.r (stripped of sensitivity and adjusted param_region_extraction/gaml_bounds)
+# depends on functions, data_processing, plots
 
-source("./functions.R")
-source("./data_processing.R")
-source("./plots.R")
+## TODO Comment output contract from lhs
+## TODO change output contract name to generalized version
+## include run_type param to plots for labels and title generation
 
 stopifnot("debate_composition" %in% colnames(df_lhs))
 stopifnot(exists("lhs_versions"))
+
+# ─────────────────────────────────────────────
+# SAFE TYPE NORMALISATION (CRITICAL FIX #1)
+# ─────────────────────────────────────────────
+
+df_lhs$selected_debate_id <- as.character(df_lhs$selected_debate_id)
+df_lhs_v1$selected_debate_id <- as.character(df_lhs_v1$selected_debate_id)
+df_lhs_v2$selected_debate_id <- as.character(df_lhs_v2$selected_debate_id)
 
 # ─────────────────────────────────────────────
 # Empirical Comparisons
@@ -485,9 +494,9 @@ graphs_top_nodes <- map(network_outputs$graphs, filter_top_nodes, top_n = 10)
 # threshold on 75th percentile of the edge_weights considered, flexible to allow for graphical representation
 # hereafter designated as "adaptive threshold"
 graphs_edge_filter <- map(network_outputs$graphs, function(g) { 
-                          threshold <- quantile(E(g)$edge_weight, 0.75)
-                          filter_edges(g, threshold)
-                          })
+  threshold <- quantile(E(g)$edge_weight, 0.75)
+  filter_edges(g, threshold)
+})
 
 names(graphs_edge_filter)
 
@@ -497,7 +506,7 @@ vcount(graphs_edge_filter[[1]])
 
 # edge plot iteration over models and conditions
 edge_plots <- imap(graphs_edge_filter, function(g, name)
-                     build_network_graph(g) + labs(title = name))
+  build_network_graph(g) + labs(title = name))
 
 ## segmented to homogeneous plots for clarity 15/5/26
 homogeneous_plots <- imap(graphs_edge_filter[c("homogeneous_consensus",
@@ -654,7 +663,7 @@ lhs_outputs <- list(
     
     # convergence and speaking
     convergence_compar = function() plot_box_conv_compar_speak(df_conv_debate),
-      
+    
     convergence = function() plot_viol_conv_model_type(df_lhs),
     tradeoff_agg = function() plot_tradeoff_aggregated(df_conv_debate),
     tradeoff_raw = function() plot_tradeoff_raw(df_lhs),

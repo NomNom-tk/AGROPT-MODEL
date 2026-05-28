@@ -9,6 +9,26 @@ read_clean <- function(path) {
                                     na.omit(as.character(.))))), 
                   ~ as.numeric(gsub(",", ".", trimws(.)))))
 }
+# TODO and CHECK append_metadata 28/5/26 ----
+## purpose: provenance travels with dfs, provides objects to call in analysis files and in rmd
+append_metadata <- function(df, config, version = NA) {
+  df %>% 
+    mutate(
+      run_type = config$run_type,
+      composition_scope = config$composition_scope,
+      version = version
+    )
+}
+# TODO and CHECK composition_filter 27/5/26 ----
+## purpose: centralizes filtering logic, removes duplicate code
+apply_composition_filter <- function(df, config) {
+  if (config$composition_scope == "all") {
+    return(df)
+  }
+  
+  df %>%
+    filter(debate_composition == config$composition_scope)
+}
 # TODO empirical_prep ----
 empirical_prep <- function(path) {
   read_clean(path) %>%
@@ -18,6 +38,20 @@ empirical_prep <- function(path) {
           change_t1_t2 = (db_index_t2 - db_index_t1) / 6,
           change_t0_t2 = (db_index_t2 - db_index_t0) / 6,
           abs_change_t1_t2 = abs(change_t1_t2))
+}
+
+# load and prepare 27/5/26 ----/
+## prepare data handling using read_clean, batch mutations, bipol_contraints
+## append meta data attaches, run type, composition scope and verison columns
+## aply composition filter to M/H?all filter\
+# returns single clean df
+load_and_prepare <- function(path, config, version = NA) {
+  df <- path %>%
+    read_clean() %>%
+    apply_batch_mutationts() %>%
+    bipol_constraint_filter() %>%
+    append_metadata(config, version = version) %>%
+    apply_composition_filter(config)
 }
 
 # TODO empirical_stats ----
@@ -709,7 +743,7 @@ param_region_extraction <- function(df, percentile = 0.25,
   ))
   
 }
-# TODO build_analysis_outputs ----
+# NOTUSED TODO build_analysis_outputs ----
 ## 27/4/26: added source and df for interactions, change source to be generalizable
 ## also added interactions list
 build_analysis_outputs <- function(source, 

@@ -378,13 +378,13 @@ reflex check_convergence when: end_simulation_at_convergence and ((cycle - debat
     if length(opinion_changes) > 0 {
         float max_change <- max(opinion_changes);
         
-        //if mode_batch and debug_mode {
-        //    write "Cycle " + cycle + " | Max change: " + max_change;
-        //}
+        if mode_batch and debug_mode {
+            write "Cycle " + cycle + " | Max change: " + max_change;
+        }
         
         // Check if converged
         if max_change < mae_convergence_threshold {
-            convergence_cycle <- cycle;
+            convergence_cycle <- cycle - debate_start_cycle;
             if debug_mode = true {
                 write "Converged at cycle " + convergence_cycle;
             } 
@@ -434,7 +434,7 @@ reflex update_prev_opinion {
 
 // REFLEX: FALLBACK - STOP AT MAX_CYCLES
 reflex max_cycles_reached when: (cycle - debate_start_cycle) >= max_cycles and !end_simulation {
-    convergence_cycle <- cycle; // record actual convergence cycle regardless of termination 4/5/26
+    convergence_cycle <- cycle - deabte_start_cycle; // record actual convergence cycle regardless of termination 4/5/26
     write "Reached max_cycles without convergence";
     end_simulation <- true;
     
@@ -553,8 +553,8 @@ action compute_final_statistics {
 
 // resets the globals for each debate when cycling between debates 21/5/26
 action init_debate {
-    debate_start_cycle <- cycle; // 22/5/26 introduce local debate cycle count
     do reset_debate_globals;
+    debate_start_cycle <- cycle; // 22/5/26 introduce local debate cycle count
     do initialize_agents_for_debate(selected_debate_id);
     do create_network;
     do initial_diagnostics;

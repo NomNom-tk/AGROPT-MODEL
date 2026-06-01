@@ -46,9 +46,13 @@ empirical_prep <- function(path) {
 ## aply composition filter to M/H?all filter\
 # returns single clean df
 load_and_prepare <- function(path, config, version = NA) {
+  
+  # guard: return NULL if path is NULL or file does not exist
+  if (is.null(path) || file.exists(path)) return(NULL)
+  
   df <- path %>%
     read_clean() %>%
-    apply_batch_mutationts() %>%
+    apply_batch_mutations() %>%
     bipol_constraint_filter() %>%
     append_metadata(config, version = version) %>%
     apply_composition_filter(config)

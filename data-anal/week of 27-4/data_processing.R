@@ -18,6 +18,8 @@ library(tidygraph)
 library(patchwork)
 
 # run config declarations
+## TODO 1/6/26, consider refactoring to different layers, makes run_type agnostic of the rest
+## and allows for more variable inputs without breaking downstream analyses
 run_configs <- list(
   lhs_main = list(
     run_type = "LHS", # 28/5/26: "LHS", "GA", "PSO"
@@ -42,9 +44,9 @@ run_configs <- list(
     composition_scope = "M",
     version_scope = "both",
     paths = list(
-      batch_v1 = ,
+      batch_v1 = NULL,
       batch_v2 = NULL,
-      agent_v1 = ,
+      agent_v1 = NULL,
       agent_v2 = NULL,
       interaction_v1 = NULL,
       interaction_v2 = NULL
@@ -66,9 +68,53 @@ process_run <- function(config) {
   # if GA/PSO: load single file, no versions combination
   # canonical output: df_batch (and lhs_versions if LHS + both)
   
+  # modif 1/6/26
+  if (config$version_scope == "both" && !is.null(config$paths$batch_v2) && 
+      file.exists(config$paths$batch_v2)) {
+    df_batch_v1 <- load_and_prepare(
+      config$paths$batch_v1, 
+      config, 
+      version = config$versions$v1)
+    df_batch_v2 <- load_and_prepare(
+      config$paths$batch_v2, 
+      config, 
+      version = config$versions$v2)
+    
+    # canonical + auxiliary outputs
+    df_batch <- df_batch_v1
+    lhs_versions <- combine_df_versions(
+      list(df_batch_v1, df_batch_v2), 
+      c(config$versions$v1, config$versions$v2)
+    )
+    
+  } else if (config$version_scope == "v1") {
+    df_batch_v1 <- load_and_prepare(
+      config$paths$batch_v1, 
+      config, 
+      version = config$versions$v1)
+    df_batch <- df_batch_v1
+    lhs_versions <- NULL
+  } else if (config$version_scope == "v2") {
+    df_batch_v2 <- load_and_prepare(
+      config$paths$batch_v2, 
+      config, 
+      version = config$versions$v2)
+    df_batch <- df_batch_v2
+    lhs_versions <- NULL
+  }
+  
   # AGENT LEVEL
   # read_clean + apply_batch_mutations + logical coercions
   # canonical output: df_ag
+  if (config$version_scope == "v2" && !is.null(config$paths$agent_v2) &&
+      file.exists(config$paths$agent_v2)) {
+    ag_path <- config$paths$agent_v2
+  } else {
+    ag_path <- config$paths$agent_v1
+  }
+  
+  if (is.null(ag_path) or )
+  
   
   # INTERACTION LEVEL
   # prepare_interactions + left_join pro_reduction from df_ag

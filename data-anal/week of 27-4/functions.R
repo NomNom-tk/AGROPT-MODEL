@@ -21,13 +21,28 @@ append_metadata <- function(df, config, version = NA) {
 }
 # TODO and CHECK composition_filter 27/5/26 ----
 ## purpose: centralizes filtering logic, removes duplicate code
+## update 2/6/26, dynamic column detection and stop condition
 apply_composition_filter <- function(df, config) {
-  if (config$composition_scope == "all") {
+  if (is.null(config$composition_scope) || config$composition_scope == "all") {
     return(df)
   }
   
-  df %>%
-    filter(debate_composition == config$composition_scope)
+  # dynamic column detection strategy
+  target_col <- case_when(
+    "debate_composition" %in% colnames(df) ~ "debate_composition",
+    "selected_debate_id" %in% colnames(df) ~ "selected_debate_id",
+    "debate_label" %in% colnames(df) ~ "debate_label",
+    TRUE ~ NULL
+  )
+  
+  if (is.null(target_col)) {
+    stop("Composition filter failed: df contains no recognizable debate identifiers")
+  }
+  
+  df <- df %>%
+    filter(str_starts(.data[[target_col]], config$composition_scope))
+  
+  return(df)
 }
 # TODO empirical_prep ----
 empirical_prep <- function(path) {
@@ -48,7 +63,10 @@ empirical_prep <- function(path) {
 load_and_prepare <- function(path, config, version = NA) {
   
   # guard: return NULL if path is NULL or file does not exist
-  if (is.null(path) || file.exists(path)) return(NULL)
+  if (is.null(path) || !file.exists(path)) {
+    warning(paste("File read aborted: Path is NULL or doesnt exist at:", path))
+    return(NULL)
+  }
   
   df <- path %>%
     read_clean() %>%
@@ -56,6 +74,8 @@ load_and_prepare <- function(path, config, version = NA) {
     bipol_constraint_filter() %>%
     append_metadata(config, version = version) %>%
     apply_composition_filter(config)
+  
+  return(df)
 }
 
 # TODO empirical_stats ----
@@ -242,6 +262,9 @@ apply_batch_mutations <- function(df) {
   # guard for required columns
   required_cols <- c("speaking_mode", "use_distinct_agents", 
                      "debate_label", "convergence_cycle")
+  if ("debate_label" %in% colnames(df)) required_cols <- c(required_cols, "debate_label")
+  
+  # structural contract check 2/6/26
   missing <- setdiff(required_cols, colnames(df))
   if (length(missing) > 0) {
     stop(paste("apply_batch_mutations: missing required columns:", 
@@ -260,11 +283,19 @@ apply_batch_mutations <- function(df) {
       #                          speaking_mode == "false" ~ FALSE),
       #use_distinct_agents = case_when(use_distinct_agents == "true" ~ TRUE,
       #                                use_distinct_agents == "false" ~ FALSE),
-      debate_composition = substr(debate_label, 1, 1),
       normalised_convergence = convergence_cycle / 100, # divided by 100 to normalize, updated to 100 6/5/26
-    ) %>%
-    mutate(selected_debate_id = as.character(selected_debate_id),
-           seed = as.character(seed))
+    )
+  
+  # guards for string tags matching if columns exist 2/6/26
+  if ("debate_label" %in% colnames(df)) {
+    df <- df %>% mutate(debate_composition = substr(debate_label, 1, 1))
+  }
+  if ("selected_debate_id" %in% colnames(df)) {
+    df <- df %>% mutate(selected_debate_id = as.character(selected_debate_id))
+  }
+  if ("seed" %in% colnames(df)) {
+    df <- df %>% mutate(seed = as.character(seed))
+  }
   
   # count NAs // recheck logic
   na_check <- colSums(is.na(df))

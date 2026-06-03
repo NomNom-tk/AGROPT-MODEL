@@ -58,11 +58,19 @@ source("./functions.R")
 source("./data_processing.R")
 source("./plots.R")
 
-source("./lhs_analysis_1.R")
+source("framework_analysis.R")
 #ga_outputs <- source("./ga_analysis.R")$value
 #ga_outputs <- source("./ga_analysis.R")$value
 # sensitivity, ga, annealing, plots
 ```
+
+```{r, analysis-calls, include = FALSE, echo = FALSE, cache = FALSE}
+# Run latin hypercube sampling
+processed_lhs <- process_run(run_configs$lhs_main)
+lhs_outputs <- analyze_processed_run(processed_lhs)
+
+```
+
 # Preface
 - this document considers two different versions of lhs data 
 -- one with 100 fixed cycles (designated as **v1**)
@@ -341,7 +349,7 @@ lhs_outputs$inputs$influence %>%
   autofit()
 
 # anti-agent cross position table (new, answers the question)
-df_lhs_interactions %>%
+lhs_outputs$inputs$raw_interactions %>%
   filter(pro_reduction == 0) %>%
   mutate(sender_is_pro = sender_opinion > 0.5) %>%
   group_by(model_type, sender_is_pro) %>%

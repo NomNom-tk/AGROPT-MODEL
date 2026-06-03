@@ -1,5 +1,5 @@
-#lhs analysis
-# depends on: functions.r and data_processing.r
+#framework analysis
+# depends on: functions.r and data_processing.r and plots.r
 
 source("./functions.R")
 source("./data_processing.R")

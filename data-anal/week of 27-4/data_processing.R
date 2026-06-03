@@ -20,48 +20,106 @@ library(patchwork)
 # run config declarations
 ## TODO 1/6/26, consider refactoring to different layers, makes run_type agnostic of the rest
 ## and allows for more variable inputs without breaking downstream analyses
-run_configs <- list(
-  lhs_main = list(
-    run_type = "LHS", # 28/5/26: "LHS", "GA", "PSO"
-    composition_scope = "M", # 18/5/26: "all", "H", "M"
-    version_scope = "both", # 28/5/26: "both", "v1", "v2" (LHS only)
-    
-    batch = list(
-      v1 = list(
-        path = "./data/lhs_batch_summary.csv",
-        version = "v1_7_5_100c"
-      ),
-      v2 = list (
-        path = NULL,
-        version = "v2_30-4_dyn"
-      ),
-    
-    agent = list (
-      v1 = list(
-        path = "./data/lhs_agent_level_results.csv"
-      ),
-      v2 = NULL
-    ),
-    
-    interaction = list(
-      v1 = list(
-        path = "./data/lhs_interaction_log.csv"
-      ),
-      v2 = NULL
-    )
-  ),
-  
-  ga_main = list(
-    run_type = "GA",
-    composition_scope = "M",
-    version_scope = "both",
-    
-    batch = NULL,
-    agent = NULL,
-    interaction = NULL
-  )
-)
-)
+run_configs <- list()
+lhs <- list()
+ga <- list()
+
+# ==========================================
+# 2. BUILD THE LHS CONFIGURATION
+# ==========================================
+lhs$run_type          <- "LHS"
+lhs$composition_scope <- "M"
+lhs$version_scope     <- "both"
+
+lhs$batch$v1$path     <- "./data/lhs_batch_summary.csv"
+lhs$batch$v1$version  <- "v1_7_5_100c"
+
+lhs$batch$v2$path     <- NULL
+lhs$batch$v2$version  <- "v2_30-4_dyn"
+
+lhs$agent$v1$path     <- "./data/lhs_agent_level_results.csv"
+lhs$agent$v2          <- NULL
+
+lhs$interaction$v1$path <- "./data/lhs_interaction_log.csv"
+lhs$interaction$v2      <- NULL
+
+# ==========================================
+# 3. BUILD THE GA CONFIGURATION
+# ==========================================
+ga$run_type          <- "GA"
+ga$composition_scope <- "M"
+ga$version_scope     <- "v1"
+
+ga$batch$v1$path     <- "./data/ga_batch_summary.csv"
+ga$batch$v1$version  <- "ga_v1"
+
+ga$agent$v1$path     <- "./data/ga_agent_level_results.csv"
+ga$interaction$v1$path <- "./data/ga_interaction_log.csv"
+
+# ==========================================
+# 4. ASSIGN TO MASTER CONTAINER
+# ==========================================
+run_configs$lhs_main <- lhs
+run_configs$ga_main  <- ga
+
+
+# run_configs <- list(
+#   lhs_main = list(
+#     run_type = "LHS", # 28/5/26: "LHS", "GA", "PSO"
+#     composition_scope = "M", # 18/5/26: "all", "H", "M"
+#     version_scope = "both", # 28/5/26: "both", "v1", "v2" (LHS only)
+#     
+#     batch = list(
+#       v1 = list(
+#         path = "./data/lhs_batch_summary.csv",
+#         version = "v1_7_5_100c"
+#       ),
+#       v2 = list (
+#         path = NULL,
+#         version = "v2_30-4_dyn"
+#       ),
+#     
+#     agent = list (
+#       v1 = list(
+#         path = "./data/lhs_agent_level_results.csv"
+#       ),
+#       v2 = NULL
+#     ),
+#     
+#     interaction = list(
+#       v1 = list(
+#         path = "./data/lhs_interaction_log.csv"
+#       ),
+#       v2 = NULL
+#     )
+#   ),
+#   
+#   ga_main = list(
+#     run_type = "GA",
+#     composition_scope = "M",
+#     version_scope = "v1",
+#     
+#     batch = list(
+#       v1 = list(
+#         path = "./data/ga_batch_summary.csv",
+#         version = "ga_v1"
+#       )
+#     ),
+#     agent = list(
+#       v1 = list(
+#         path = "./data/ga_agent_level_results.csv",
+#         version = "ga_v1"
+#       )
+#     ),
+#     interaction = list(
+#       v1 = list(
+#         path = "./data/ga_interaction_log.csv",
+#         version = "ga_v1"
+#       )
+#     )
+#   )
+# )
+# )
 
 # Instantiate processing 28/5/26
 ## update 2/6/26, easier loading based on config update

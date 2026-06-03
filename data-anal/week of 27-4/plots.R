@@ -295,3 +295,18 @@ plot_dir_by_pro <- function(df) { # use with df_lhs_susceptibility
       theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
       labs(x = "Model Type", y = "% Wrong Direction", fill = "Position")
 }
+
+# Beta distribution comparison
+plot_beta_distance <- function(df_raw, empirical_beta) {
+    ggplot(df_raw, aes(x = estimate, fill = model_type)) +
+    geom_density(alpha = 0.4) +
+    geom_vline(xintercept = empirical_beta,
+               linetype = "dashed", color = "red", linewidth = 0.8) +
+    facet_wrap(~ model_type) +
+    labs(x = "Simulated Beta",
+         y = "Density",
+         title = "Simulated beta distribution vs empirical beta",
+         subtitle = paste("Empirical beta =", round(empirical_beta, 3))) +
+    theme_minimal() +
+    theme(legend.position = "none")
+}

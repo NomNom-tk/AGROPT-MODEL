@@ -69,6 +69,10 @@ source("framework_analysis.R")
 processed_lhs <- process_run(run_configs$lhs_main)
 lhs_outputs <- analyze_processed_run(processed_lhs)
 
+# run GA process code
+processed_ga <- process_run(run_configs$ga_main)
+ga_outputs <- analyze_processed_run(processed_ga)
+
 ```
 
 # Preface
@@ -83,6 +87,12 @@ lhs_outputs <- analyze_processed_run(processed_lhs)
 ```{r, empirical_comparison, cache = FALSE}
 # df comparison test
 lhs_outputs$results$comparisons$empirical
+
+# beta_plot and table calls to check wehther data is reasonable
+lhs_outputs$plots$beta_distance_vs_empir()
+
+# beta table
+lhs_outputs$results$comparisons$beta_distance
 
 # cohens d check
 lhs_outputs$results$comparisons$empirical_cohen

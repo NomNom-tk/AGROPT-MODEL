@@ -32,7 +32,7 @@ apply_composition_filter <- function(df, config) {
     "debate_composition" %in% colnames(df) ~ "debate_composition",
     "selected_debate_id" %in% colnames(df) ~ "selected_debate_id",
     "debate_label" %in% colnames(df) ~ "debate_label",
-    TRUE ~ NULL
+    TRUE ~ NA_character_ # 2/6/26 updated guard to NA_char (case_when will populate NA character as other columsn to check are chars)
   )
   
   if (is.null(target_col)) {
@@ -262,7 +262,8 @@ apply_batch_mutations <- function(df) {
   # guard for required columns
   required_cols <- c("speaking_mode", "use_distinct_agents", 
                      "debate_label", "convergence_cycle")
-  if ("debate_label" %in% colnames(df)) required_cols <- c(required_cols, "debate_label")
+  # removed 3/2/26 duplicate conditional addition
+  #if ("debate_label" %in% colnames(df)) required_cols <- c(required_cols, "debate_label")
   
   # structural contract check 2/6/26
   missing <- setdiff(required_cols, colnames(df))
@@ -295,6 +296,13 @@ apply_batch_mutations <- function(df) {
   }
   if ("seed" %in% colnames(df)) {
     df <- df %>% mutate(seed = as.character(seed))
+  }
+  if ("agent_wrong_direction" %in% colnames(df)) {
+    df <- df %>%
+      mutate(
+        agent_wrong_direction = as.logical(agent_wrong_direction),
+        agent_is_saturated = as.logical(agent_is_saturated)
+      )
   }
   
   # count NAs // recheck logic

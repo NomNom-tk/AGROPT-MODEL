@@ -5,21 +5,21 @@ source("./functions.R")
 source("./data_processing.R")
 source("./plots.R")
 
-analyze_processed_run <- function(pipeline_data) {
+analyze_processed_run <- function(df) {
   
   # ────────────────────────────────────────────────────────────────────────────
   # 0. CONFIG & DATA EXTRACTION FROM UNIFIED LIST KEYS
   # ────────────────────────────────────────────────────────────────────────────
-  config                <- pipeline_data$config
-  df_batch              <- pipeline_data$df_batch
-  lhs_versions          <- pipeline_data$lhs_versions
-  df_ag                 <- pipeline_data$df_ag
-  df_interactions       <- pipeline_data$df_interactions
-  df_influence          <- pipeline_data$df_influence
-  df_susceptibility     <- pipeline_data$df_susceptibility
-  df_empirical          <- pipeline_data$df_empirical
-  df_directional        <- pipeline_data$df_directional
-  df_directional_agents <- pipeline_data$df_directional_agents
+  config                <- df$sim_inputs$config
+  df_batch              <- df$sim_inputs$df_batch
+  lhs_versions          <- df$sim_inputs$lhs_versions
+  df_ag                 <- df$sim_inputs$df_ag
+  df_interactions       <- df$sim_inputs$df_interactions
+  df_influence          <- df$sim_inputs$df_influence
+  df_susceptibility     <- df$sim_inputs$df_susceptibility
+  df_empirical          <- df$df_empirical
+  df_directional        <- df$sim_inputs$df_directional
+  df_directional_agents <- df$sim_inputs$df_directional_agents
   
   # Master Guard: Check that core batch data was loaded successfully
   if (is.null(df_batch)) {
@@ -120,7 +120,7 @@ analyze_processed_run <- function(pipeline_data) {
   ols_global_mae     <- NULL
   ols_model          <- NULL
   abm_mae_debate     <- NULL
-  empirical_beta <- NULL
+  empirical_beta_val <- NULL
   beta_distance <- NULL
   simulated_betas_raw <- NULL 
   
@@ -175,25 +175,41 @@ analyze_processed_run <- function(pipeline_data) {
     # beta distance check 3/6/26 check distribution of empirical beta compared with simulations
     if (!is.null(empir_cohen)) {
       # extract empirical beta
-      empirical_beta <- empir_cohen %>%
-        filter(term == "pro_reduction") %>%
-        pull(std.estimate)
+      empirical_beta_val <- empir_cohen %>%
+        filter(term == "pro_reduction")
+      
+      # investigate which columns exist in empir_cohen 4/6/26 extra guard
+      if ("std_estimate" %in% colnames(empirical_beta_val)) {
+        empirical_beta_val <- empirical_beta_val %>% pull(std_estimate) 
+      } else if ("std.estimate" %in% colnames(empirical_beta_val)) {
+        empirical_beta_val <- empirical_beta_val %>% pull(std.estimate)
+      } else {
+        empirical_beta_val <- empirical_beta_val %>% pull(estimate) # fallback to understandardized
+      }
+      
+      # ensure empir is treated as a single numeric value
+      empirical_beta_scalar <- if(length(empirical_beta_val) > 0) as.numeric(empirical_beta_val[1]) else NA_real_
+      
       # compute simualted beta distribution per model type and seed
       simulated_betas_raw <- df_ag %>%
         group_by(model_type, selected_debate_id, seed) %>%
         do(tidy(lm(opinion_change ~ pro_reduction, data = .))) %>%
         filter(term == "pro_reduction")
       
+      # safe distance calculation (type-matching ensured)
       beta_distance <- simulated_betas_raw %>%
         group_by(model_type) %>%
         summarize(
           mean_simulated_beta = mean(estimate, na.rm = TRUE),
           sd_simulated_beta = sd(estimate, na.rm = TRUE),
           n = n(),
-          empirical_beta = empirical_beta,
+          empirical_beta = empirical_beta_scalar,
           # z score: where does empirical beta sit in simulated distribution
-          z_score = (empirical_beta - mean_simulated_beta) / sd_simulated_beta,
-          # pct of simulated betas more extreme than empirical
+          z_score = if_else(
+            !is.na(sd_simulated_beta) & sd_simulated_beta > 0,
+            (empirical_beta_scalar - mean_simulated_beta) / sd_simulated_beta,
+            NA_real_
+          ),
           .groups = "drop"
         )
     }
@@ -327,7 +343,7 @@ analyze_processed_run <- function(pipeline_data) {
     graphs_top_nodes <- map(network_outputs$graphs, filter_top_nodes, top_n = 10)
     
     graphs_edge_filter <- map(network_outputs$graphs, function(g) { 
-      threshold := quantile(E(g)$edge_weight, 0.75, na.rm = TRUE)
+      threshold <- quantile(E(g)$edge_weight, 0.75, na.rm = TRUE)
       filter_edges(g, threshold)
     })
     
@@ -436,7 +452,7 @@ analyze_processed_run <- function(pipeline_data) {
       directional_accuracy         = function() plot_directional_accuracy(df_directional),
       delta_direction_sim_vs_empir = function() plot_delta_direction_scatter(df_directional_agents),
       
-      beta_distance_vs_empir = function() plot_beta_distance(simulated_betas_raw, empirical_beta),
+      beta_distance_vs_empir = function() plot_beta_distance(simulated_betas_raw, empirical_beta_val),
       
       homogeneous_network_plots   = homogeneous_plots_combined,
       heterogeneous_network_plots = heterogeneous_plots_combined

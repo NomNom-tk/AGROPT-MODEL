@@ -62,65 +62,6 @@ ga$interaction$v1$path <- "./data/ga_interaction_log.csv"
 run_configs$lhs_main <- lhs
 run_configs$ga_main  <- ga
 
-
-# run_configs <- list(
-#   lhs_main = list(
-#     run_type = "LHS", # 28/5/26: "LHS", "GA", "PSO"
-#     composition_scope = "M", # 18/5/26: "all", "H", "M"
-#     version_scope = "both", # 28/5/26: "both", "v1", "v2" (LHS only)
-#     
-#     batch = list(
-#       v1 = list(
-#         path = "./data/lhs_batch_summary.csv",
-#         version = "v1_7_5_100c"
-#       ),
-#       v2 = list (
-#         path = NULL,
-#         version = "v2_30-4_dyn"
-#       ),
-#     
-#     agent = list (
-#       v1 = list(
-#         path = "./data/lhs_agent_level_results.csv"
-#       ),
-#       v2 = NULL
-#     ),
-#     
-#     interaction = list(
-#       v1 = list(
-#         path = "./data/lhs_interaction_log.csv"
-#       ),
-#       v2 = NULL
-#     )
-#   ),
-#   
-#   ga_main = list(
-#     run_type = "GA",
-#     composition_scope = "M",
-#     version_scope = "v1",
-#     
-#     batch = list(
-#       v1 = list(
-#         path = "./data/ga_batch_summary.csv",
-#         version = "ga_v1"
-#       )
-#     ),
-#     agent = list(
-#       v1 = list(
-#         path = "./data/ga_agent_level_results.csv",
-#         version = "ga_v1"
-#       )
-#     ),
-#     interaction = list(
-#       v1 = list(
-#         path = "./data/ga_interaction_log.csv",
-#         version = "ga_v1"
-#       )
-#     )
-#   )
-# )
-# )
-
 # Instantiate processing 28/5/26
 ## update 2/6/26, easier loading based on config update
 process_run <- function(config) {
@@ -194,14 +135,14 @@ process_run <- function(config) {
     df_influence = compute_influence_scores(df_interactions)
   }
 
-  # EMPIRICAL
-  # empirical_prep — same path regardless of run_type
-  # canonical output: df_empirical
-  df_empirical <- NULL
-  empirical_path <- "./data/data_complete_anonymised.csv"
-  if (file.exists(empirical_path)) {
-    df_empirical <- empirical_prep(empirical_path)
-  }
+  # # EMPIRICAL
+  # # empirical_prep — same path regardless of run_type
+  # # canonical output: df_empirical
+  # df_empirical <- NULL
+  # empirical_path <- "./data/data_complete_anonymised.csv"
+  # if (file.exists(empirical_path)) {
+  #   df_empirical <- empirical_prep(empirical_path)
+  # }
   
   # DERIVED (first written 29/4/26)
   # prepare_directional + summarize_directional from df_ag
@@ -210,8 +151,8 @@ process_run <- function(config) {
   df_directional <- NULL
   
   if (!is.null(df_ag)) {
-    df_lhs_directional_agents <- prepare_directional(df_ag) # unsummarized directional
-    df_lhs_directional <- summarize_directional(df_lhs_directional_agents) # summarized version
+    df_directional_agents <- prepare_directional(df_ag) # unsummarized directional
+    df_directional <- summarize_directional(df_directional_agents) # summarized version
   }
 
   # RETURN LIST with consistent slot names regardless of run_type
@@ -228,64 +169,6 @@ process_run <- function(config) {
     df_directional_agents = df_directional_agents
   ) 
 }
-
-
-
-# data_loading
-## LHS
-## temp trials for different lhs versions (to compare with baseline 28/4/26)
-## modif 5-4-26 --> thr_0.01 (correct cap), thr_0.001 (30-4-26 mistake with cap)
-df_lhs_v1 <- prepare_data("./data/lhs_batch_summary.csv", version = "v1_7-5_100c")
-df_lhs_v2 <- prepare_data("./data/lhs_batch_summary_v2.csv", version = "v2_4-5_dyn")
-df_lhs <- df_lhs_v1
-
-
-# empirical prep call
-df_empirical_check <- empirical_prep("./data/data_complete_anonymised.csv")
-
-## TODO lhs agent level --> fix no neutral zone width and prepare_data function 
-#df_lhs_ag <- apply_batch_mutations("./data/lhs_agent_level_results.csv")
-
-# temp fix for lhs agent level
-df_ag <- read_clean("./data/lhs_agent_level_results.csv") %>%
-  apply_batch_mutations() %>%
-  mutate(agent_wrong_direction = as.logical(agent_wrong_direction),
-        agent_is_saturated = as.logical(agent_is_saturated))
-
-df_ag %>% filter(speaking_mode == TRUE) %>%
-  count(current_condition, agent_is_saturated)
-
-
-## comparison for lhs, called form functions combined dfs
-lhs_versions <- combine_df_versions(
-  list(df_lhs_v1, df_lhs_v2),
-  c("v1_7-5_100c", "v2_30-4_dyn")
-)
-
-## LHS interactions prep 27/4/26
-# left join with df_ag to pull pro_reduciton before computing susceptibility
-df_lhs_interactions <- prepare_interactions("./data/lhs_interaction_log.csv") %>%
-  left_join(df_ag %>% select(agent_id, pro_reduction) %>% distinct(),
-            by = c("receiver_id" = "agent_id"))
-
-# Influence and susceptibility score calculations
-df_lhs_influence <- compute_influence_scores(df_lhs_interactions)
-df_lhs_susceptibility <- compute_susceptibility_scores(df_lhs_interactions)
-
-## LHS interactions directional 29/4/26
-df_lhs_directional_agents <- prepare_directional(df_ag) # unsummarized directional
-df_lhs_directional <- summarize_directional(df_lhs_directional_agents) # summarized version
-
-## GA
-# GA equivalents 27/4/26 /// rename files for GA before analysis
-#df_ga_interactions <- prepare_interactions("./data/ga_interaction_log.csv")
-#df_ga_influence <- compute_influence_scores(df_ga_interactions)
-#df_ga_susceptibility <- compute_susceptibility_scores(df_ga_interactions)
-
-#df_ga <- prepare_data("./data/ga_batch_summary.csv", version = "v1")
-
-## ANNEALING
-# df_anneal < -prepare_data("./data/anneal_batch_summary.csv", version = "v1")
 
 # lists declaration for lm and sensitivity analyses
 ## define input columns

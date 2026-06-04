@@ -611,6 +611,14 @@ bipol_constraint_filter <- function(df, verbose = TRUE) {
     df <- df %>% rename(selected_debate_id = debate)
   }
   
+  # guard rail for df_ag - neutral_zone_width
+  if (!"model_type" %in% colnames(df) || !"neutral_zone_width" %in% colnames(df)) {
+    if (verbose) {
+      message("Skipping neutral zone validation: columns not in dataset")
+    }
+    return(df)
+  }
+  
   violations <- df %>%
     filter(model_type == "bipolarization",
            neutral_zone_width < 0)
@@ -621,7 +629,7 @@ bipol_constraint_filter <- function(df, verbose = TRUE) {
   if (verbose && n_violations > 0) {
     message(paste(n_violations,
                   "Removed bipolarization rows where there are neutral zone violations", unique(n_violations)))
-  } else {
+  } else if (verbose) {
     message(paste("No violations found, good on ya ;-+"))
   }
   
@@ -633,8 +641,10 @@ bipol_constraint_filter <- function(df, verbose = TRUE) {
     )
   
   # return filtered df
-  df %>%
+  df <- df %>%
     filter(!(model_type == "bipolarization" & neutral_zone_width < 0))
+  
+  return(df)
 }
 
 # CLEAR param_region_extraction ####

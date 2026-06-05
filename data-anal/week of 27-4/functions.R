@@ -990,25 +990,39 @@ build_influence_network <- function(df, df_attributes) { # use with lhs_interact
   }) %>%
     bind_rows()
   
+  # agent_static_attributes, filter raw attributes / one row per agent, per debate
+  ## 5/6/26
+  agent_static_attributes <- df_attributes %>%
+    select(agent_id, selected_debate_id, current_condition, pro_reduction, agent_is_saturated) %>%
+    group_by(agent_id, selected_debate_id) %>%
+    summarize(
+      current_condition = first(current_condition),
+      pro_reduction = first(pro_reduction),
+      agent_is_saturated = first(agent_is_saturated),
+      .groups = "drop"
+    )
+
   # join with df_ag on agent_id
   combined <- left_join(node_metrics %>% mutate(agent_id = as.numeric(agent_id)), 
-                        df_attributes %>% select(-model_type), # disambiguate model type before joining (node metrics already has it)
-                        by = c("agent_id", "selected_debate_id"),
-                        relationship = "many-to-many")
+                        agent_static_attributes %>%
+                        by = c("agent_id", "selected_debate_id"))
   print(colnames(combined))
   print(nrow(combined))
   
   # table summary per debate
   per_debate_summary <- combined %>%
-    group_by(agent_id, selected_debate_id, model_type, pro_reduction) %>%
+    select(agent_id, selected_debate_id, model_type, pro_reduction,
+           in_strength, out_strength, betweenness, graph_density, isolated_nodes) %>%
     summarize(
-      in_strength = mean(in_strength),
-      out_strength = mean(out_strength),
-      betweenness = mean(betweenness),
-      graph_density = first(graph_density),
-      isolated_nodes = first(isolated_nodes),
+      in_strength = in_strength,
+      out_strength = out_strength,
+      betweenness = betweenness,
+      graph_density = graph_density,
+      isolated_nodes = isolated_nodes,
       .groups = "drop"
     )
+  
+  # macro attributes form shielded agent_static_attributes
   
   # table summary for aggregate by condition
   per_condition_summary <- aggregate_metrics %>%

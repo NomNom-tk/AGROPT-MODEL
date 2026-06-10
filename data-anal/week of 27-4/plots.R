@@ -83,26 +83,36 @@ plot_ols_abm_comp <- function(df) { # use with comparison_clean
 
 ## Model performance as a rank
 plot_model_performance_rank_main <- function(df) { # use with model_compar_main
-  ggplot(df, aes(x= reorder(model_type, mae_mean), y=mae_mean)) +
+  # base plot with columns that ALWAYS exist
+  p <- ggplot(df, aes(x= reorder(model_type, mae_mean), y=mae_mean)) +
     geom_col(fill= "blue") +
     coord_flip() +
-    facet_grid(version ~ speaking_mode) +
     theme_bw() +
-    labs(Title = "Model Performance by Version",
+    labs(title = "Model Performance by Version",
          x = "Model Type",
          y = "Mean MAE")
+  
+  # dynamic with versions 9/6/26
+  if ("version" %in% colnames(df)) {
+    # if version exists facet by version AND speaking_mode
+    p <- p + facet_grid(version ~ speaking_mode)
+  } else {
+    # version missing collapse to 1D with speaking_mode ONLY
+    p <- p + facet_wrap(~ speaking_mode)
+  }
+  return(p)
 }
 
 ## Model performance with distinct agents
+# fix version aware and defensive wrap
 plot_model_comparison_uncertainty <- function(df) { # use detailed version
-  ggplot(df, aes(x = reorder(model_type, mae_mean), y = mae_mean)) +
+  p <- ggplot(df, aes(x = reorder(model_type, mae_mean), y = mae_mean)) +
     geom_point(size = 2.5, color = "blue") +
     geom_errorbar(aes(
       ymin = mae_mean - mae_sd,
       ymax = mae_mean + mae_sd
     ), width = 0.2) +
     coord_flip() +
-    facet_grid(version ~ speaking_mode + use_distinct_agents) +
     theme_minimal() +
     labs(
       title = "Model Performance with Distinct Agents",
@@ -110,31 +120,60 @@ plot_model_comparison_uncertainty <- function(df) { # use detailed version
       x = "Model Type",
       y = "Mean MAE"
     )
+  
+  if ("version" %in% colnames(df)) {
+    p <- p + facet_grid(version ~ speaking_mode + use_distinct_agents)
+  } else {
+    p <- p + facet_wrap(~ speaking_mode + use_distinct_agents)
+  }
+  return(p)
 }
 
 ## how far is the performance gap compared to the best model
 plot_model_performance_rank_gap <- function(df) { # use with model_relative
-  ggplot(df, aes(x= reorder(model_type, delta_mae), y=delta_mae)) +
+  # standard version with columns that ALWAYS exist
+  p <- ggplot(df, aes(x= reorder(model_type, delta_mae), y = delta_mae)) +
     geom_col(fill = "darkred") +
     coord_flip() +
-    facet_wrap(version ~ speaking_mode) +
     theme_bw() +
-    labs(Title = "Performance Gap to Best Model",
+    labs(title = "Performance Gap to Best Model",
          subtitle = "0 = best model in each panel",
          x = "Model Type",
-         y = "Delta MAE",)
+         y = "Delta MAE")
+  
+  # dynamic with version AND speaking_mode 9/6/26
+  if ("version" %in% colnames(df)) {
+    # if version exists facet by BOTH
+    p <- p + facet_grid(version ~ speaking_mode)
+  } else {
+    # if no version exists, 1D collapse to speaking_mode
+    p <- p + facet_wrap(~ speaking_mode)
+  }
+  return(p)
 }
 
 ## Version aware rank comparison
-plot_model_rank_versions <- function(df) { # use with main
-  ggplot(df, aes(x = model_type, y = mae_mean, color = version)) +
+# TODO modify with version abstraction
+# needs to be injected only if declared as non NULL, convert string (var) to variable symbol
+# inject with !! into aes mapping
+# else use static color if no column is present and write a message 
+plot_model_rank_versions <- function(df, color_col = NULL) { # use with main
+  
+  # define grouping var for color = version
+  if (!is.null(color_col) && color_col %in% colnames(df)) {
+    group_var <- bquote(interaction(model_type, .(sym(color_col))))
+  } else {
+    # single version
+    group_var <- sym("model_type")
+  }
+  
+  p <- ggplot(df, aes(x = model_type, y = mae_mean)) +
     geom_point(position = position_dodge(width = 0.5), size = 3) +
     geom_errorbar(aes(
       ymin = mae_mean - mae_sd,
-      ymax = mae_mean + mae_sd,
-      color = version
-    ), width = 0.2) +
-    geom_line(aes(group = model_type), alpha = 0.4) +
+      ymax = mae_mean + mae_sd
+    ), width = 0.2, position = position_dodge(width = 0.5)) +
+    geom_line(aes(group = !!group_var), alpha = 0.4) +
     coord_flip() +
     facet_wrap(~ speaking_mode) +
     theme_minimal() +
@@ -144,6 +183,22 @@ plot_model_rank_versions <- function(df) { # use with main
       y = "Mean MAE",
       color = "version"
     )
+  
+  # inject color ONLY if column is provided and exists
+  if (!is.null(color_col) && color_col %in% colnames(df)) {
+    # conv string to variable symbol
+    color_sym <- sym(color_col)
+    p <- p + aes(color = !!color_sym) +
+      labs(color = color_col)
+  } else {
+    #fallback to default
+    p <- p + geom_point(color = "darkblue", position = position_dodge(width = 0.5), size = 3) +
+      geom_errorbar(aes(ymin = mae_mean - mae_sd, ymax = mae_mean + mae_sd),
+                    color = "darkblue", width = 0.2)
+    
+    message("No variable color (version) column found. Default to darkblue")
+  }
+  return(p)
 }
 
 # Debate Composition
@@ -189,14 +244,22 @@ plot_box_conv_compar_speak <- function(df) {
 }
 
 ## Convergence outcome analysis
+### 10/6/26 version guard
 plot_opin_var_versions <- function(df) { # use with df_versions
-  ggplot(df, aes(x = model_type, y = opinion_variance, fill = version)) +
-    geom_boxplot(position = position_dodge(0.75), width = 0.6) +
-    facet_wrap(~ version) +
+  p <- ggplot(df, aes(x = model_type, y = opinion_variance)) +
     theme_minimal() +
     theme(axis.text.x = element_text(angle = 45, hjust = 1),
           strip.text = element_text(face = "bold")) +
     labs(title = "Opinion Variance by model type", y = "Opinion Variance")
+  
+  # version guard
+  if ("version" %in% colnames(df)) {
+    p <- p + geom_boxplot(aes(fill = version), position = position_dodge(0.75), width = 0.6) +
+      facet_wrap(~ version)
+  } else {
+    p <- p + geom_boxplot(fill = "darkblue", width = 0.6)
+  }
+  return(p)
 }
 
 ## Trade-offs

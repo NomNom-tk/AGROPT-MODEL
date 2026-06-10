@@ -1,5 +1,5 @@
 # Functions
-# TO INCLUDE: prepare_sensitivity_data / generate_gaml_bounds / add_to_ppt / pivot_params
+# TO INCLUDE: prepare_sensitivity_data / add_to_ppt / pivot_params
 
 
 # CLEAR read_clean to clean colnames before all else 7/5/26 ----
@@ -942,7 +942,7 @@ build_influence_network <- function(df, df_attributes) { # use with lhs_interact
   
   # aggregate networks per condition
   debate_edges <- df %>%
-    group_by(sender_id, receiver_id, current_condition, model_type) %>%
+    group_by(sender_id, receiver_id, current_condition, model_type, selected_debate_id) %>%
     summarize(
       edge_weight = mean(abs(delta)),
       n_interactions = n(),
@@ -1004,7 +1004,7 @@ build_influence_network <- function(df, df_attributes) { # use with lhs_interact
 
   # join with df_ag on agent_id
   combined <- left_join(node_metrics %>% mutate(agent_id = as.numeric(agent_id)), 
-                        agent_static_attributes %>%
+                        agent_static_attributes,
                         by = c("agent_id", "selected_debate_id"))
   print(colnames(combined))
   print(nrow(combined))
@@ -1012,31 +1012,25 @@ build_influence_network <- function(df, df_attributes) { # use with lhs_interact
   # table summary per debate
   per_debate_summary <- combined %>%
     select(agent_id, selected_debate_id, model_type, pro_reduction,
-           in_strength, out_strength, betweenness, graph_density, isolated_nodes) %>%
+           in_strength, out_strength, betweenness, graph_density, isolated_nodes)
+  
+  # macro attributes form shielded agent_static_attributes
+  macro_attributes <- agent_static_attributes %>%
+    select(agent_id, current_condition, pro_reduction, agent_is_saturated) %>%
+    distinct(agent_id, current_condition, .keep_all = TRUE)
+  
+  # table summary for aggregate by condition
+  per_condition_summary <- aggregate_metrics %>%
+    mutate(agent_id = as.numeric(agent_id)) %>%
+    left_join(macro_attributes, by = c("agent_id", "current_condition")) %>%
+    group_by(agent_id, current_condition, model_type, pro_reduction) %>%
     summarize(
       in_strength = in_strength,
       out_strength = out_strength,
       betweenness = betweenness,
       graph_density = graph_density,
       isolated_nodes = isolated_nodes,
-      .groups = "drop"
-    )
-  
-  # macro attributes form shielded agent_static_attributes
-  
-  # table summary for aggregate by condition
-  per_condition_summary <- aggregate_metrics %>%
-    mutate(agent_id = as.numeric(agent_id)) %>%
-    left_join(df_attributes %>% select(agent_id, pro_reduction, agent_is_saturated) %>%
-                distinct(), by = "agent_id") %>%
-    group_by(agent_id, current_condition, model_type, pro_reduction) %>%
-    summarize(
-      in_strength = mean(in_strength),
-      out_strength = mean(out_strength),
-      betweenness = mean(betweenness),
-      graph_density = first(graph_density),
-      isolated_nodes = first(isolated_nodes),
-      agent_is_saturated = first(agent_is_saturated),
+      agent_is_saturated = agent_is_saturated,
       .groups = "drop"
     )
   

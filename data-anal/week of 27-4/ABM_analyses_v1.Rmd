@@ -1,0 +1,332 @@
+---
+title: "ABM_orchest_v1"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+    theme: lumen
+date: "2026-04-02"
+---
+
+```{r-setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width = 15,
+                      fig.height = 10)
+```
+
+```{r, file_layout, echo = FALSE, }
+#[EXISTING] Basic exploration
+#[EXISTING] Parameter correlations — minor tweak
+#[NEW]      Sensitivity analysis SRC/PCC
+#[NEW]      Parameter importance ranking
+#[MODIFIED] GA regions — SD params, group percentile,
+#insensitive flags, range check, 
+#GAML generator
+#[EXISTING] Convergence analysis — add violin plot
+#[EXISTING] Debate composition — keep
+#[EXISTING] Speaking mode — add effect size
+#[EXISTING] No change baseline — add limitation flag
+#[EXISTING] Best params — add GA bounds check
+#[EXISTING] Top 10 — keep
+#[EXISTING] Cluster formation — extend
+#[EXISTING] Hardest/easiest debates — keep
+#[MODIFIED] Failures — justify threshold, 
+#add constraint violation flag
+#[MODIFIED] Stochasticity — add CV convergence plot
+#[EXISTING] Boss table — add VAE if keeping
+#[EXISTING] Model comparison — keep
+#[EXISTING] Final recommendations — keep
+```
+
+```{r, setup_1, echo = FALSE, message = FALSE}
+library(tidyverse)
+library(rvg)
+library(broom)
+library(officer)
+library(flextable)
+library(sensitivity)
+library(lm.beta)
+library(igraph)
+library(ggraph)
+library(janitor)
+library(tidygraph)
+library(patchwork)
+library(knitr)
+```
+
+```{r, file-sourcing, include = FALSE, echo = FALSE, cache = FALSE}
+source("./functions.R")
+source("./data_processing.R")
+source("./plots.R")
+source("framework_analysis.R")
+```
+
+```{r, analysis-calls, include = FALSE, echo = FALSE, cache = FALSE}
+# empirical data loading 4/6/26
+df_empirical <- empirical_prep("./data/data_complete_anonymised.csv")
+
+# LHS pipeline
+if (!exists("processed_lhs")) {
+  message("Processing raw LHS data files")
+  processed_lhs <- process_run(run_configs$lhs_main)
+}
+
+if(exists("processed_lhs")) {
+  lhs_bundle <- list(
+    sim_inputs = processed_lhs,
+    df_empirical = df_empirical
+  )
+  lhs_outputs <- analyze_processed_run(lhs_bundle)
+}
+
+# GA pipeline
+if (!exists("processed_ga")) {
+  message("Processing raw GA data files")
+  processed_ga <- process_run(run_configs$ga_main)
+}
+
+if(exists("processed_ga")) {
+  ga_bundle <- list( # 4/6/26
+    sim_inputs = processed_ga,
+    df_empirical = df_empirical
+  )
+  ga_outputs <- analyze_processed_run(ga_bundle)
+}
+```
+
+# Preface
+- this document considers one version of LHS and one of GA (100 fixed cycles)
+-- the other with dynamic convergence (convergence_threshold at 0.01) which is designated as **v2**
+- Further all of the data displayed below is only considering M (mixed) debates which constitute a mix of pro and anti reduction agents (a future version to be run next week - form 25/5/26 onwards will introduce better segmentation and cross comparison of H and M debates)
+- All analyses where data is not labelled in **v1** or **v2** is run with **v1** (which biases the interpretation as each debate is forced to run until it reaches 100 cycles)
+- use_distinct_agents: __TRUE__ (each agent has the same base parameter value but has a standard deviation associated with each parameter) / __FALSE__ (all agents in that debate have the same parameter value -> assumes agents are all the same)
+
+
+```{r, empirical_comparison, cache = FALSE}
+# Beta Distribution Check
+lhs_outputs$plots$beta_distance_vs_empir()
+
+# Empirical Outcome Distributions
+lhs_outputs$plots$empirical_col()
+lhs_outputs$plots$empirical_cross()
+
+# cohens d check
+lhs_outputs$results$comparisons$empirical_cohen
+
+```
+
+``` {r, ols-compar, echo = FALSE, cache = FALSE}
+# display linear comparisons
+if(!is.null(lhs_outputs$results$comparisons$ols)) {
+  lhs_outputs$results$comparisons$ols %>%
+    mutate(across(where(is.numeric), ~ round(., 4))) %>%
+    flextable() %>%
+    set_caption("Debate-Level Benchmark: ABM MAE vs OLS MAE") %>%
+    autofit()
+}
+
+# baseline overall performance ranking
+if(!is.null(lhs_outputs$results$comparisons$ranking)) {
+  lhs_outputs$results$comparisons$ranking %>%
+    mutate(across(where(is.numeric), ~ round(., 4))) %>%
+    flextable() %>%
+    set_caption("Global (Unoptimized) Model Performance Rankings") %>%
+    autofit()
+}
+```
+
+# Empirical data discovery
+```{r lhs-analysis-comparison, cache = FALSE}
+# lhs_analysis comparison - v1 (threshold = 0.001), v2 (threshold = 0.01)
+
+# PCC and PRCC using v2 as df_lhs (combined in lhs_ouputs list)
+lhs_outputs$plots$pcc()
+lhs_outputs$plots$prcc()
+
+# combined visualization if both versions are present
+if (!is.null(lhs_outputs$inputs$versions) && nrow(lhs_outputs$inputs$versions) > 0) {
+  lhs_outputs$plots$pcc_all()
+  lhs_outputs$plots$prcc_all()  
+} else {
+  message("Single LHS version found, skipping combined PCC/PRCC analysis")
+}
+
+```
+# PCC and PRCC (Pearson (Partial) Correlation Coefficients)
+## Description of Data in LHS
+- v1: 100 fixed cycles 6-5-26
+- v2: dynamic convergence 4-5-26
+- Mean Absolute Error (MAE): unoptimized parameter iterations show weak relationships with raw MAE metrics
+
+```{r, directional-accuracy, echo = FALSE}
+# 1. Global accuracy first (context setter)
+if (!is.null(lhs_outputs$results$comparisons$directional)) {
+  lhs_outputs$results$comparisons$directional %>%
+    summarize(mean_correct = mean(pct_correct_dir),
+            mean_mae = mean(mean_mae),
+            mean_baseline = mean(mean_baseline_mae)) %>%
+    mutate(across(where(is.numeric), ~ round(., 4))) %>%
+    flextable() %>%
+    set_caption("Global Directional Accuracy Aggregates") %>%
+    autofit()
+}
+
+# sign vs magnitude diangostics
+if (!is.null(lhs_outputs$results$comparisons$directional)) {
+  lhs_outputs$results$comparisons$directional %>%
+    select(selected_debate_id, model_type, pct_correct_dir, mean_mae, mean_baseline_mae) %>%
+    mutate(
+      Diagnostic_Status = case_when(
+        pct_correct_dir >= 0.70 & mean_mae <= mean_baseline_mae ~ "Optimized Structure (Correct Sign & Scale)",
+        pct_correct_dir >= 0.70 & mean_mae >  mean_baseline_mae ~ "Parameter Attenuation Floor (Correct Sign, Overshot Scale)",
+        pct_correct_dir <  0.70 & mean_mae <= mean_baseline_mae ~ "Stochastic Coincidence (Wrong Sign, Low Scale Variance)",
+        TRUE
+      )
+    ) %>%
+    group_by(model_type, Diagnostic_status) %>%
+    summarize(Debates_count = n(), Average_MAE = mean(mean_mae), .groups = "drop") %>%
+    flextable() %>%
+    set_caption("Systemic Diagnostic Matrix: Sign Alignment vs Parameter Volatility") %>%
+    autofit()
+}
+
+# 3. ABM vs OLS
+lhs_outputs$plots$abm_vs_ols()
+
+# 4. Delta scatter
+lhs_outputs$plots$delta_direction_sim_vs_empir()
+
+# Explicit calling directional script plots
+if (!is.null(lhs_outputs$results$comparisons$directional)) {
+  # Bar plot for condition accuracy
+  print(plot_directional_accuracy(lhs_outputs$results$comparisons$directional))
+  
+  # four quadrant change scatter plot
+  print(plot_delta_direction_scatter(lhs_outputs$results$comparisons$directional))
+}
+
+if (!is.null(lhs_outputs$plots$))
+
+```
+
+# Initial Attempt at Variance Debate Classifier
+```{r, debate-classifier, echo = FALSE}
+# variance threshold classifier
+df_classifier <- lhs_outputs$inputs$raw %>%
+  group_by(selected_debate_id, debate_label) %>%
+  summarize(
+    mean_var = mean(initial_variance, na.rm = TRUE),
+    mean_mae = mean(mae, na.rm = TRUE),
+    best_model = model_type[which.min(mae)],
+    .groups = "drop"
+  ) %>%
+  mutate(predicted_type = ifelse(mean_var < 0.01,
+                                 "consensus", "bipolarization"))
+
+df_classifier %>%
+  mutate(correct = best_model == predicted_type) %>%
+  summarize(accuracy = mean(correct, na.rm = TRUE)) %>%
+  mutate(accuracy = round(accuracy, 4)) %>%
+  flextable() %>%
+  set_caption("Predictive Accuracy of the Initial Variance Classifier") %>%
+  autofit()
+```
+# Debate Classifier Intepretation
+- debates initialized below a strict variance ceiling (0.01) match consensus models, wider spreads call for bipolarization configurations (stepping stone for targeted optimization)
+
+
+# GAML Boundary Layer
+- tracks parameter spaces from top 25% performing configurations of LHS runs
+``` {r, gaml-boundary-lhs, echo = FALSE, cache = FALSE}
+if (!is.null(lhs_outputs$results$regions)) {
+  lhs_outputs$results$regions %>%
+    select(model_type, use_distinct_agents, best_mae, mae_threshold_used, n, 
+           cr_min, cr_max, ct_min, ct_max, rs_min, rs_max, rt_min, rt_max) %>%
+    mutate(across(where(is.numeric), ~ round(., 4))) %>%
+    flextable() %>%
+    set_caption("Filtered LHS Base Parameter Envelopes (top 25% slices") %>%
+    autofit()
+}
+
+```
+
+
+``` {r, lhs-vs-ga-pcc, echo = FALSE, cache = FALSE}
+# initial comparison
+if (exists("lhs_outputs") && exists("ga_outputs")) {
+  #extrac high leverage parameters based on absolute PRCC values form lhs
+  top_sensitivity_params <- lhs_outputs$results$sensitivity$combined$prcc %>%
+    filter(output_variable == "mae") %>%
+    group_by(model_type) %>%
+    slice_max(order_by = abs(value), n = 3, with_ties = FALSE) %>%
+    ungroup() %>%
+    select(model_type, parameter, prcc_value = value)
+  
+  # fetch boundaries where GA improved
+  ga_realized_regions <- ga_outputs$results$comparisons$ranking
+}
+
+#isolate standard deviation envelopes (use_distinct_agents)
+# if (!is.null(lhs_outputs$results$regions$regions)) {
+#   lhs_outputs$results$regions$regions %>%
+#     filter(use_distinct_agents == TRUE) %>%
+#     select(model_type, best_mae, cr_min_sd, cr_max_sd, ct_min_sd, ct_max_sd, rs_min_sd, rs_max_sd, rt_min_sd, rt_max_sd) %>%
+#     mutate(across(where(is.numeric), ~ round(., 4))) %>%
+#     flextable() %>%
+#     set_caption("Filtered LHS Micro-Variance Envelopes (SD Parameters)") %>%
+#     autofit()
+# }
+
+```
+
+``` {r, param-range-audit, echo = FALSE, cache = FALSE}
+# check to prevent GA from getting trapped, flags params where width is narrower than 0.05
+if (!is.null(lhs_outputs$results$regions$range_check)) {
+  if (nrow(lhs_outputs$results$regions$range_check) == 0) {
+    cat("### Validation Success: All parameter ranges are sufficient for follow up GA")
+  } else {
+    lhs_outputs$results$regions$range_check %>%
+      select(model_type, use_distinct_agents, parameter, range_ok) %>%
+      flextable() %>%
+      set_caption("WARNING: param ranges too narrow for GA optimization mobility") %>%
+      autofit()
+  }
+}
+```
+
+# Macro comparisons of LHS and GA
+``` {r, lhs-vs-ga, echo = FALSE, cache = FALSE}
+if (exists("ga_outputs") && !is.null(ga_outputs$results$comparisons$ranking)) {
+  p_lhs <- lhs_outputs$plots$model_performance_rank_main() +
+    labs(subtitle = "LHS Exploration Footprint (Wide Search")
+  
+  p_ga <- ga_outputs$plots$model_performance_rank_main() +
+    labs(subtitle = "GA Optimization Footprint (Targeted GAML Calibration")
+  
+  p_lhs + p_ga + plot_layout(guides = "collect")
+} else {
+  cat("\n\n ** system note: Active GA Package not detected for this specific run",
+      "GAML bounds successfully written to disk. run GA engine to append optimization data")
+}
+
+```
+
+# Behavioral Spillover & Composition Effects
+```{r, behavioral-effects, echo = FALSE}
+## debate composition plot
+lhs_outputs$plots$debate_comp_errors()
+
+## debate composition
+lhs_outputs$results$behavioral$composition %>%
+  mutate(across(where(is.numeric), ~ round(., 4))) %>%
+  flextable() %>%
+  set_caption("Debate Composition Behavioral diagnostics") %>%
+  autofit()
+
+## speaking mode comparisons
+lhs_outputs$results$behavioral$speaking %>%
+  mutate(across(where(is.numeric), ~ round(., 4))) %>%
+  flextable() %>%
+  set_caption("Influence of Speaking Mode on Metric Convergence") %>%
+  autofit()
+```

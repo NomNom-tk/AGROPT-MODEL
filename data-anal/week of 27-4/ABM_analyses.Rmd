@@ -5,6 +5,7 @@ output:
     toc: true
     toc_float: true
     code_folding: hide
+    theme: lumen
 date: "2026-04-02"
 ---
 
@@ -60,31 +61,37 @@ source("./plots.R")
 ```
 
 ```{r, analysis-calls, include = FALSE, echo = FALSE, cache = FALSE}
+# source framework_file
+source("framework_analysis.R")
+
 # empirical data loading 4/6/26
 df_empirical <- empirical_prep("./data/data_complete_anonymised.csv")
 
-# Run processing code
+# LHS pipeline
 if (!exists("processed_lhs")) {
   processed_lhs <- process_run(run_configs$lhs_main)
+}
+
+if(exists("processed_lhs")) {
   lhs_bundle <- list(
     sim_inputs = processed_lhs,
     df_empirical = df_empirical
   )
+  lhs_outputs <- analyze_processed_run(lhs_bundle)
 }
+
+# GA pipeline
 if (!exists("processed_ga")) {
   processed_ga <- process_run(run_configs$ga_main)
+}
+
+if(exists("processed_ga")) {
   ga_bundle <- list( # 4/6/26
     sim_inputs = processed_ga,
     df_empirical = df_empirical
   )
+  ga_outputs <- analyze_processed_run(ga_bundle)
 }
-
-# source framework_file
-source("framework_analysis.R")
-
-# run lhs outputs and bundle
-lhs_outputs <- analyze_processed_run(lhs_bundle)
-ga_outputs <- analyze_processed_run(ga_bundle)
 ```
 
 # Preface

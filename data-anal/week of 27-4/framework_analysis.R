@@ -404,6 +404,7 @@ analyze_processed_run <- function(df) {
         ols             = comparison_clean,
         summary         = comparison_summary,
         ranking         = model_comparison_main,
+        mae_delta_compar = model_comparison_relative,
         baseline        = baseline_comparison,
         directional     = df_directional,
         beta_distance = beta_distance, # beta empir distance relative to simulated data 3/6/26

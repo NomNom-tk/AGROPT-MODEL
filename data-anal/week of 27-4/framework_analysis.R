@@ -407,6 +407,7 @@ analyze_processed_run <- function(df) {
         mae_delta_compar = model_comparison_relative,
         baseline        = baseline_comparison,
         directional     = df_directional,
+        directional_agents = df_directional_agents,
         beta_distance = beta_distance, # beta empir distance relative to simulated data 3/6/26
         beta_distance_raw = simulated_betas_raw
       ),

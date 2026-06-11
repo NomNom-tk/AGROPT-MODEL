@@ -180,10 +180,10 @@ if (!is.null(lhs_outputs$results$comparisons$directional)) {
         pct_correct_dir >= 0.70 & mean_mae <= mean_baseline_mae ~ "Optimized Structure (Correct Sign & Scale)",
         pct_correct_dir >= 0.70 & mean_mae >  mean_baseline_mae ~ "Parameter Attenuation Floor (Correct Sign, Overshot Scale)",
         pct_correct_dir <  0.70 & mean_mae <= mean_baseline_mae ~ "Stochastic Coincidence (Wrong Sign, Low Scale Variance)",
-        TRUE
+        TRUE ~ "Ambiguous (Wrong Sign, High Scale Variance)"
       )
     ) %>%
-    group_by(model_type, Diagnostic_status) %>%
+    group_by(model_type, Diagnostic_Status) %>%
     summarize(Debates_count = n(), Average_MAE = mean(mean_mae), .groups = "drop") %>%
     flextable() %>%
     set_caption("Systemic Diagnostic Matrix: Sign Alignment vs Parameter Volatility") %>%
@@ -202,11 +202,16 @@ if (!is.null(lhs_outputs$results$comparisons$directional)) {
   print(plot_directional_accuracy(lhs_outputs$results$comparisons$directional))
   
   # four quadrant change scatter plot
-  print(plot_delta_direction_scatter(lhs_outputs$results$comparisons$directional))
+  print(plot_delta_direction_scatter(lhs_outputs$results$comparisons$directional_agents))
 }
 
-if (!is.null(lhs_outputs$plots$))
-
+if (!is.null(lhs_outputs$plots$direction_by_position)) {
+  # called wrapped function from package
+  print(lhs_outputs$plots$direction_by_position())
+} else if (!is.null(lhs_outputs$inputs$raw)) {
+  # fallback to raw batch input
+  print(plot_dir_by_pro(lhs_outputs$inputs$raw))
+}
 ```
 
 # Initial Attempt at Variance Debate Classifier
@@ -238,14 +243,16 @@ df_classifier %>%
 # GAML Boundary Layer
 - tracks parameter spaces from top 25% performing configurations of LHS runs
 ``` {r, gaml-boundary-lhs, echo = FALSE, cache = FALSE}
-if (!is.null(lhs_outputs$results$regions)) {
-  lhs_outputs$results$regions %>%
-    select(model_type, use_distinct_agents, best_mae, mae_threshold_used, n, 
-           cr_min, cr_max, ct_min, ct_max, rs_min, rs_max, rt_min, rt_max) %>%
-    mutate(across(where(is.numeric), ~ round(., 4))) %>%
-    flextable() %>%
-    set_caption("Filtered LHS Base Parameter Envelopes (top 25% slices") %>%
-    autofit()
+if (!is.null(lhs_outputs$results$regions$bounds)) {
+  print(
+    lhs_outputs$results$regions$bounds %>%
+      select(model_type, use_distinct_agents, best_mae, mae_threshold_used, n, 
+             cr_min, cr_max, ct_min, ct_max, rs_min, rs_max, rt_min, rt_max) %>%
+      mutate(across(where(is.numeric), ~ round(., 4))) %>%
+      flextable() %>%
+      set_caption("Filtered LHS Base Parameter Envelopes (top 25% slices") %>%
+      autofit()
+  )
 }
 
 ```
@@ -256,26 +263,40 @@ if (!is.null(lhs_outputs$results$regions)) {
 if (exists("lhs_outputs") && exists("ga_outputs")) {
   #extrac high leverage parameters based on absolute PRCC values form lhs
   top_sensitivity_params <- lhs_outputs$results$sensitivity$combined$prcc %>%
-    filter(output_variable == "mae") %>%
+    filter(output == "mae") %>%
     group_by(model_type) %>%
-    slice_max(order_by = abs(value), n = 3, with_ties = FALSE) %>%
+    slice_max(order_by = abs(PRCC), n = 3, with_ties = FALSE) %>%
     ungroup() %>%
-    select(model_type, parameter, prcc_value = value)
+    select(model_type, parameter, prcc_value = PRCC)
+  
+  print(top_sensitivity_params)
   
   # fetch boundaries where GA improved
   ga_realized_regions <- ga_outputs$results$comparisons$ranking
 }
 
-#isolate standard deviation envelopes (use_distinct_agents)
-# if (!is.null(lhs_outputs$results$regions$regions)) {
-#   lhs_outputs$results$regions$regions %>%
-#     filter(use_distinct_agents == TRUE) %>%
-#     select(model_type, best_mae, cr_min_sd, cr_max_sd, ct_min_sd, ct_max_sd, rs_min_sd, rs_max_sd, rt_min_sd, rt_max_sd) %>%
-#     mutate(across(where(is.numeric), ~ round(., 4))) %>%
-#     flextable() %>%
-#     set_caption("Filtered LHS Micro-Variance Envelopes (SD Parameters)") %>%
-#     autofit()
-# }
+# isolate standard deviation envelopes (use_distinct_agents)
+if (!is.null(lhs_outputs$results$regions$bounds)) {
+  
+  # Extraction and check if hetero agents exist
+  df_sd <- lhs_outputs$results$regions$bounds %>%
+    filter(use_distinct_agents == TRUE)
+  
+  # Only print if there are valid rows
+  if (nrow(df_sd) > 0) {
+    sd_table <- df_sd %>%
+      select(model_type, best_mae, cr_min_sd, cr_max_sd, ct_min_sd, 
+             ct_max_sd, rs_min_sd, rs_max_sd, rt_min_sd, rt_max_sd) %>%
+    mutate(across(where(is.numeric), ~ round(., 4))) %>%
+    flextable() %>%
+    set_caption("Filtered LHS Micro-Variance Envelopes (SD Parameters)") %>%
+    autofit()
+    
+    print(sd_table)
+  } else {
+    cat("### Micro-Architecture Note: Current simulation data only uses homogeneous agents")
+  }
+}
 
 ```
 
@@ -294,8 +315,65 @@ if (!is.null(lhs_outputs$results$regions$range_check)) {
 }
 ```
 
+# GA results
+``` {r, ga-directional-accuracy, echo = FALSE, cache = FALSE}
+# 1. Global accuracy first (context setter)
+if (!is.null(ga_outputs$results$comparisons$directional)) {
+  ga_outputs$results$comparisons$directional %>%
+    summarize(mean_correct = mean(pct_correct_dir),
+            mean_mae = mean(mean_mae),
+            mean_baseline = mean(mean_baseline_mae)) %>%
+    mutate(across(where(is.numeric), ~ round(., 4))) %>%
+    flextable() %>%
+    set_caption("Global Directional Accuracy Aggregates") %>%
+    autofit()
+}
+
+# sign vs magnitude diangostics
+if (!is.null(ga_outputs$results$comparisons$directional)) {
+  ga_outputs$results$comparisons$directional %>%
+    select(selected_debate_id, model_type, pct_correct_dir, mean_mae, mean_baseline_mae) %>%
+    mutate(
+      Diagnostic_Status = case_when(
+        pct_correct_dir >= 0.70 & mean_mae <= mean_baseline_mae ~ "Optimized Structure (Correct Sign & Scale)",
+        pct_correct_dir >= 0.70 & mean_mae >  mean_baseline_mae ~ "Parameter Attenuation Floor (Correct Sign, Overshot Scale)",
+        pct_correct_dir <  0.70 & mean_mae <= mean_baseline_mae ~ "Stochastic Coincidence (Wrong Sign, Low Scale Variance)",
+        TRUE ~ "Ambiguous (Wrong Sign, High Scale Variance)"
+      )
+    ) %>%
+    group_by(model_type, Diagnostic_Status) %>%
+    summarize(Debates_count = n(), Average_MAE = mean(mean_mae), .groups = "drop") %>%
+    flextable() %>%
+    set_caption("Systemic Diagnostic Matrix: Sign Alignment vs Parameter Volatility") %>%
+    autofit()
+}
+
+# 3. ABM vs OLS
+lhs_outputs$plots$abm_vs_ols()
+
+# 4. Delta scatter
+lhs_outputs$plots$delta_direction_sim_vs_empir()
+
+# Explicit calling directional script plots
+if (!is.null(ga_outputs$results$comparisons$directional)) {
+  # Bar plot for condition accuracy
+  print(plot_directional_accuracy(ga_outputs$results$comparisons$directional))
+  
+  # four quadrant change scatter plot
+  print(plot_delta_direction_scatter(ga_outputs$results$comparisons$directional_agents))
+}
+
+if (!is.null(ga_outputs$plots$direction_by_position)) {
+  # called wrapped function from package
+  print(ga_outputs$plots$direction_by_position())
+} else if (!is.null(ga_outputs$inputs$raw)) {
+  # fallback to raw batch input
+  print(plot_dir_by_pro(ga_outputs$inputs$raw))
+}
+```
+
 # Macro comparisons of LHS and GA
-``` {r, lhs-vs-ga, echo = FALSE, cache = FALSE}
+``` {r, lhs-vs-ga-mae, echo = FALSE, cache = FALSE}
 if (exists("ga_outputs") && !is.null(ga_outputs$results$comparisons$ranking)) {
   p_lhs <- lhs_outputs$plots$model_performance_rank_main() +
     labs(subtitle = "LHS Exploration Footprint (Wide Search")
@@ -310,6 +388,32 @@ if (exists("ga_outputs") && !is.null(ga_outputs$results$comparisons$ranking)) {
 }
 
 ```
+
+``` {r, lhs-vs-ga-convergence, echo = FALSE, cache = FALSE}
+# Convergence Comparison (depends on fixed or dynamic convergence)
+p_lhs_conv <- lhs_outputs$plots$convergence() + labs(subtitle = "LHS")
+p_ga_conv <- ga_outputs$plots$convergence() + labs(subtitle = "GA")
+p_lhs_conv + p_ga_conv + plot_layout(guides = "collect")
+```
+
+``` {r, lhs-vs-ga-directional, echo = FALSE, cache = FALSE}
+# Directional Accuracy Comparison 
+combined_directional <- bind_rows(
+  lhs_outputs$results$comparisons$directional %>% mutate(run_type = "LHS"),
+  ga_outputs$results$comparisons$directional %>% mutate(run_type = "GA")
+)
+
+combined_directional %>%
+  group_by(run_type, model_type) %>%
+  summarize(mean_correct = mean(pct_correct_dir),
+            mean_mae = mean(mean_mae), .groups = "drop") %>%
+  mutate(across(where(is.numeric), ~ round(., 4))) %>%
+  flextable() %>%
+  set_caption("LHS vs GA Directional Accuracy Comparison") %>%
+  autofit()
+
+```
+
 
 # Behavioral Spillover & Composition Effects
 ```{r, behavioral-effects, echo = FALSE}

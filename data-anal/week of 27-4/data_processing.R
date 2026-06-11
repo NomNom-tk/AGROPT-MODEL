@@ -127,9 +127,18 @@ process_run <- function(config) {
     df_interactions <- prepare_interactions(target_int_path)
     
     if (!is.null(df_ag)) {
+      
+      # 1. standardize RHS join table columns
+      df_ag_clean <- df_ag %>%
+        select(agent_id, pro_reduction) %>%
+        distinct() %>%
+        mutate(agent_id = as.character(agent_id))
+      
+      # 2. standardize LHS join table and execute safe merge
       df_interactions <- df_interactions %>%
-        left_join(df_ag %>% select(agent_id, pro_reduction) %>% distinct(),
-                  by = c("receiver_id" = "agent_id"))
+        mutate(receiver_id = as.character(receiver_id)) %>%
+        left_join(df_ag_clean, by = c("receiver_id" = "agent_id")) %>%
+        filter(!is.na(pro_reduction)) # 11/6/26 filter out rows where pro_reduc is not matched by receiver_id
     }
     df_susceptibility = compute_susceptibility_scores(df_interactions)
     df_influence = compute_influence_scores(df_interactions)

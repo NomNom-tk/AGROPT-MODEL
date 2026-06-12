@@ -1,0 +1,475 @@
+---
+title: "ABM_orchest"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+    theme: lumen
+date: "2026-04-02"
+---
+
+```{r-setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width = 15,
+                      fig.height = 10)
+```
+
+```{r, file_layout, echo = FALSE, }
+#[EXISTING] Basic exploration
+#[EXISTING] Parameter correlations — minor tweak
+#[NEW]      Sensitivity analysis SRC/PCC
+#[NEW]      Parameter importance ranking
+#[MODIFIED] GA regions — SD params, group percentile,
+#insensitive flags, range check, 
+#GAML generator
+#[EXISTING] Convergence analysis — add violin plot
+#[EXISTING] Debate composition — keep
+#[EXISTING] Speaking mode — add effect size
+#[EXISTING] No change baseline — add limitation flag
+#[EXISTING] Best params — add GA bounds check
+#[EXISTING] Top 10 — keep
+#[EXISTING] Cluster formation — extend
+#[EXISTING] Hardest/easiest debates — keep
+#[MODIFIED] Failures — justify threshold, 
+#add constraint violation flag
+#[MODIFIED] Stochasticity — add CV convergence plot
+#[EXISTING] Boss table — add VAE if keeping
+#[EXISTING] Model comparison — keep
+#[EXISTING] Final recommendations — keep
+```
+
+```{r, setup_1, echo = FALSE, message = FALSE}
+library(tidyverse)
+library(rvg)
+library(broom)
+library(officer)
+library(flextable)
+library(sensitivity)
+library(lm.beta)
+library(igraph)
+library(ggraph)
+library(janitor)
+library(tidygraph)
+library(patchwork)
+library(knitr)
+```
+
+```{r, file-sourcing, include = FALSE, echo = FALSE, cache = FALSE}
+source("./functions.R")
+source("./data_processing.R")
+source("./plots.R")
+```
+
+```{r, analysis-calls, include = FALSE, echo = FALSE, cache = FALSE}
+# source framework_file
+source("framework_analysis.R")
+
+# empirical data loading 4/6/26
+df_empirical <- empirical_prep("./data/data_complete_anonymised.csv")
+
+# LHS pipeline
+if (!exists("processed_lhs")) {
+  processed_lhs <- process_run(run_configs$lhs_main)
+}
+
+if(exists("processed_lhs")) {
+  lhs_bundle <- list(
+    sim_inputs = processed_lhs,
+    df_empirical = df_empirical
+  )
+  lhs_outputs <- analyze_processed_run(lhs_bundle)
+}
+
+# GA pipeline
+if (!exists("processed_ga")) {
+  processed_ga <- process_run(run_configs$ga_main)
+}
+
+if(exists("processed_ga")) {
+  ga_bundle <- list( # 4/6/26
+    sim_inputs = processed_ga,
+    df_empirical = df_empirical
+  )
+  ga_outputs <- analyze_processed_run(ga_bundle)
+}
+```
+
+# Preface
+- this document considers two different versions of lhs data 
+-- one with 100 fixed cycles (designated as **v1**)
+-- the other with dynamic convergence (convergence_threshold at 0.01) which is designated as **v2**
+- Further all of the data displayed below is only considering M (mixed) debates which constitute a mix of pro and anti reduction agents (a future version to be run next week - form 25/5/26 onwards will introduce better segmentation and cross comparison of H and M debates)
+- All analyses where data is not labelled in **v1** or **v2** is run with **v1** (which biases the interpretation as each debate is forced to run until it reaches 100 cycles)
+- use_distinct_agents: __TRUE__ (each agent has the same base parameter value but has a standard deviation associated with each parameter) / __FALSE__ (all agents in that debate have the same parameter value -> assumes agents are all the same)
+
+
+```{r, empirical_comparison, cache = FALSE}
+# df comparison test
+lhs_outputs$results$comparisons$empirical
+
+# beta_plot and table calls to check wehther data is reasonable
+lhs_outputs$plots$beta_distance_vs_empir()
+
+# beta table
+lhs_outputs$results$comparisons$beta_distance
+
+# cohens d check
+lhs_outputs$results$comparisons$empirical_cohen
+
+# plot of empirical distribution
+## needs to add labs/for title and axes and theme
+lhs_outputs$plots$empirical_col()
+
+# cross time col plot
+lhs_outputs$plots$empirical_cross()
+
+```
+# Empirical data discovery
+
+## Empirical Cross comparisons
+- primary attitude change (8-17% of scale range) occurred between t0-t1 (sd almost twice the size of the mean change) 
+- mean attitude change from t1->t2 is around 3-4% (with the exception of homogeneous which sways in the negative direction) left for simulation during debate (statistically indistinguishable from spontaneous drift in control)
+
+## Linear Regression for Cohen's D
+- std estimate represents cohen's d --> (-0.034, p value = 0.655), no significance of population on mean change from t1->t2
+
+## Opinion Change T1 to T2
+- small positive change in heterogeneous group / slight negative change in homogeneous group -> could be due to it being all anti_reduction so they create echo chambers leaning in the wrong direction (further away from pro_reduction of meat consumption)
+
+## Combined Bar Chart
+- Represents mean change across 3 time periods
+- change from t1 -> t2 is minimal --> weak empirical signal with insignificant cohen's d implies difficulty in simulating opinion change given that it is assumed that deliberation creates social influence in this experiment
+
+
+
+```{r lhs-analysis-comparison, cache = FALSE}
+# lhs_analysis comparison - v1 (threshold = 0.001), v2 (threshold = 0.01)
+
+# PCC and PRCC using v2 as df_lhs (combined in lhs_ouputs list)
+lhs_outputs$plots$pcc()
+lhs_outputs$plots$prcc()
+
+# combined visualization
+lhs_outputs$plots$pcc_all()
+lhs_outputs$plots$prcc_all()
+
+# include comparison plots and use df_versions
+#df_versions <- lhs_outputs$inputs$versions
+
+# interpretation:
+# model structure dominates behavior (so threshold is a second-order effect)
+# bipolarizaito is the only regime with meaningful sensitivity
+
+# comparison summary
+#lhs_outputs$comparisons$summary()
+
+# convergence plot
+#lhs_outputs$plots$convergence()
+
+
+```
+# PCC and PRCC (Pearson (Partial) Correlation Coefficients)
+## Description of Data in LHS
+- v1: 100 fixed cycles 6-5-26
+- v2: dynamic convergence 4-5-26
+
+## PCC for combined versions
+- most parameters show weak relationships with mae (normal given unoptimized LHS)
+- convergence rate shows strongest negative PCC with opinion_variance -> faster convergence reduces opinion spread
+- confidence_threshold_sd notable negative relationship with opinion_variance in **v1**, distinct agents in confidence_threshold reduces variance
+
+## PRCC for combined versions
+- convergence_rate strengthens against opinion-variance (survives controlling for other parameters)
+- confidence_threshold_sd relationship strengthens
+- mae remains largely insensitive to all parameters (random parameters cannot beat the baseline)
+- convergence_cycle in **v2** shows moderative negative PRCC with mae
+- OVERALL: convergence_rate and opinion_variance have strongest relationship
+
+```{r, model-performance, echo = FALSE}
+# abm vs ols plots
+# summary table, comparison_clean
+lhs_outputs$plots$model_performance_rank_main()
+
+# version aware 
+lhs_outputs$plots$model_rank_versions()
+
+# comparison with agent heterogeneity (use_distinct_agents)
+#lhs_outputs$plots$model_performance_uncertainty()
+
+# comparison with gap, how big is the performance gap compared ot best model
+lhs_outputs$plots$model_performance_gap()
+
+# tables
+## OLS vs ABM comparison (used comparison clean)
+lhs_outputs$results$comparisons$ols
+
+## performance ranking
+lhs_outputs$results$comparisons$ranking
+
+## Setting up a baseline comparison still results in no_change dominating
+
+
+```
+# Model Performance Comparisons
+## MAE by model type and version bar chart
++ __FALSE__ & __TRUE__ labels denote speaking mode (exposure driven influence)
+- Dynamic convergence systematically outperforms fixed cycle implementation across all conditions
+- None of the models in speaking mode TRUE/FALSE has a lower mean MAE than the no_change condition (agents are initiated and do nothing --> no change)
+
+## Model Performance Across Versions
+- Reasonably large overlap in error bars for bipolarization across both versions, however mean mae is lower in the speaking mode (TRUE) condition --> speaking_mode does have a positive impact on reducing mean mae
+
+## MAE by model type and version bar chart (RED)
++ __FALSE__ & __TRUE__ labels denote speaking mode (exposure driven influence)
+- here the "best" model is the lowest mae model in that panel (e.g., consensus, clustering, no_change, bipolarization)
+- clustering consistently has the smallest delta (best performance compared with no_change)
+- dynamic convergence outperforms fixed cycles in all conditions
+- CAVEAT: pre-GA unoptimized lhs values, rankings may shift after GA runs
+
+## ABM vs OLS comparison table
+- Only the instance of Mixed debate 12 outperforms the ols mae (taken as a baseline)
+- As only mixed debates appear in this table it can be assumed that they are for a large part heterogeneous (i.e. composed of pro and anti consumption reductiona agents)
+- Delta_mae: positive (abm is worse), negative (abm is better)
+
+## Model type comparison with no_change
+- No model beats the no_change mean_mae (we still ahve slightly too much error but the dynamic converging **v2** seems to come close under clustering and consensus models with speaking mode)
+- Worst two models are consensus and bipolarization in the **v1** with 100 fixed cycles
+
+```{r, behavioral-effects, echo = FALSE}
+# Behavioral Effects
+## debate composition
+lhs_outputs$results$behavioral$composition
+
+## debate composition plot
+lhs_outputs$plots$debate_comp_errors()
+
+## speaking mode comparisons
+lhs_outputs$results$behavioral$speaking
+
+
+```
+# Behavioral Effects
+## Debate Composition on Mean MAE (table)
+- Biased because data is filtered by Mixed debates
+- No_change with speaking_mode ( __FALSE__ still outperforms all other models)
+- Consensus with speaking_mode ( __TRUE__ ) and distinct_agents ( __FALSE__ and __TRUE__ ) shows some promise
+
+## Debate Composition on Prediction Error
+- Biased again because of only representing M debates
+- __FALSE__ and __TRUE__ labels represent speaking mode
+- when speaking mode is true bipolarization has a slight edge over the other models but still does not beat no-change
+- the tail of bipolarization in both speaking_mode conditions implies a larger amount of interactions between agents which gives rise to a greater standard deviation of mae (ligns up with bipolarization dynamics)
+
+## Speaking Mode and Debate Composition on MAE impact
+- Speaking mode __TRUE__ globally has a lower mean mae than __FALSE__ but does not beat no_change
+- n column: represents the amount of interactions (broadcasts) that occur (for reference: one interaction could be agent 1 speaking with agents 2,3,4,5 in one cycle) - the number here is slightly inflated due to the nature of how these interactions are collected and the fact there are multiple interactions in one cycle (i.e. one agent broadcasts to multiple others)
+
+```{r, convergence-dynamics, echo = FALSE}
+# Convergence Dynamics
+## Convergence analysis
+lhs_outputs$results$dynamics$conv_diff
+
+## Convergence violin plot 
+lhs_outputs$plots$convergence()
+
+# convergence_comparison
+lhs_outputs$plots$convergence_compar()
+
+# opinion variance by versions (v1 fixed, v2 previous iteration with greater threshold)
+lhs_outputs$plots$opin_var_versions()
+
+## trade_off plot
+# tradeoff raw plot using df_lhs (base data)
+lhs_outputs$plots$tradeoff_raw()
+
+# TODO rework convergence_cycle aggregated (uses aggreagted data by model, debate_id, speaking_mode -- aggregated versions of convergence cycle)
+lhs_outputs$plots$tradeoff_agg()
+
+```
+# Convergence Analysis
+- (the first two and last two plots do not highlight any major findings given the fixed cycles)
+
+## Model Type and Convergence
+- All models besides bipolarization result in convergence with clustering and bipolarization having the largest number of interactions
+
+## Opinion Variance by Model Type
+- Bipolarization in both versions has a very large tale of variance which can be associated with the nature of bipolarization dynamics
+- The variance in the fixed cycles model has a slight tendency (visually) of being lower than those in the dynamic convergence and both have less variance than no_change (which I cannot explain, could be due to natural variance in the empirical input data [Thomas CSV] used to initiate each simulated debate)
+
+```{r, robustness, echo = FALSE}
+# Robustness
+## stochasticitiy
+#lhs_outputs$results$behavioral$stochastic
+
+##heterogeneity
+lhs_outputs$results$behavioral$heterogen
+
+```
+# Robustness
+## Using Distinct Agents
+- across all three models (excluding no_change) introducing distinct agents increases the mae compared with non_distinct agents
+- caveat is that the samples sizes are large with __TRUE__, makes sense given it is a binary parameter with unequal representation in latin hypercube sampling
+
+
+```{r, model-comparison, echo = FALSE}
+# 1. Global accuracy first (context setter)
+df_lhs_directional %>%
+  summarize(mean_correct = mean(pct_correct_dir),
+            mean_mae = mean(mean_mae),
+            mean_baseline = mean(mean_baseline_mae)) %>%
+  flextable() %>% autofit()
+
+# 2. Version summary
+lhs_outputs$inputs$version_summary
+
+# 3. ABM vs OLS
+lhs_outputs$plots$abm_vs_ols()
+
+# 4. Delta scatter
+lhs_outputs$plots$delta_direction_sim_vs_empir()
+
+# 5. Directional summary table (top debates)
+lhs_outputs$results$comparisons$directional %>%
+  mutate(mae_improvement = mean_baseline_mae - mean_mae) %>%
+  slice_min(mean_mae, n = 10) %>%
+  flextable() %>% autofit()
+
+# 6. Variance by debate type (inline narrative reference only, drop the full table)
+# cite: homogeneous mean var 0.006 vs mixed 0.022
+
+```
+
+# interpretation
+On average models achieve 52% directional accuracry, while producing higher MAE than no change
+- suggests that dynamics introduce noise that slightly exceeds predictive signal at aggregate level
+- the global average masks substantial debate level heterogeneity
+-- homogeneous debates consistently achieve ~80% directional accuracry -> mechanics are well specified for opinion proximate groups but poorly calibrated for high variance heterogeneous debates
+
+## Overall
+1. global performance is modest but above chance
+2. homogeneous conditions drive the positive signal
+3. pro reduction agents and heterogeneous debates are systematic failure modes
+
+# ABM vs OLS Performance
+- biased because we are only showing the results of **v1**
+- significantly worse (than the ols which is the baseline), forcing the debates to run the full 100 cycles introduces nosie that can degrade predictive accuracry
+
+
+```{r, micro-interaction-dynamics, echo = FALSE}
+# interaction of distribution by model type (density of influence score by model type)
+lhs_outputs$plots$influence_model_type()
+
+# saturation rate by condition
+lhs_outputs$plots$saturation_by_condition()
+
+# wrong direction by anti/pro
+# try and segment this by condition and by anti/pro 15/5/26
+lhs_outputs$plots$direction_by_position()
+
+# directional accuracy by current condition, faceted by model type
+lhs_outputs$plots$directional_accuracy()
+
+# WIP - influence leaderboard
+lhs_outputs$inputs$influence %>%
+  slice_max(influence_score, n = 10) %>%
+  mutate(efficiency = (influence_score / n_broadcasts) * 10000) %>%
+  flextable() %>%
+  set_header_labels(efficiency = "efficiency (×10⁻⁴)") %>%
+  autofit()
+
+# anti-agent cross position table (new, answers the question)
+lhs_outputs$inputs$raw_interactions %>%
+  filter(pro_reduction == 0) %>%
+  mutate(sender_is_pro = sender_opinion > 0.5) %>%
+  group_by(model_type, sender_is_pro) %>%
+  summarize(mean_delta = mean(abs(delta)), .groups = "drop") %>%
+  flextable() %>% autofit()
+
+```
+
+# interpretation
+1. models beat direcitonal baseline ~80% in homogeneous conditions
+2. saturation is 6x higher in heterogeneous vs homogeneous
+3. pro reduction agenets show systematic wrong-direction bias
+
+# pro interpretation
+- pro leaning speakers move anti agents roughly 2x more than anti leaning speakers
+- bipolarization shows largest absolute cross position delta: shows highest wrong direction rates (may be moving anti agents more but not always in the right direction)
+- This suggests cross-position influence is operative within the bounded confidence framework, though the absolute magnitude remains small — reflecting the attenuating effect of inertia and retention discount mechanics on entrenched positions (Festinger 1957, Nowak & Vallacher 1998).
+
+``` {r, network-analysis, echo = FALSE, out.width="100%"}
+# initial test of network per debate
+#lhs_outputs$results$networks$per_debate
+
+# aggregate metrics
+#lhs_outputs$results$networks$aggregate
+
+# graphs
+#lhs_outputs$results$networks$graphs
+
+# graphs proper
+#lhs_outputs$plots$homogeneous_network_plots
+
+# hetero plots
+#lhs_outputs$plots$heterogeneous_network_plots
+
+knitr::include_graphics(c("network_attempt_100c_adaptive_hetero.png",
+                        "network_attempt_100c_adaptive_homo.png"))
+
+```
+## Network Plots for Homogeneous Debates
+- theorized impact of how the influence network can be represented when new experiments are re-run
++ Legend description
+- node size (out_strength): total wegithed influence an agent exerts on others across all interactions (larger nodes are more influential speakers in the debate)
+- Node color (pro_reduction): agents position on pro or anti reduction, absent here given that these are 
+- Node shape (agent_is_saturated): circles (FALSE) agents whos opinion remained within bounds throughout debate, triangles (TRUE) agents whos opinion reached opinion saturation (their opinion hit the scale boundary and could no longer move in one direction, this is a bipolarization specific phenomenon)
+- Edge width (edge_weight): cumulative strength of influence between two agents, how much one agent's opinion shifted another's across all of their interactions, thicker edges indicate stronger dyadic influence relationships
+- arrows: direction of influence flow between agents
+
+## Homogeneous plot (homogeneous debates, only anti reduction agents)
+- all agents are anti-reduction
+- network structure is relatively sparse and linear (chains of influence)
+- opinions in homogeneous groups operate through sequential cascades rather than reinforcing loops
+
+## Heterogeneous plot (heterogeneous debates, both pro and anti agents)
+- network is more dense, bipolarization has tighter clusters with heavier edges (cross-position influence is stronger, pro speakers move anti agents ~2x more)
+- saturation is more frequent
+
+```{r, debate-classifier, echo = FALSE}
+# variance threshold classifier
+df_classifier <- df_lhs %>%
+  group_by(selected_debate_id, debate_label) %>%
+  summarize(
+    mean_var = mean(initial_variance),
+    mean_mae = mean(mae),
+    best_model = model_type[which.min(mae)],
+    .groups = "drop"
+  ) %>%
+  mutate(predicted_type = ifelse(mean_var < 0.01,
+                                 "consensus", "bipolarization"))
+
+df_classifier %>%
+  mutate(correct = best_model == predicted_type) %>%
+  summarize(accuracy = mean(correct))
+
+```
+
+## debate classifier
+- LHS results suggest that initial variance plays a significant role in the predictor of model suitability.
+- one could use a preliminary classifier for GA runs to check which model would work "best" for a specific debate
+- debates with var < 0.01 are predicted to favor consensus, dynamics while high-variance favor bipolarization
+
+-- next stage set-up
+- could classify debate by initial variance, then apply GA optimization for that predicted model
+- preliminary classifier is too simple, variance is not the only predictor
+
+
+```{r, optimization-insights, echo = FALSE}
+# GA regions, best configs
+lhs_outputs$results$regions$bounds
+```
+
+```{r, ppt-function-init, echo = FALSE}
+#ppt <- read_pptx()
+```
+

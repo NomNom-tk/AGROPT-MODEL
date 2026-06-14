@@ -425,7 +425,7 @@ lhs_outputs$results$behavioral$speaking %>%
 ## 1. Statistical Validation of algorithmic progress
 A Welch's t-test run on the raw output data, found that the transition from LHS to GA proved statistically significant (<0.01). The GA drove down the MAE from an LHS baseline of $\mu = 0.0875$ to an optimized mean of $\mu = 0.0644$ across all debates ($t(63394) = -48.96, p < 2.2 \times 10^{-16}$). This decrease of roughly 26% in mae demonstrates that the GA is effectively optimizing parameters and we are making progress towards reaching the no_change baseline.
 
-The case for agent heterogeneity: Across all three regimes, models that assume homogeneous agents ("use_distinct_agents" = FALSE, where all agents have the same parameter values without SDs) perform worse than when they have an SD associated to each parameter. More specifically, under the clustering and consensus regimes, incorporating the SDs (distinct agents) dropped the 
+The case for agent heterogeneity: Across all three regimes, models that assume homogeneous agents ("use_distinct_agents" = FALSE, where all agents have the same parameter values without SDs) perform worse than when they have an SD associated to each parameter. More specifically, under the clustering and consensus regimes, incorporating the SDs (distinct agents) dropped the mean mae.
 
 ## 2. Key Parameter Drivers & Sensitivity (PRCC)
 **Consensus** is mostly governed by the parameter "convergence_rate" (speed at which agents making "opinion steps") which reduces mae.
@@ -444,3 +444,9 @@ The wide range of simulated betas (compared with the empirical beta) demonstrate
 **Bipolarization:** The empirical line cuts right through the center of the simulated distribution, so the model matches the direction and real-world scale of the echo chambers (MAE ~ 0.0425).
 **Consensus:** The empirical line intersects the outer tail, implying that the model got the direction right but overshot the scale, simulated consensus was too strong compared with real world groups that have stubborn outliers (MAE ~ 0.0352).
 **Clustering:** The empirical line intersects the far right tail of the bimodal simulated distribution. The model only hits the human signal in extreme edges cases, implying that the parameters are on a critical tipping point. The current parameter bounds are too broad, which allows the model to drift away from the human signal.
+
+## 5. Next Steps
+- Relaunch GA algorithm with dynamic convergence
+- Relaunch GA algorithm with adjusted parameter ranges for **Consensus** and **Clustering**
+- Integrate the argumentation framework and test it
+- 

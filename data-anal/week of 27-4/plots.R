@@ -5,6 +5,24 @@
 # 6/5/26 introduced all plots from lhs_analysis_1 (and tested)
 
 # TODO feedback on which plot is better for PCC and PRCC
+#' Visualize combined PCC for combined versions (e.g., v1, v2, etc)
+#'
+#' Produces a faceted heatmap of Partial Correlation Coefficients (PCC)
+#' Intended use with LHS sensitivity analysis and called via lhs_outputs$plots$pcc_all() when
+#' Multiple versions are present using lhs_outputs$inputs$versions
+#' Dataframe is bound when lhs_outputs is constructed.
+#'
+#' @param pcc_all Dataframe containing at least the following columns:
+#' (see \code{run_sensi_analysis()} for the sensitivity calc function (in functions.R)
+#' \describe{
+#'   \item{parameter}{Character. Input parameter name}
+#'   \item{output}{Character. Output variable name}
+#'   \item{PCC}{Numeric. Partial correlation coefficient}
+#'   \item{versions}{Character. Version label (e.g., "v1", "v2")}
+#' }
+#' @return A ggplot2 object.
+#' @note Only called when \code{lhs_outputs$inputs$versions} is non-null and not empty
+#' see lhs-analysis-comparison chunk in Rmd for calls
 plot_pcc_all_heatmap <- function(df) {
   ggplot(df, aes(x=parameter, y=output, fill=PCC)) +
     geom_tile(width = 0.9, height = 0.9) +
@@ -15,6 +33,23 @@ plot_pcc_all_heatmap <- function(df) {
           axis.text.y = element_text(size = 8))
 }
 
+#' Visualize combined PRCC for combined versions (e.g., v1, v2, etc)
+#'
+#' Produces a faceted heatmap of Partial Rank Correlation Coefficients (PRCC)
+#' Intended use with LHS sensitivity analysis and called via lhs_outputs$plots$prcc_all() when
+#' Multiple versions are present using lhs_outputs$inputs$versions
+#' Dataframe is bound when lhs_outputs is constructed.
+#' @param prcc_all Dataframe containing at least the following columns:
+#' (see \code{run_sensi_analysis()} for the sensitivity calc function (in functions.R)
+#' \describe{
+#'   \item{parameter}{Character. Input parameter name}
+#'   \item{output}{Character. Output variable name}
+#'   \item{PRCC}{Numeric. Partial correlation coefficient}
+#'   \item{versions}{Character. Version label (e.g., "v1", "v2")}
+#' }
+#' @return A ggplot2 object.
+#' @note Only called when \code{lhs_outputs$inputs$versions} is non-null and not empty
+#' see lhs-analysis-comparison chunk in Rmd for calls
 plot_prcc_all_heatmap <- function(df) {
   ggplot(df, aes(x=parameter, y=output, fill=PRCC)) +
     geom_tile(width = 0.9, height = 0.9) +
@@ -24,6 +59,19 @@ plot_prcc_all_heatmap <- function(df) {
           axis.text.y = element_text(size = 8))
 }
 
+#' Visualize PCC for single version
+#'
+#' Produces a faceted heatmap of Partial Correlation Coefficients (PCC)
+#' Intended use with LHS sensitivity analysis and called via lhs_outputs$plots$pcc()
+#' @param pcc_lhs Dataframe containing at least the following columns:
+#' (see \code{run_sensi_analysis()} for the sensitivity calc function (in functions.R)
+#' \describe{
+#'   \item{parameter}{Character. Input parameter name}
+#'   \item{output}{Character. Output variable name}
+#'   \item{PCC}{Numeric. Partial correlation coefficient}
+#' }
+#' @return A ggplot2 object.
+#' see lhs-analysis-comparison chunk in Rmd for calls
 plot_pcc_heatmap <- function(df) {
   ggplot(df, aes(x = parameter, y = output, fill = PCC)) +
     geom_tile() +
@@ -33,6 +81,19 @@ plot_pcc_heatmap <- function(df) {
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
 }
 
+#' Visualize PRCC for single version
+#'
+#' Produces a faceted heatmap of Partial Rank Correlation Coefficients (PRCC)
+#' Intended use with LHS sensitivity analysis and called via lhs_outputs$plots$prcc()
+#' @param prcc_lhs Dataframe containing at least the following columns:
+#' (see \code{run_sensi_analysis()} for the sensitivity calc function (in functions.R)
+#' \describe{
+#'   \item{parameter}{Character. Input parameter name}
+#'   \item{output}{Character. Output variable name}
+#'   \item{PRCC}{Numeric. Partial correlation coefficient}
+#' }
+#' @return A ggplot2 object.
+#' see lhs-analysis-comparison chunk in Rmd for calls
 plot_prcc_heatmap <- function(df){
   ggplot(df, aes(x = parameter, y = output, fill = PRCC)) +
     geom_tile() +
@@ -42,14 +103,23 @@ plot_prcc_heatmap <- function(df){
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
 }
 
-# Empirical comparisons
-# empirical for t1_t2
+#' Empirical Viz for T1-T2 Change
+#' 
+#' Produces a bar chart for mean opinion change before and after debate
+#' Intended use with empirical data csv to check opinion evolution, called with lhs_outputs$plots$empirical_col()
+#' @param empirical_stat_check Dataframe of empirical debate data processed by empirical_stats() (in functions.R)
+#' \describe{
+#'   \item{condition}{Character. Experimental group (among: control, heterogeneous, homogenous)}
+#'   \item{mean_change}{Numerical. Empirical change between T1 (before debate) and T2 (after debate) questionnaires}
+#' }
+#' @return A ggplot2 object with horizontal intercept (empirical beta?)
+#' @note see empirical_comparison chunk in Rmd for call.
 plot_empir_compar <- function(df) {
   ggplot(df, aes(x = condition, y = mean_change_t1_t2)) +
     geom_col() +
     geom_errorbar(aes(ymin = mean_change_t1_t2 - sd_change_t1_t2, 
                   ymax = mean_change_t1_t2 + sd_change_t1_t2)) +
-    geom_hline(yintercept = 0.042, linetype = "dashed") +
+    geom_hline(yintercept = 0.042, linetype = "dashed") + # TODO check where this number comes from
     #geom_hline(yintercept = df %>% filter(condition == "Control") %>%
    #              pull(mean_change_t1_t2), linetype = "dashed") +
     theme_minimal() +
@@ -58,7 +128,18 @@ plot_empir_compar <- function(df) {
          title = "Opinion Change from T1 to T2")
 }
 
-# stacked column for cross-time comparisons
+#' Column Viz for cross-time comparisons
+#' 
+#' Produces a column chart to illustrate empirical opinion change across experimental conditions
+#' Intended use with empirical data csv called with lhs_outputs$plots$empirical_cross()
+#' @param empirical_stat_pivot Dataframe (empirical_stat_pivot) pivot of empirical stats() (in functions.R)
+#' \describe{
+#'   \item{condition}{Character. Experimental group (among: control, heterogeneous, homogenous)}
+#'   \item{value}{Numerical. Pivoted mean change assigned to value}
+#'   \item{change_type}{Factor. Change for time period (e.g., mean_change_t0_t1)}
+#' }
+#' @return A ggplot2 object with opinion change for different timeframes
+#' @note see empirical_comparison chunk in Rmd for call.
 plot_empir_cross <- function(df) {
   ggplot(df, aes(x = condition, y = value, fill = change_type)) +
     geom_col(position = "dodge") +
@@ -67,8 +148,19 @@ plot_empir_cross <- function(df) {
          title = "Opinion Change Across T0-T1-T2")
 }
 
-# Model Comparison
-## OLS VS ABM
+#' OLS VS ABM Model Comparison (GA,LHS,PSO,etc)
+#' 
+#' Produces a scatter plot comparing empirical ABM (between T1 and T2) and simulated MAE
+#' Intended use with empirical and simulated datae (e.g., LHS, GA) to check whether ABM 
+#' improves upon the empirical regression.
+#' @param comparison_clean Dataframe (df that has an inner join between simulation and empirical data by selected_debate_id)
+#' \describe{
+#'   \item{ols_mae}{Numerical. Linear regression between initial and final empirical attitudes}
+#'   \item{abm_mae}{Numerical. Mean of simulated MAE for an exploration algorithm}
+#' @note y=x dashed line represents proportion of ABM debates that improves on OLS baseline}
+#' }
+#' @return A ggplot scatter plot comparing in which debates ABM improves over OLS or vice-versa.
+#' @note see directional-accuracy chunk in Rmd for call.
 plot_ols_abm_comp <- function(df) { # use with comparison_clean
   ggplot(df, aes(x=ols_mae, y=abm_mae)) +
     geom_point(alpha = 0.6) +
@@ -81,7 +173,23 @@ plot_ols_abm_comp <- function(df) { # use with comparison_clean
     theme_bw()
 }
 
-## Model performance as a rank
+#' Version aware Model Performance Ranking
+#' 
+#' Produces a horizontally flipped bar chart ranking mean mae for each model_type
+#' faceted by speaking_mode and version (if it exists). Global sort order computed
+#' across all speaking_modes to ensure consistent ranking across facets
+#' Baseline (no_change) is injected using \code{anchor_baseline_facets()} before plotting
+#' @param df Dataframe (used with \code{model_compar_main}), containing:
+#'   \describe{
+#'     \item{model_type}{Character. Model type identifier (e.g., consensus, clustering, bipolarization)}
+#'     \item{mae_mean}{Numerical. Mean MAE across debates for that model_type}
+#'     \item{speaking_mode}{Boolean. Debate speaking mode condition}
+#'     \item{version}{Character. Optional. LHS/GA if present facets by version AND speaking mode (\code{facet_grid})}
+#'   }
+#' @return A ggplot2 object \code{scale_x_discrete(drop = FALSE)} ensure \code{no_change} is preserved when absent from one facet.
+#' @note Global sort order is derived across ALL speaking_modes to avoid inconsistent facet ordering
+#' \code{anchor_baseline_facets()} handles this so that both facets level simultaneously
+#' @seealso \code{anchor_baseline_facets()} (in functions.R) AND model-performance chunk in Rmd for call.
 plot_model_performance_rank_main <- function(df) { # use with model_compar_main
 
   # inject baseline across both facets simultaneously

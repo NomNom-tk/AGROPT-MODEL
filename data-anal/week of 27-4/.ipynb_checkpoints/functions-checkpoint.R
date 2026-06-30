@@ -262,7 +262,46 @@ aggregate_abm_debate <- function(df, mae_col = "mae") {
       .groups = "drop"
     )
 }
-# SEMI_CLEARED apply_batch_mutations / zero all non-useful params in GAMA exp (consensus has SD values) ####
+
+
+#' Apply Batch Mutations and Type Coercion to Simulation Output
+#'
+#' Cleans and type-converts raw GAMA batch output for downstream analysis.
+#' Converts character/logical columns to numeric where applicable, derives
+#' \code{normalised_convergence} and \code{debate_composition}, coerces ID
+#' columns to character, and performs structural validation (required
+#' columns) and NA auditing with row-level diagnostics.
+#'
+#' @param df A dataframe of raw GAMA batch output (one row per simulation run).
+#'   Must contain \code{speaking_mode}, \code{use_distinct_agents},
+#'   \code{debate_label}, and \code{convergence_cycle}.
+#'
+#' @return The cleaned dataframe with:
+#'   \describe{
+#'     \item{normalised_convergence}{Numeric. \code{convergence_cycle / 100}.}
+#'     \item{debate_composition}{Character. First character of \code{debate_label}
+#'       (e.g. "H" or "M"), added only if \code{debate_label} exists.}
+#'     \item{selected_debate_id, seed}{Coerced to character if present.}
+#'     \item{agent_wrong_direction, agent_is_saturated}{Coerced to logical if present.}
+#'   }
+#'   Numeric coercion is applied to: convergence_rate, confidence_threshold,
+#'   repulsion_strength, repulsion_threshold (and their _sd variants), mae,
+#'   initial_variance, opinion_variance, seed, polarization_index,
+#'   neutral_zone_width, mean_net_repulsion_abs, convergence_cycle —
+#'   restricted to columns that actually exist in \code{df}.
+#'
+#' @section Side effects:
+#'   Prints per-column NA counts and total NA count to console. Emits a
+#'   \code{warning()} per affected column listing the row indices containing
+#'   NAs, or a \code{message()} confirming no NAs if none found.
+#'
+#' @section Errors:
+#'   Throws via \code{stop()} if any of the required columns
+#'   (\code{speaking_mode}, \code{use_distinct_agents}, \code{debate_label},
+#'   \code{convergence_cycle}) are missing from \code{df}.
+#'
+#' @note Filters out any row where \code{model_type == "model_type"}
+#'   (header row artifact from batch CSV concatenation).
 apply_batch_mutations <- function(df) {
   
   df <- df %>%
@@ -347,7 +386,52 @@ apply_batch_mutations <- function(df) {
   
 }
 
-# CLEAR pcc and prcc function run_sensi_analysis ####
+#' Compute PCC and PRCC Sensitivity Indices per Model/Agent-Type Combination
+#'
+#' Runs Partial Correlation Coefficient (PCC) and Partial Rank Correlation
+#' Coefficient (PRCC) sensitivity analysis (via \code{sensitivity::pcc()})
+#' separately for each combination of \code{model_type} and
+#' \code{use_distinct_agents}, against each output variable in
+#' \code{output_cols}. Excludes \code{model_type == "no_change"}.
+#'
+#' @param df A dataframe of simulation results (post \code{apply_batch_mutations()}),
+#'   containing \code{model_type}, \code{use_distinct_agents}, parameter
+#'   columns, and output columns.
+#' @param param_cols_by_model A named list mapping
+#'   \code{"<model_type>_<TRUE|FALSE>"} keys (e.g. \code{"consensus_TRUE"})
+#'   to a character vector of parameter column names relevant to that
+#'   model/agent-type combination.
+#' @param output_cols Character vector of output variable column names to
+#'   test sensitivity against (e.g. \code{c("mae", "convergence_cycle")}).
+#'
+#' @return A named list with two elements:
+#'   \describe{
+#'     \item{pcc}{Dataframe with columns \code{key}, \code{model_type},
+#'       \code{use_distinct_agents}, \code{output}, \code{parameter}, \code{PCC}.}
+#'     \item{prcc}{Same structure with \code{PRCC} instead of \code{PCC}.}
+#'   }
+#'
+#' @details
+#'   For single-parameter cases, PCC/PRCC reduce to a simple Pearson
+#'   correlation (\code{cor()}) since \code{sensitivity::pcc()} requires
+#'   \eqn{\ge 2} parameters. For multi-parameter cases, \code{pcc()} is
+#'   called twice — once with \code{rank = FALSE} for PCC, once with
+#'   \code{rank = TRUE} for PRCC — extracting the \code{"original"} column
+#'   from each result object.
+#'
+#'   Skips (via \code{next}): keys not found in \code{param_cols_by_model};
+#'   parameter sets that don't intersect with \code{df_piece} columns;
+#'   outputs missing from \code{df_piece}; outputs with zero variance
+#'   (constant values), since PCC requires variance in both X and Y.
+#'
+#' @section Side effects:
+#'   Prints debug output to console: current key, available
+#'   \code{param_cols_by_model} names, selected \code{param_cols}, and
+#'   \code{str()}/\code{head()} of the PRCC result object.
+#'
+#' @seealso \code{plot_pcc_heatmap()}, \code{plot_prcc_heatmap()} for
+#'   visualizing the returned dataframes. \code{PCC} column name confirmed
+#'   here as \code{"original"} extracted from \code{sensitivity::pcc()}.
 run_sensi_analysis <- function(df, param_cols_by_model, output_cols) {
   
   sensi_split <- df %>%
@@ -368,8 +452,8 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols) {
     key <- paste(model_type_val, distinct_val, sep="_") # key creation [model, val] separated by _
     
     # key debug
-    print(paste("key:", key))
-    print(names(param_cols_by_model))
+    #print(paste("key:", key))
+    #print(names(param_cols_by_model))
     
     # Retrieve relevant parameter columns
     param_cols <- param_cols_by_model[[key]]       # lookup mapping
@@ -384,8 +468,8 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols) {
     # convert to numeric in case some columns are factors/logical
     X[] <- lapply(X, function(col) as.numeric(col))
     
-    print(key)
-    print(param_cols)
+    #print(key)
+    #print(param_cols)
     
     # check if keys are null or not
     if (is.null(param_cols)) {
@@ -433,8 +517,8 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols) {
       # Compute PCC for multiple parameters partial pearson
       pcc_res <- pcc(X, y) # Partial Pearson correlation coefficients using X (param cols input), and y column names converted to numeric
       prcc_res <- pcc(X, y, rank = TRUE) # PRCC
-      print(str(prcc_res))
-      print(head(prcc_res$PCC))
+      #print(str(prcc_res))
+      #print(head(prcc_res$PCC))
       
       # flatten pcc results properly
       param_names <- rownames(pcc_res$PCC) # extract parameter names (row labels) FIRST BEFORE VALUES
@@ -521,7 +605,49 @@ fit_lm <- function(df, param_cols, output_cols, standardize = FALSE) {
   # return results
   return(lm_results_df)
 }
-# CLEAR generate_gaml_bounds ####
+                  
+#' Generate GAML Parameter Bound Declarations from Top-Performing Configs
+#'
+#' Translates a dataframe of best-performing parameter ranges (one row per
+#' model_type / use_distinct_agents combination) into GAML \code{parameter}
+#' declaration strings, ready to paste into a GAMA experiment block to
+#' constrain a follow-up GA or LHS run. Zero-width ranges (min == max) are
+#' symmetrically expanded by \code{buffer} to avoid a degenerate search space.
+#'
+#' @param df A dataframe, typically the GAML Boundary Layer output (top 25%
+#'   performing LHS configs), with one row per model_type/use_distinct_agents
+#'   combination. Required columns: \code{model_type}, \code{use_distinct_agents},
+#'   \code{best_mae}, \code{n}, \code{cr_min}, \code{cr_max}, \code{ct_min},
+#'   \code{ct_max}, \code{rs_min}, \code{rs_max}, \code{rt_min}, \code{rt_max}.
+#'   For rows where \code{use_distinct_agents == TRUE}, also requires the
+#'   \code{_sd} variants of all the above (e.g. \code{cr_min_sd}).
+#'
+#' @return A character vector of GAML source lines — a header comment per
+#'   row (model type, distinct agents flag, best MAE, n) followed by one
+#'   \code{parameter "..." var: ... min: ... max: ...;} line per parameter
+#'   that passes its inclusion guard. Intended to be written to a \code{.gaml}
+#'   file or pasted directly into an experiment block.
+#'
+#' @param buffer Numeric. Amount (in parameter units) to expand a zero-width
+#'   range symmetrically around its value. Default \code{0.05}.
+#'
+#' @details
+#'   \code{convergence_rate} is always included. \code{confidence_threshold}
+#'   is included only if \code{ct_min} is non-NA, finite, and \code{ct_max > 0.01}
+#'   (guards against near-zero/irrelevant ranges for e.g. consensus, where
+#'   confidence_threshold doesn't structurally apply). \code{repulsion_strength}
+#'   and \code{repulsion_threshold} are included together under the same guard
+#'   on \code{rs_min}/\code{rs_max} (relevant only to bipolarization). SD
+#'   variants of all parameters are included only when
+#'   \code{use_distinct_agents == TRUE}, under the same respective guards.
+#'
+#' @note Internal helper \code{expand_range(min_val, max_val, buffer)}
+#'   returns \code{c(NA, NA)}-safe passthrough if either bound is NA;
+#'   otherwise expands symmetrically only when \code{min_val == max_val}.
+#'
+#' @seealso \code{lhs-boundary-layer} / \code{gaml-boundaries} chunk in Rmd
+#'   for the upstream construction of \code{df} and downstream usage of
+#'   the returned GAML lines.
 generate_gaml_bounds <- function(df, buffer = 0.05) {
   
   # Helper function: expands zero-width ranges
@@ -622,7 +748,38 @@ generate_gaml_bounds <- function(df, buffer = 0.05) {
   
   return(output_lines)
 }
-# CLEAR bipol_constraint_filter ####
+                  
+#' Filter Out Bipolarization Rows Violating Neutral Zone Constraint
+#'
+#' Removes simulation rows where \code{model_type == "bipolarization"} and
+#' \code{neutral_zone_width < 0}, which represents a structurally invalid
+#' configuration (the two opinion poles have crossed/overlapped rather than
+#' maintaining a separating neutral zone). Also normalizes a legacy
+#' \code{debate} column name to \code{selected_debate_id} if present.
+#'
+#' @param df A dataframe of simulation results. Expected to contain
+#'   \code{model_type} and \code{neutral_zone_width} for the filter to apply;
+#'   if either is missing, the function is a no-op (returns \code{df} unchanged).
+#' @param verbose Logical. If \code{TRUE} (default), prints a message
+#'   reporting the number of violating rows removed, or confirms none found.
+#'
+#' @return The filtered dataframe, with bipolarization rows where
+#'   \code{neutral_zone_width < 0} removed. All other rows (including all
+#'   non-bipolarization rows) are retained unchanged.
+#'
+#' @note Renames \code{debate} -> \code{selected_debate_id} if \code{debate}
+#'   exists in \code{df}, for consistency with the rest of the pipeline's
+#'   join key naming.
+#'
+#' @section Side effects:
+#'   Emits a \code{message()} when \code{verbose = TRUE}: either reporting
+#'   violation count or confirming a clean dataset.
+#'
+#' @section Known issue:
+#'   Lines 26-30 (the standalone \code{df \%>\% filter(...)} block without
+#'   reassignment) execute but discard their result — only the subsequent
+#'   reassigned \code{df <- df \%>\% filter(...)} actually takes effect. The
+#'   earlier block is dead code and can be removed.
 bipol_constraint_filter <- function(df, verbose = TRUE) {
   # check and reconvert any naming problems
   if ("debate" %in% names(df)) {
@@ -652,11 +809,11 @@ bipol_constraint_filter <- function(df, verbose = TRUE) {
   }
   
   # only apply to bipolarization rows
-  df %>%
-    filter(
-      model_type != "bipolarization" |
-        (model_type == "bipolarization" & neutral_zone_width >= 0)
-    )
+  #df %>%
+  #  filter(
+  #    model_type != "bipolarization" |
+  #      (model_type == "bipolarization" & neutral_zone_width >= 0)
+  #  )
   
   # return filtered df
   df <- df %>%
@@ -750,7 +907,7 @@ param_region_extraction <- function(df, percentile = 0.25,
   )
   
   # Optional buffer to expand ranges slightly
-  buffer <- 0.05  # change to 0 if you don't want a buffer
+  #buffer <- 0.05  # change to 0 if you don't want a buffer
   
   # Apply clamping and buffer
   df <- df %>%
@@ -814,77 +971,7 @@ param_region_extraction <- function(df, percentile = 0.25,
   ))
   
 }
-# NOTUSED TODO build_analysis_outputs ----
-## 27/4/26: added source and df for interactions, change source to be generalizable
-## also added interactions list
-build_analysis_outputs <- function(source, 
-                              df,
-                              df_versions,
-                              df_interactions = NULL,
-                              df_influence = NULL,
-                              df_susceptibility = NULL,
-                              sensi,
-                              models,
-                              comparisons,
-                              behavioral,
-                              dynamics,
-                              regions,
-                              plot_fns) {
-  
-  # --------
-  # OUTPUT CONTRACT
-  # --------
-  outputs <- list(
-    source = source,
-    
-    # DATA
-    data = list(
-      raw      = df,
-      versions = df_versions
-    ),
-    
-    # SENSITIVITY ANALYSIS
-    sensitivity = list(
-      pcc  = sensi$pcc,
-      prcc = sensi$prcc
-    ),
-    
-    # MODELS
-    models = models,
-    
-    # INTERACTIONS
-    interactions = list(
-      raw = df_interactions,
-      influence = df_influence,
-      susceptibility = df_susceptibility
-    ),
-    
-    # STATISTICAL COMPARISONS
-    # need to contain: selected_debate_id, ols_mae, abm_mae, delta_mae, abm_better
-    comparisons = list(
-      ols_abm = comparisons$ols_abm
-    ),
-    
-    # BEHAVIORAL ANALYSIS
-    behavioral = behavioral,
-    
-    # DYNAMICS / SYSTEM OUTPUTS
-    dynamics = dynamics,
-    
-    # PARAMETER SPACE / REGIONS
-    regions = regions,
-    
-    # PLOTS (FUNCTIONS, NOT OBJECTS)
-    plots = list(
-      pcc         = function() plot_fns$pcc(sensi$pcc),
-      prcc        = function() plot_fns$prcc(sensi$prcc),
-      convergence = function() plot_fns$convergence(df),
-      tradeoff    = function() plot_fns$tradeoff(df),
-      delta_mae   = function() plot_fns$delta_mae(comparisons$ols)
-    )
-  )
-  return(outputs)
-}
+
 # CLEAR prepare_direcitonal_df 29/4/26 ----
 prepare_directional <- function(df) { # use with df_ag
   df_directional <- df %>%
@@ -911,7 +998,75 @@ summarize_directional <- function(df) {
     )
 }
 
-# TODO build_influence_network 6/5/26 ----
+#' Summarize Direcitonal Accuracy, Valence split
+#' 
+#' Extension of summarize_directional() with pro_reduction split
+#' produces per-debate, per-model, per-condition, per-valence directional accuracy and signed error metrics
+#' 
+#' @param df Agent-level dataframe (df_directional_agents) containing
+#' model_type, 
+
+#' Build Per-Agent Influence Network Metrics (Debate-Level and Aggregate) 6/5/26
+#'
+#' Constructs directed, weighted interaction graphs from agent-to-agent
+#' influence data, computing centrality metrics at two granularities:
+#' per-debate (one graph per selected_debate_id x model_type) and aggregate
+#' (one graph per current_condition x model_type, pooling across debates).
+#' Joins resulting node metrics with static agent attributes (pro_reduction,
+#' saturation status).
+#'
+#' @param df A dataframe of agent-to-agent interactions (use with
+#'   \code{lhs_interactions}), containing \code{sender_id}, \code{receiver_id},
+#'   \code{selected_debate_id}, \code{model_type}, \code{current_condition},
+#'   and \code{delta} (opinion change magnitude per interaction).
+#' @param df_attributes A dataframe of static per-agent attributes containing
+#'   \code{agent_id}, \code{selected_debate_id}, \code{current_condition},
+#'   \code{pro_reduction}, \code{agent_is_saturated}.
+#'
+#' @return A named list:
+#'   \describe{
+#'     \item{per_debate}{Node metrics (in/out strength, betweenness, density,
+#'       isolated node count) per agent per debate, joined with pro_reduction.}
+#'     \item{per_debate_full}{Same as \code{per_debate} but with all joined
+#'       attribute columns retained (the full \code{combined} dataframe).}
+#'     \item{aggregate_full}{Node metrics computed on graphs aggregated across
+#'       debates within each \code{current_condition} x \code{model_type}.}
+#'     \item{aggregate}{Per-condition summary joined with static agent
+#'       attributes (\code{macro_attributes}).}
+#'     \item{graphs}{Named list of \code{igraph} objects, one per
+#'       \code{current_condition}_\code{model_type} combination, for
+#'       visualization.}
+#'   }
+#'
+#' @details
+#'   Edge weight is \code{mean(abs(delta))} between a sender/receiver pair;
+#'   edges with zero weight are dropped. Two separate graph constructions
+#'   occur: (1) per-debate, split by \code{selected_debate_id} and
+#'   \code{model_type}; (2) aggregate, split by \code{current_condition} and
+#'   \code{model_type} — pooling sender/receiver pairs across all debates
+#'   sharing the same condition, which conflates agent IDs across debates
+#'   since agent_id is not globally unique (see Known Issue).
+#'
+#'   Metrics computed per graph via \code{igraph}: weighted in-strength
+#'   (susceptibility to influence), weighted out-strength (influence
+#'   exerted), betweenness centrality (bridge/broker agents), edge density,
+#'   and isolated node count (agents with zero interactions).
+#'
+#' @section Known issue:
+#'   Per the project's known issues list: aggregate graphs (the
+#'   \code{current_condition} x \code{model_type} split) conflate agent IDs
+#'   across debates, since \code{agent_id} alone is not a unique key absent
+#'   \code{selected_debate_id} in the grouping. A fix is pending to add
+#'   \code{selected_debate_id} to the aggregate grouping key — until then,
+#'   \code{aggregate}/\code{aggregate_full}/\code{graphs} outputs should be
+#'   treated as provisional.
+#'
+#' @section Side effects:
+#'   Prints \code{colnames(combined)} and \code{nrow(combined)} to console
+#'   (debug output).
+#'
+#' @seealso \code{enrich_graph_vertices()}, \code{filter_top_nodes()},
+#'   \code{filter_edges()} for post-processing the returned \code{graphs}.
 build_influence_network <- function(df, df_attributes) { # use with lhs_interactions
   # prepare edge list
   edges <- df %>%
@@ -943,7 +1098,7 @@ build_influence_network <- function(df, df_attributes) { # use with lhs_interact
     isolated_nodes <- sum(degree(g) == 0) # agents with no interactions in this debate
     
     # data frame conversion
-    data.frame(
+    node_metrics_piece <- data.frame(
       agent_id = names(in_str),
       in_strength = in_str,
       out_strength = out_str,
@@ -954,12 +1109,17 @@ build_influence_network <- function(df, df_attributes) { # use with lhs_interact
       isolated_nodes = isolated_nodes,
       selected_debate_id = debate,
       model_type = model
-    )
+    ) %>%
+      mutate(raw_agent_id = str_remove(agent_id, paste0("^", debate, "_")))
+    stopifnot(all(paste(debate, node_metrics_piece$raw_agent_id, sep = "_") == node_metrics_piece$agent_id))
+    node_metrics_piece
   }) %>%
     bind_rows()
   
   # aggregate networks per condition
   debate_edges <- df %>%
+    mutate(sender_id = paste(selected_debate_id, sender_id, sep = "_"),
+           receiver_id = paste(selected_debate_id, receiver_id, sep = "_")) %>%
     group_by(sender_id, receiver_id, current_condition, model_type, selected_debate_id) %>%
     summarize(
       edge_weight = mean(abs(delta)),
@@ -1039,7 +1199,7 @@ build_influence_network <- function(df, df_attributes) { # use with lhs_interact
   
   # table summary for aggregate by condition
   per_condition_summary <- aggregate_metrics %>%
-    mutate(agent_id = as.numeric(agent_id)) %>%
+    # mutate(agent_id = as.numeric(agent_id)) %>% removed due to char coercion instead of strictly numeric 30/6/26
     left_join(macro_attributes, by = c("agent_id", "current_condition")) %>%
     group_by(agent_id, current_condition, model_type, pro_reduction) %>%
     summarize(
@@ -1062,7 +1222,31 @@ build_influence_network <- function(df, df_attributes) { # use with lhs_interact
   ))
   
 }
-# TODO enrich_graph_vertices - Helper 7/5/26 ----
+
+#' Attach Static Agent Attributes to Graph Vertices 7/5/26
+#'
+#' Joins a dataframe of agent attributes onto the vertices of an existing
+#' \code{igraph} object, matching on agent ID, and removes duplicate vertex
+#' rows.
+#'
+#' @param g An \code{igraph} object whose vertex names (\code{V(g)$name})
+#'   are agent IDs stored as character strings.
+#' @param df A dataframe of agent attributes containing \code{agent_id} and
+#'   any additional columns to attach (e.g. \code{pro_reduction},
+#'   \code{in_strength}).
+#'
+#' @return A \code{tbl_graph} object (tidygraph) with the node attribute
+#'   table enriched by the joined columns from \code{df}.
+#'
+#' @details
+#'   Filters \code{df} to only rows whose \code{agent_id} appears among the
+#'   graph's vertex names, deduplicates to one row per \code{agent_id}, then
+#'   left-joins onto graph nodes by \code{name == agent_id} (after coercing
+#'   \code{agent_id} to character to match vertex name type).
+#'
+#' @seealso \code{build_influence_network()} for the source of \code{g} and
+#'   attribute dataframes; \code{filter_top_nodes()},
+#'   \code{filter_edges()} for further graph processing.
 enrich_graph_vertices <- function(g, df) {
   vertex_ids <- as.numeric(V(g)$name) # agent_ids as characters converted to numeric
   attributes_reordered <- df %>%
@@ -1078,7 +1262,23 @@ enrich_graph_vertices <- function(g, df) {
   return(g_enriched)
 }
 
-# TODO filter_top_nodes 13/5//26 ----
+#' Filter Graph to Top-N Nodes by Out-Strength 13/5/26
+#'
+#' Reduces a graph to its \code{top_n} most influential nodes, ranked by
+#' \code{out_strength} (total weighted outgoing influence).
+#'
+#' @param g An \code{igraph} or \code{tbl_graph} object whose nodes have an
+#'   \code{out_strength} attribute (e.g. from \code{build_influence_network()}
+#'   or \code{enrich_graph_vertices()}).
+#' @param top_n Integer. Number of top nodes to retain.
+#'
+#' @return A \code{tbl_graph} object containing only the top \code{top_n}
+#'   nodes by \code{out_strength} (edges not incident to retained nodes are
+#'   implicitly dropped by tidygraph's node filtering).
+#'
+#' @seealso \code{filter_edges()} for the edge-weight equivalent;
+#'   \code{enrich_graph_vertices()} for attaching \code{out_strength} prior
+#'   to filtering.                
 filter_top_nodes <- function(g, top_n) {
   g_filtered <- g %>% 
     as_tbl_graph() %>%
@@ -1088,7 +1288,21 @@ filter_top_nodes <- function(g, top_n) {
   return(g_filtered)
 }
 
-# TODO filter_edges 15/5/25 ----
+#' Filter Graph Edges Below a Weight Threshold 15/5/26
+#'
+#' Removes edges with \code{edge_weight} at or below \code{threshold}, then
+#' removes any resulting isolated nodes (nodes with no remaining edges).
+#'
+#' @param g An \code{igraph} or \code{tbl_graph} object whose edges have an
+#'   \code{edge_weight} attribute.
+#' @param threshold Numeric. Minimum edge weight to retain (exclusive —
+#'   edges with \code{edge_weight <= threshold} are dropped).
+#'
+#' @return A \code{tbl_graph} object with low-weight edges and any newly
+#'   isolated nodes removed.
+#'
+#' @seealso \code{filter_top_nodes()} for the node-count equivalent;
+#'   typically applied after \code{enrich_graph_vertices()}.
 filter_edges <- function(g, threshold) {
   g_filtered_edge <- g %>%
     as_tbl_graph() %>%

@@ -119,7 +119,7 @@ plot_empir_compar <- function(df) {
     geom_col() +
     geom_errorbar(aes(ymin = mean_change_t1_t2 - sd_change_t1_t2, 
                   ymax = mean_change_t1_t2 + sd_change_t1_t2)) +
-    geom_hline(yintercept = 0.042, linetype = "dashed") +
+    geom_hline(yintercept = 0.042, linetype = "dashed") + # TODO check where this number comes from
     #geom_hline(yintercept = df %>% filter(condition == "Control") %>%
    #              pull(mean_change_t1_t2), linetype = "dashed") +
     theme_minimal() +
@@ -173,7 +173,23 @@ plot_ols_abm_comp <- function(df) { # use with comparison_clean
     theme_bw()
 }
 
-## Model performance as a rank
+#' Version aware Model Performance Ranking
+#' 
+#' Produces a horizontally flipped bar chart ranking mean mae for each model_type
+#' faceted by speaking_mode and version (if it exists). Global sort order computed
+#' across all speaking_modes to ensure consistent ranking across facets
+#' Baseline (no_change) is injected using \code{anchor_baseline_facets()} before plotting
+#' @param df Dataframe (used with \code{model_compar_main}), containing:
+#'   \describe{
+#'     \item{model_type}{Character. Model type identifier (e.g., consensus, clustering, bipolarization)}
+#'     \item{mae_mean}{Numerical. Mean MAE across debates for that model_type}
+#'     \item{speaking_mode}{Boolean. Debate speaking mode condition}
+#'     \item{version}{Character. Optional. LHS/GA if present facets by version AND speaking mode (\code{facet_grid})}
+#'   }
+#' @return A ggplot2 object \code{scale_x_discrete(drop = FALSE)} ensure \code{no_change} is preserved when absent from one facet.
+#' @note Global sort order is derived across ALL speaking_modes to avoid inconsistent facet ordering
+#' \code{anchor_baseline_facets()} handles this so that both facets level simultaneously
+#' @seealso \code{anchor_baseline_facets()} (in functions.R) AND model-performance chunk in Rmd for call.
 plot_model_performance_rank_main <- function(df) { # use with model_compar_main
 
   # inject baseline across both facets simultaneously
@@ -213,7 +229,21 @@ plot_model_performance_rank_main <- function(df) { # use with model_compar_main
 
 ## Model performance with distinct agents
 # fix version aware and defensive wrap
-plot_model_comparison_uncertainty <- function(df) { # use detailed version
+
+#' Scatter Plot of Model Performance Considering Distinct Agents (Optional version aware)
+#'
+#' Creates a flipped coordinate scatter plot with error bars to illustrate the impact of using SDs for each agent across model types
+#' Optionally version aware (through use of \code{facet_wrap})
+#' 
+#' @param df A dataframe (usually \code{model_comparison_detailed}), a version of df_batch
+#' grouped by \{model_type, version, speaking_mode, use_distinct_agents} aand then summarized in terms of mean MAE
+#' \describe{
+#'   \item{reordered model_type, mae_mean}{Numerical. Meant to sort mae_mean by model_type}
+#'   \item{mae_mean}{Numerical. MAE for each model_type}
+#'   \item{version}{Character. Optional only if for different LHS/GA versions add this to speaking_mode and use_distinct_agents with \code{facet_wrap}}
+#' @return a ggplot object with \code{coord_flip()} and \code{geom_errorbar()}
+#' @note see (framework_analysis.R for calls in outputs list) / not used in Rmd.
+plot_model_comparison_uncertainty <- function(df) {
   p <- ggplot(df, aes(x = reorder(model_type, mae_mean), y = mae_mean)) +
     geom_point(size = 2.5, color = "blue") +
     geom_errorbar(aes(
@@ -238,6 +268,20 @@ plot_model_comparison_uncertainty <- function(df) { # use detailed version
 }
 
 ## how far is the performance gap compared to the best model
+#' Bar Chart of Model Performance Compared to Best Model
+#'
+#' Takes the best model (lowest mae and eliminates it from the plot), then displays
+#' how far the rest of the models are from this "best" model
+#'
+#' @param A Dataframe use with \code{model_comparison_relative} which groups model_comparison_main by 
+#' speaking mode and then calculates the delta_mae (mae wrt to the "best" model)
+#' \describe{
+#'   \item{reordered model_type and delta_mae}{Numerical. MAE relative to the lowest mae of the model, reordered to display per model_type}
+#'   \item{delta_mae}{Numerical. MAE of the model_type relative to the model with the lowest MAE for speaking_mode}
+#'   \item{version}{Character. Will facet by version AND speaking_mode if several versions of LHS or GA are present}
+#' }
+#' @return a ggplot object with \code{coord_flip()}
+#' @note not currently used in Rmd.
 plot_model_performance_rank_gap <- function(df) { # use with model_relative
   # standard version with columns that ALWAYS exist
   p <- ggplot(df, aes(x= reorder(model_type, delta_mae), y = delta_mae)) +
@@ -260,11 +304,22 @@ plot_model_performance_rank_gap <- function(df) { # use with model_relative
   return(p)
 }
 
-## Version aware rank comparison
-# TODO modify with version abstraction
-# needs to be injected only if declared as non NULL, convert string (var) to variable symbol
-# inject with !! into aes mapping
-# else use static color if no column is present and write a message 
+#' Scatter Plot of Model Performance (Rank) with Version Adaptation
+#'
+#' Used to establish if different versions of the same exploration algorithm have an impact on model performance.
+#' Defines a grouping variable for color set to different versions if present.
+#' Injects a color (through string conversion to a variable symbol) if the different verisons are available and otherwise collapses to a static "darkblue"
+#' 
+#' @param a Dataframe used with \code{model_comparison_main} which is grouped by \code{model_type} and \code{speaking_mode} AND \code{version} IF present.
+#' @param color Variable Symbol IF different versions are present
+#' \describe{
+#'   \item{model_type}{Character. Distinguishes between different models in the experiment}
+#'   \item{mae_mean}{Numerical. Average of MAE for the specific \code{model_type}}
+#'   \item{color_sym}{Character. Assigns a color to different version IF present, otherwise creates error bars based on single version MAE}
+#' }
+#' @return a ggplot object comparing the model performance (mean MAE) across different versions, with different \code{color_sym} based on versions.
+#' @return1 ggplot object with \code{facet_wrap} by speaking_mode Boolean and \code{coord_flip()}.
+#' @note not currently used in Rmd. See (framework_analysis.R for calls).
 plot_model_rank_versions <- function(df, color_col = NULL) { # use with main
   
   # define grouping var for color = version

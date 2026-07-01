@@ -998,13 +998,53 @@ summarize_directional <- function(df) {
     )
 }
 
-#' Summarize Direcitonal Accuracy, Valence split
+#' Summarize Direcitonal Accuracy, Valence split 1/7/26
 #' 
 #' Extension of summarize_directional() with pro_reduction split
 #' produces per-debate, per-model, per-condition, per-valence directional accuracy and signed error metrics
 #' 
 #' @param df Agent-level dataframe (df_directional_agents) containing
-#' model_type, 
+#' model_type, current_condition, selected_debate_id, pro_reduction, correct_dir, agent_wrong_direction, opinion,
+#' final_attitude, initial_opinion
+#'
+#' @return one row per model x current_condition x selected_debate_id x pro_reduction
+#' with pct_correct_dir, pct_wrong_dir, mean_signed_error, mean_mae, mean_baseline_mae, n.
+summarize_directional_valence <- function(df) {
+    df %>%
+      group_by(model_type, current_condition, selected_debate_id, pro_reduction) %>%
+      summarize(
+          pct_correct_dir = mean(correct_dir),
+          pct_wrong_dir = mean(agent_wrong_direction),,
+          mean_signed_error = mean(opinion - final_attitude),
+          mean_mae = mean(abs(opinion - final_attitude)),
+          mean_baseline_mae = mean(abs(initial_opinion - final_attitude)),
+          n = n(),
+          .groups = "drop"
+      )
+}
+
+#' Compute Valence Asymmetry 1/7/26
+#' 
+#' Takes output of summarize_directional_valence() and pivots wide for coppmutation of accuracy and error asymmetry
+#' 
+#' @param df Aggregated agent-level dataframe (df_directional_valence) with:
+#' model_type, current_condition, selected_debate_id, pro_reduction, 
+#' pct_correct_dir, pct_wrong_dir, mean_signed_error, mean_mae, mean_baseline_mae, n
+#' 
+#' @return a dataframe in wide format with one row per debate x model x pro_reduction
+#' separate columns for TRUE/FALSE
+compute_valence_asymmetry <- function(df) {
+    df %>%
+    select(model_type, current_condition, selected_debate_id, pro_reduction,
+          pct_correct_dir, mean_signed_error, mean_mae) %>%
+    pivot_wider(
+        names_from = pro_reduction,
+        values_from = c(pct_correct_dir, mean_signed_error, mean_mae)) %>%
+    mutate(
+        accuracy_asymmetry = pct_correct_dir_1 - pct_correct_dir_0, # 1 (TRUE), 0 (FALSE)
+        error_asymmetry = mean_signed_error_1 - mean_signed_error_0)
+}
+        
 
 #' Build Per-Agent Influence Network Metrics (Debate-Level and Aggregate) 6/5/26
 #'
@@ -1068,158 +1108,158 @@ summarize_directional <- function(df) {
 #' @seealso \code{enrich_graph_vertices()}, \code{filter_top_nodes()},
 #'   \code{filter_edges()} for post-processing the returned \code{graphs}.
 build_influence_network <- function(df, df_attributes) { # use with lhs_interactions
-  # prepare edge list
-  edges <- df %>%
-    group_by(sender_id, receiver_id, selected_debate_id, model_type) %>%
-    summarize(
-      edge_weight = mean(abs(delta)),
-      n_interactions = n(),
-      .groups = "drop"
-    ) %>%
-    filter(edge_weight > 0)
+  # # prepare edge list
+  # edges <- df %>%
+  #   group_by(sender_id, receiver_id, selected_debate_id, model_type) %>%
+  #   summarize(
+  #     edge_weight = mean(abs(delta)),
+  #     n_interactions = n(),
+  #     .groups = "drop"
+  #   ) %>%
+  #   filter(edge_weight > 0)
   
-  # initial list to split edges df by debate_id and model_type
-  edge_split <- group_split(edges, selected_debate_id, model_type)
+  # # initial list to split edges df by debate_id and model_type
+  # edge_split <- group_split(edges, selected_debate_id, model_type)
   
-  # edge graphs for each debate_id and model_type combination
-  # extract debate and model from initial df, then compute on graph object
-  node_metrics <- map(edge_split, .progress = TRUE, ~ {
-    debate <- unique(.x$selected_debate_id)[1]
-    model <- unique(.x$model_type)[1]
-    g <- graph_from_data_frame(.x, directed = TRUE)
+  # # edge graphs for each debate_id and model_type combination
+  # # extract debate and model from initial df, then compute on graph object
+  # node_metrics <- map(edge_split, .progress = TRUE, ~ {
+  #   debate <- unique(.x$selected_debate_id)[1]
+  #   model <- unique(.x$model_type)[1]
+  #   g <- graph_from_data_frame(.x, directed = TRUE)
     
-    # metrics computations
-    in_str <- strength(g, mode = "in", weights = E(g)$edge_weight) # weighted in-strength per node (total influence received)
-    out_str <- strength(g, mode = "out", weights = E(g)$edge_weight) # weight out per node (total influence exerted)
-    between <- betweenness(g, directed = TRUE, weights = E(g)$edge_weight) # betweennes centrality/node (bridge agents between clusters)
-    graph_density <- edge_density(g) # proportion of possible edges that exist in network
-    mean_in_str <- mean(in_str) # mean susceptibility across all agents in debate
-    mean_out_str <- mean(out_str) # mean influence exerted across all agents in debate
-    isolated_nodes <- sum(degree(g) == 0) # agents with no interactions in this debate
+  #   # metrics computations
+  #   in_str <- strength(g, mode = "in", weights = E(g)$edge_weight) # weighted in-strength per node (total influence received)
+  #   out_str <- strength(g, mode = "out", weights = E(g)$edge_weight) # weight out per node (total influence exerted)
+  #   between <- betweenness(g, directed = TRUE, weights = E(g)$edge_weight) # betweennes centrality/node (bridge agents between clusters)
+  #   graph_density <- edge_density(g) # proportion of possible edges that exist in network
+  #   mean_in_str <- mean(in_str) # mean susceptibility across all agents in debate
+  #   mean_out_str <- mean(out_str) # mean influence exerted across all agents in debate
+  #   isolated_nodes <- sum(degree(g) == 0) # agents with no interactions in this debate
     
-    # data frame conversion
-    node_metrics_piece <- data.frame(
-      agent_id = names(in_str),
-      in_strength = in_str,
-      out_strength = out_str,
-      betweenness = between,
-      graph_density = graph_density,
-      mean_in_strength = mean_in_str,
-      mean_out_strength = mean_out_str,
-      isolated_nodes = isolated_nodes,
-      selected_debate_id = debate,
-      model_type = model
-    ) %>%
-      mutate(raw_agent_id = str_remove(agent_id, paste0("^", debate, "_")))
-    stopifnot(all(paste(debate, node_metrics_piece$raw_agent_id, sep = "_") == node_metrics_piece$agent_id))
-    node_metrics_piece
-  }) %>%
-    bind_rows()
+  #   # data frame conversion
+  #   node_metrics_piece <- data.frame(
+  #     agent_id = names(in_str),
+  #     in_strength = in_str,
+  #     out_strength = out_str,
+  #     betweenness = between,
+  #     graph_density = graph_density,
+  #     mean_in_strength = mean_in_str,
+  #     mean_out_strength = mean_out_str,
+  #     isolated_nodes = isolated_nodes,
+  #     selected_debate_id = debate,
+  #     model_type = model
+  #   ) %>%
+  #     mutate(raw_agent_id = str_remove(agent_id, paste0("^", debate, "_")))
+  #   stopifnot(all(paste(debate, node_metrics_piece$raw_agent_id, sep = "_") == node_metrics_piece$agent_id))
+  #   node_metrics_piece
+  # }) %>%
+  #   bind_rows()
   
-  # aggregate networks per condition
-  debate_edges <- df %>%
-    mutate(sender_id = paste(selected_debate_id, sender_id, sep = "_"),
-           receiver_id = paste(selected_debate_id, receiver_id, sep = "_")) %>%
-    group_by(sender_id, receiver_id, current_condition, model_type, selected_debate_id) %>%
-    summarize(
-      edge_weight = mean(abs(delta)),
-      n_interactions = n(),
-      .groups = "drop"
-    ) %>%
-    filter(edge_weight > 0)
+  # # aggregate networks per condition
+  # debate_edges <- df %>%
+  #   mutate(sender_id = paste(selected_debate_id, sender_id, sep = "_"),
+  #          receiver_id = paste(selected_debate_id, receiver_id, sep = "_")) %>%
+  #   group_by(sender_id, receiver_id, current_condition, model_type, selected_debate_id) %>%
+  #   summarize(
+  #     edge_weight = mean(abs(delta)),
+  #     n_interactions = n(),
+  #     .groups = "drop"
+  #   ) %>%
+  #   filter(edge_weight > 0)
   
-  # set up of edge_list
-  agg_edge_split <- group_split(debate_edges, current_condition, model_type)
+  # # set up of edge_list
+  # agg_edge_split <- group_split(debate_edges, current_condition, model_type)
   
-  # aggregate edge graphs
-  agg_edge_graphs <- map(agg_edge_split, ~ graph_from_data_frame(.x, directed = TRUE), .progress = TRUE)
+  # # aggregate edge graphs
+  # agg_edge_graphs <- map(agg_edge_split, ~ graph_from_data_frame(.x, directed = TRUE), .progress = TRUE)
   
-  # addition of naming fix
-  names(agg_edge_graphs) <- map_chr(agg_edge_split, ~ paste(unique(.x$current_condition)[1], unique(.x$model_type)[1], sep = "_"))
+  # # addition of naming fix
+  # names(agg_edge_graphs) <- map_chr(agg_edge_split, ~ paste(unique(.x$current_condition)[1], unique(.x$model_type)[1], sep = "_"))
   
-  # aggregated metrics
-  aggregate_metrics <- map(agg_edge_split, .progress = TRUE, ~ {
-    current_condition <- unique(.x$current_condition)[1]
-    model <- unique(.x$model_type)[1]
-    g <- graph_from_data_frame(.x, directed = TRUE)
+  # # aggregated metrics
+  # aggregate_metrics <- map(agg_edge_split, .progress = TRUE, ~ {
+  #   current_condition <- unique(.x$current_condition)[1]
+  #   model <- unique(.x$model_type)[1]
+  #   g <- graph_from_data_frame(.x, directed = TRUE)
     
-    # metrics calculation on aggregate level
-    in_str <- strength(g, mode = "in", weights = E(g)$edge_weight) # weighted in-strength per node across all debates
-    out_str <- strength(g, mode = "out", weights = E(g)$edge_weight) # weight out per node across all debates
-    between <- betweenness(g, directed = TRUE, weights = E(g)$edge_weight) # bridge agents between clusters across all debates
-    graph_density <- edge_density(g) # proportion of possible edges that exist in network
-    mean_in_str <- mean(in_str) # mean susceptibility across all agents in debate
-    mean_out_str <- mean(out_str) # mean influence exerted across all agents in debate
-    isolated_nodes <- sum(degree(g) == 0) # agents with no interactions in this debate
+  #   # metrics calculation on aggregate level
+  #   in_str <- strength(g, mode = "in", weights = E(g)$edge_weight) # weighted in-strength per node across all debates
+  #   out_str <- strength(g, mode = "out", weights = E(g)$edge_weight) # weight out per node across all debates
+  #   between <- betweenness(g, directed = TRUE, weights = E(g)$edge_weight) # bridge agents between clusters across all debates
+  #   graph_density <- edge_density(g) # proportion of possible edges that exist in network
+  #   mean_in_str <- mean(in_str) # mean susceptibility across all agents in debate
+  #   mean_out_str <- mean(out_str) # mean influence exerted across all agents in debate
+  #   isolated_nodes <- sum(degree(g) == 0) # agents with no interactions in this debate
     
-    # data frame conversion
-    data.frame(
-      agent_id = names(in_str),
-      in_strength = in_str,
-      out_strength = out_str,
-      betweenness = between,
-      graph_density = graph_density,
-      mean_in_strength = mean_in_str,
-      mean_out_strength = mean_out_str,
-      isolated_nodes = isolated_nodes,
-      current_condition = current_condition,
-      model_type = model
-    )
-  }) %>%
-    bind_rows()
+  #   # data frame conversion
+  #   data.frame(
+  #     agent_id = names(in_str),
+  #     in_strength = in_str,
+  #     out_strength = out_str,
+  #     betweenness = between,
+  #     graph_density = graph_density,
+  #     mean_in_strength = mean_in_str,
+  #     mean_out_strength = mean_out_str,
+  #     isolated_nodes = isolated_nodes,
+  #     current_condition = current_condition,
+  #     model_type = model
+  #   )
+  # }) %>%
+  #   bind_rows()
   
-  # agent_static_attributes, filter raw attributes / one row per agent, per debate
-  ## 5/6/26
-  agent_static_attributes <- df_attributes %>%
-    select(agent_id, selected_debate_id, current_condition, pro_reduction, agent_is_saturated) %>%
-    group_by(agent_id, selected_debate_id) %>%
-    summarize(
-      current_condition = first(current_condition),
-      pro_reduction = first(pro_reduction),
-      agent_is_saturated = first(agent_is_saturated),
-      .groups = "drop"
-    )
+  # # agent_static_attributes, filter raw attributes / one row per agent, per debate
+  # ## 5/6/26
+  # agent_static_attributes <- df_attributes %>%
+  #   select(agent_id, selected_debate_id, current_condition, pro_reduction, agent_is_saturated) %>%
+  #   group_by(agent_id, selected_debate_id) %>%
+  #   summarize(
+  #     current_condition = first(current_condition),
+  #     pro_reduction = first(pro_reduction),
+  #     agent_is_saturated = first(agent_is_saturated),
+  #     .groups = "drop"
+  #   )
 
-  # join with df_ag on agent_id
-  combined <- left_join(node_metrics %>% mutate(agent_id = as.numeric(agent_id)), 
-                        agent_static_attributes,
-                        by = c("agent_id", "selected_debate_id"))
-  print(colnames(combined))
-  print(nrow(combined))
+  # # join with df_ag on agent_id
+  # combined <- left_join(node_metrics %>% mutate(agent_id = as.numeric(agent_id)), 
+  #                       agent_static_attributes,
+  #                       by = c("agent_id", "selected_debate_id"))
+  # print(colnames(combined))
+  # print(nrow(combined))
   
-  # table summary per debate
-  per_debate_summary <- combined %>%
-    select(agent_id, selected_debate_id, model_type, pro_reduction,
-           in_strength, out_strength, betweenness, graph_density, isolated_nodes)
+  # # table summary per debate
+  # per_debate_summary <- combined %>%
+  #   select(agent_id, selected_debate_id, model_type, pro_reduction,
+  #          in_strength, out_strength, betweenness, graph_density, isolated_nodes)
   
-  # macro attributes form shielded agent_static_attributes
-  macro_attributes <- agent_static_attributes %>%
-    select(agent_id, current_condition, pro_reduction, agent_is_saturated) %>%
-    distinct(agent_id, current_condition, .keep_all = TRUE)
+  # # macro attributes form shielded agent_static_attributes
+  # macro_attributes <- agent_static_attributes %>%
+  #   select(agent_id, current_condition, pro_reduction, agent_is_saturated) %>%
+  #   distinct(agent_id, current_condition, .keep_all = TRUE)
   
-  # table summary for aggregate by condition
-  per_condition_summary <- aggregate_metrics %>%
-    # mutate(agent_id = as.numeric(agent_id)) %>% removed due to char coercion instead of strictly numeric 30/6/26
-    left_join(macro_attributes, by = c("agent_id", "current_condition")) %>%
-    group_by(agent_id, current_condition, model_type, pro_reduction) %>%
-    summarize(
-      in_strength = in_strength,
-      out_strength = out_strength,
-      betweenness = betweenness,
-      graph_density = graph_density,
-      isolated_nodes = isolated_nodes,
-      agent_is_saturated = agent_is_saturated,
-      .groups = "drop"
-    )
+  # # table summary for aggregate by condition
+  # per_condition_summary <- aggregate_metrics %>%
+  #   # mutate(agent_id = as.numeric(agent_id)) %>% removed due to char coercion instead of strictly numeric 30/6/26
+  #   left_join(macro_attributes, by = c("agent_id", "current_condition")) %>%
+  #   group_by(agent_id, current_condition, model_type, pro_reduction) %>%
+  #   summarize(
+  #     in_strength = in_strength,
+  #     out_strength = out_strength,
+  #     betweenness = betweenness,
+  #     graph_density = graph_density,
+  #     isolated_nodes = isolated_nodes,
+  #     agent_is_saturated = agent_is_saturated,
+  #     .groups = "drop"
+  #   )
   
-  # outputs
-  return(list(
-    per_debate = per_debate_summary,
-    per_debate_full = combined, # node metrics joined with df_ag, per debate
-    aggregate_full = aggregate_metrics, # node metrics at condition level
-    aggregate = per_condition_summary, # summary of metrics per condition
-    graphs = agg_edge_graphs # igraph objects for condition level viz
-  ))
+  # # outputs
+  # return(list(
+  #   per_debate = per_debate_summary,
+  #   per_debate_full = combined, # node metrics joined with df_ag, per debate
+  #   aggregate_full = aggregate_metrics, # node metrics at condition level
+  #   aggregate = per_condition_summary, # summary of metrics per condition
+  #   graphs = agg_edge_graphs # igraph objects for condition level viz
+  # ))
   
 }
 
@@ -1248,18 +1288,18 @@ build_influence_network <- function(df, df_attributes) { # use with lhs_interact
 #'   attribute dataframes; \code{filter_top_nodes()},
 #'   \code{filter_edges()} for further graph processing.
 enrich_graph_vertices <- function(g, df) {
-  vertex_ids <- as.numeric(V(g)$name) # agent_ids as characters converted to numeric
-  attributes_reordered <- df %>%
-    filter(agent_id %in% vertex_ids) %>% # filter to relevant vertex_id rows
-    distinct(agent_id, .keep_all = TRUE) %>%
-    mutate(agent_id = as.character(agent_id))
+  # vertex_ids <- as.numeric(V(g)$name) # agent_ids as characters converted to numeric
+  # attributes_reordered <- df %>%
+  #   filter(agent_id %in% vertex_ids) %>% # filter to relevant vertex_id rows
+  #   distinct(agent_id, .keep_all = TRUE) %>%
+  #   mutate(agent_id = as.character(agent_id))
 
-  g_enriched <- as_tbl_graph(g) %>% 
-    activate(nodes) %>%
-    left_join(attributes_reordered, by = c("name" = "agent_id")) %>%
-    distinct(name, .keep_all = TRUE)
+  # g_enriched <- as_tbl_graph(g) %>% 
+  #   activate(nodes) %>%
+  #   left_join(attributes_reordered, by = c("name" = "agent_id")) %>%
+  #   distinct(name, .keep_all = TRUE)
   
-  return(g_enriched)
+  # return(g_enriched)
 }
 
 #' Filter Graph to Top-N Nodes by Out-Strength 13/5/26
@@ -1280,12 +1320,12 @@ enrich_graph_vertices <- function(g, df) {
 #'   \code{enrich_graph_vertices()} for attaching \code{out_strength} prior
 #'   to filtering.                
 filter_top_nodes <- function(g, top_n) {
-  g_filtered <- g %>% 
-    as_tbl_graph() %>%
-    activate(nodes) %>%
-    slice_max(order_by = out_strength, n = top_n)
+  # g_filtered <- g %>% 
+  #   as_tbl_graph() %>%
+  #   activate(nodes) %>%
+  #   slice_max(order_by = out_strength, n = top_n)
   
-  return(g_filtered)
+  # return(g_filtered)
 }
 
 #' Filter Graph Edges Below a Weight Threshold 15/5/26
@@ -1304,14 +1344,14 @@ filter_top_nodes <- function(g, top_n) {
 #' @seealso \code{filter_top_nodes()} for the node-count equivalent;
 #'   typically applied after \code{enrich_graph_vertices()}.
 filter_edges <- function(g, threshold) {
-  g_filtered_edge <- g %>%
-    as_tbl_graph() %>%
-    activate(edges) %>%
-    filter(edge_weight > threshold) %>%
-    activate(nodes) %>%
-    filter(!node_is_isolated())
+  # g_filtered_edge <- g %>%
+  #   as_tbl_graph() %>%
+  #   activate(edges) %>%
+  #   filter(edge_weight > threshold) %>%
+  #   activate(nodes) %>%
+  #   filter(!node_is_isolated())
   
-  return(g_filtered_edge)
+  # return(g_filtered_edge)
 }
 
 # TODO build_network_graph 15/5/26 update, added arrows, node_text and continuous edges ----

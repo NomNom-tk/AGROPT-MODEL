@@ -29,7 +29,7 @@ ga <- list()
 # ==========================================
 lhs$run_type          <- "LHS"
 lhs$composition_scope <- "M"
-lhs$version_scope     <- "both"
+lhs$version_scope     <- "v1"
 
 lhs$batch$v1$path     <- "./data/lhs_batch_summary.csv"
 lhs$batch$v1$version  <- "v1_7_5_100c"
@@ -146,13 +146,13 @@ process_run <- function(config) {
   }
 
   # # EMPIRICAL
-  # # empirical_prep — same path regardless of run_type
-  # # canonical output: df_empirical
-  # df_empirical <- NULL
-  # empirical_path <- "./data/data_complete_anonymised.csv"
-  # if (file.exists(empirical_path)) {
-  #   df_empirical <- empirical_prep(empirical_path)
-  # }
+  # empirical_prep — same path regardless of run_type
+  # canonical output: df_empirical
+  df_empirical <- NULL
+  empirical_path <- "./data/data_complete_anonymised.csv"
+  if (file.exists(empirical_path)) {
+    df_empirical <- empirical_prep(empirical_path)
+  }
   
   # DERIVED (first written 29/4/26)
   # prepare_directional + summarize_directional from df_ag
@@ -168,10 +168,10 @@ process_run <- function(config) {
   # Valence/Signed error (30/6/26)
   # derive from df_directional_agents - split by pro_reduction, compute signed error
   # output: df_valence
-  df_valence <- NULL
-  if (!is.null(df_directional_agents)) {
-      df_valence <- compute_valence_metrics(df_directional_agents)
-  }
+  # df_valence <- NULL
+  # if (!is.null(df_directional_agents)) {
+  #     df_valence <- compute_valence_metrics(df_directional_agents)
+  # }
 
     
   # RETURN LIST with consistent slot names regardless of run_type
@@ -185,8 +185,8 @@ process_run <- function(config) {
     df_susceptibility     = df_susceptibility,
     df_empirical          = df_empirical,
     df_directional        = df_directional,
-    df_directional_agents = df_directional_agents,
-    df_valence            = df_valence
+    df_directional_agents = df_directional_agents
+    #df_valence            = df_valence
   ) 
 }
 

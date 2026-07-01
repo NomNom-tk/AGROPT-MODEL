@@ -29,7 +29,7 @@ ga <- list()
 # ==========================================
 lhs$run_type          <- "LHS"
 lhs$composition_scope <- "M"
-lhs$version_scope     <- "both"
+lhs$version_scope     <- "v1"
 
 lhs$batch$v1$path     <- "./data/lhs_batch_summary.csv"
 lhs$batch$v1$version  <- "v1_7_5_100c"

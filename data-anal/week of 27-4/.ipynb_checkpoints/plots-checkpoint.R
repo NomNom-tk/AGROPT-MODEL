@@ -497,7 +497,7 @@ plot_delta_direction_scatter <- function(df) { # use with df_lhs_directional
       empirical_delta = final_attitude - initial_opinion
     )
   
-  ggplot(df, aes(x = simulated_delta, y = empirical_delta)) +
+  ggplot(df, aes(x = simulated_delta, y = empirical_delta, color = pro_reduction)) +
     geom_point(alpha = 0.3) +
     geom_abline(slope = 1, intercept = 0) + # perfect prediction line
     geom_hline(yintercept = 0, linetype = "dashed") + # no empirical change
@@ -535,4 +535,36 @@ plot_beta_distance <- function(df_raw, empirical_beta) {
          subtitle = paste("Empirical beta =", round(empirical_beta, 3))) +
     theme_minimal() +
     theme(legend.position = "none")
+}
+
+#' Grouped Bar Chart for Valence
+#' 
+#' Separates population into anti/pro reduction and illustrates the difference in valence
+#' (accuracy) for each model_type
+#'
+#' @param df Valence dataframe used with \code{df_sum_directional_valence} containing:
+#' model_type, current_condition, selected_debate_id, pro_reduction, pct_correct_dir,
+#' pct_wrong_dir, mean_signed_error, pro_signed_error, mean_mae, mean_baseline_mae, n 
+#' \describe{
+#'   \item{
+
+# TODO figure out a way to make pro_reduction within each model_type
+plot_valence_accuracy <- function(df) {
+    ggplot(df, aes(x = current_condition, y = pct_correct_dir_0, fill = model_type)) +
+    geom_bar(stat = "identity", position = "dodge") +
+    geom_hline(yintercept = 0.5, linetype = "dashed", color = "red") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(x = "Condition", y = "% accurate agents", title = "Directional Valence Accuracy")
+}
+
+
+### top right and bottom left are correct direction / top let and bottom right are wrong
+plot_directional_accuracy <- function(df) { # use with df_lhs_directional
+  ggplot(df, aes(x = current_condition, y = pct_correct_dir, fill = model_type)) +
+    geom_bar(stat = "identity", position = "dodge") +
+    geom_hline(yintercept = 0.5, linetype = "dashed", color = "red") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(x = "Condition", y = "% accurate agents")
 }

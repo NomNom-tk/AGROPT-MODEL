@@ -57,3 +57,8 @@
 #' @note This supersedes build_analysis_outputs() in functions.R, which is
 #'   marked NOTUSED and should be removed — this block is the actual,
 #'   current output contract in production use.
+
+# Experiment Runs over time
+## current config
+- "v1_7_5_100c" (LHS) vs 3/6/26 (GA)
+- results: LHS - 0.0875 to GA - 0.0644 (mean across all debates) 

@@ -169,9 +169,10 @@ process_run <- function(config) {
   # derive from df_directional_agents - split by pro_reduction, compute signed error
   # output: df_valence
   # df_valence <- NULL
-  # if (!is.null(df_directional_agents)) {
-  #     df_valence <- compute_valence_metrics(df_directional_agents)
-  # }
+  if (!is.null(df_directional_agents)) {
+      df_sum_directional_valence <- summarize_directional_valence(df_directional_agents) # summarize directional valence for models
+      df_valence <- compute_valence_metrics(df_sum_directional_valence) # valence df with additional valence metrics
+  }
 
     
   # RETURN LIST with consistent slot names regardless of run_type
@@ -185,8 +186,9 @@ process_run <- function(config) {
     df_susceptibility     = df_susceptibility,
     df_empirical          = df_empirical,
     df_directional        = df_directional,
-    df_directional_agents = df_directional_agents
-    #df_valence            = df_valence
+    df_directional_agents = df_directional_agents,
+    df_valence            = df_valence,
+    df_sum_directional_valence = df_directional_valence
   ) 
 }
 

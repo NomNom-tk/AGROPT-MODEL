@@ -1,5 +1,7 @@
 ---
-title: "ABM_orchest_v1"
+title: "ABM_orchest_v1" (add the date and nature of the run)
+params: "lhs_v1"
+  config_key: "lhs_main"
 output: 
   html_document:
     toc: true

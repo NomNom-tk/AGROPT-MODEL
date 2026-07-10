@@ -36,16 +36,21 @@ The following entities are present in the model: agents representing individuals
 ## 2.2 State Variables
 ### Agent State Variables
 #### Core Identity
-- `agent_id` (integer): Unique identifier matching empirical participant
-- `debate_id` (integer): Group membership (1-242)
+- `agent_id` (integer): Unique identifier matching empirical participant.
+- `debate_id` (integer): Group membership matching the experimental session (1-242).
 - `group_type` (string): Debate condition {"Homogeneous", "Heterogeneous", "Control"}
-- `pro_reduction` (binary): Initial stance (1=pro, 0=anti meat reduction)
+- `pro_reduction` (binary): Initial stance based on empirical designation (1=pro, 0=anti meat consumption reduction).
+- `debate_label` (string): Text string naming the active empirical group.
+- `current_experiment_id` (string): Tracker identifying the active simulation batch scenario.
 
 #### Opinion State
-- `initial_opinion` (float, [0,1]): Starting attitude computed from T1 subfactors
-- `opinion` (float, [0,1]): Current attitude (updated each cycle)
-- `previous_opinion` (float, [0,1]): Attitude at t-1 (for convergence detection)
-- `final_attitude` (float, [0,1]): Target attitude from empirical T2 data (for validation)
+- `initial_opinion` (float, [0,1]): Starting attitude computed from T1 subfactors from normalized T1 subfactors.
+- `opinion` (float, [0,1]): Current attitude (updated dynamically each cycle).
+- `previous_opinion` (float, [0,1]): Attitude at t-1 (for convergence detection).
+- `final_attitude` (float, [0,1]): Target attitude from empirical T2 data (for validation).
+- `initial_opinion_snapshot` (float, [0,1]): Immutable copy of the agent's initial opinion, set at setup to track deviations.
+- `agent_net_change` (float): Structural shift magnitude from starting baseline, calculated dynamically as opinion - initial_opinion_snapshot.
+- `agent_wrong_direction` (boolean): Validation flag to cehck if the simulated trajectory lines up with empirical data: $$\text{agent\_wrong\_direction} = (\text{pro\_reduction} = 1 \land \text{agent\_net\_change} < 0) \lor (\text{pro\_reduction} = 0 \land \text{agent\_net\_change} > 0)$$ 
 
 #### Attitude Subfactors (T1 = initial, T2 = empirical target)
 Five subfactors measured on [1,7] scale, normalized to [0,1]:
@@ -71,6 +76,14 @@ agent_param ~ Normal(population_mean, population_sd)
 Bounded: max(0.01, min(0.99, sampled_value))
 Constraint: agent_repulsion_threshold > agent_confidence_threshold
 
+#### Turn-Based & Cognitive Fatigue
+- `recent_speed` (list): Binary timeline vector recording whether the agent spoke during interaction cycles.
+- `speak_weight` (float): Dynamic selection priority weight computed as: $$\text{speak\_weight} = \frac{1.0}{\sum(\text{recent\_speech}) + 1.0}$$
+- `total_influences_received` (integer): Cumulative counter tracking individual received incoming communication events.
+- `retention_discount` (float [0,1]): Dynamic cognitive fatigue modifier scaling down opinion adjustment steps, computed as: $$\text{retention\_discount} = \frac{1.0}{1.0 + \text{total\_influences\_received} \times 0.1}$$
+- `agent_is_saturated` (boolean): Flag trigerred true when an agent becomes fatigue-inhibited (retention_discount > 0.2)
+- `cumulative_opinion_change` (float): Running total of all absolute local shifts across steps.
+
 #### Network Structure
 - `neighbors` (list<opinion_agent>): Agents with whom this agent interacts
 - Network is static after initialization (no dynamic rewiring)
@@ -84,16 +97,20 @@ Constraint: agent_repulsion_threshold > agent_confidence_threshold
 **Spatial:** 100 × 100 continuous 2D space (for visualization only)  
 **Temporal:** Discrete time steps (abstract, not calibrated to real time)
 **Typical simulation length:** 15-110 cycles until convergence 
-(max 300 cycles — applies equally to speaking and non-speaking mode)
-**Convergence threshold:** max |opinion - previous_opinion| < 0.001
+(max 100 cycles — applies equally to speaking and non-speaking mode)
+**Convergence threshold:** max |opinion - previous_opinion| < 0.01
 **Opinion scale:** Continuous [0,1] where 0=strongly anti-reduction, 1=strongly pro-reduction  
 **Empirical basis:** Real debates lasted ~60 minutes; model time is abstract (not calibrated to real minutes)
 
 
 ### 2.3 Global State Variables
 #### Model Selection
-- `model_type` (string): Which social influence model to use {"consensus", "clustering", "bipolarization"}
+- `model_type` (string): Which social influence model to use {"consensus", "clustering", "bipolarization", "no_change"}
 - `mode_batch` (boolean): Batch calibration mode vs GUI visualization
+- `speaking_mode` (boolean): Switches the environment between turn-based interaction blocks (true) or static network calculations (false).
+- `use_distinct_agents` (boolean): Determines whether individual agent parameters are heterogeneous (true) or homogeneous (false).
+- `selection_mode` (string): Dictates whether debates run based on a filter or an xml file {"filter", "explicit"} (linked with composition_scope)
+- `composition_scope` (string): Context-based experiment target filtering {"H", "M", "ALL"}
 
 #### Population-Level Dynamics Parameters
 Central tendency values from which agent-specific parameters are sampled:
@@ -120,11 +137,12 @@ Control individual differences:
 
 #### Simulation Control
 - `selected_debate_id` (integer): Which debate to simulate
-- `max_cycles` (integer, default=300): Maximum simulation length
+- `max_cycles` (integer, default=100): Maximum simulation length for local debate.
 - `step` (float, default=0.5): Time step duration
-- `mae_convergence_threshold` (float, default=0.001): Opinion change below this triggers end
-- `end_simulation` (boolean): Flag indicating convergence reached
+- `mae_convergence_threshold` (float, default=0.01): Opinion change below this triggers end
+- `end_simulation_at_convergence` (boolean): Global toggle that determines early halt or forcs continuous run until max_cycles.
 - `convergence_cycle` (integer): Cycle when convergence occurred (-1 if not converged)
+- `debate_start_cycle` (integer): Records the absolute simulation baseline cycle when active debate group loop instantiated.
 
 #### Output Metrics
 - `mae` (float): Global Mean Absolute Error (predicted vs empirical T2)
@@ -133,6 +151,7 @@ Control individual differences:
 - `num_clusters` (integer): Number of distinct opinion clusters
 - `polarization_index` (float): Measure of opinion spread
 - `initial_num_clusters` (integer): Clusters at initialization (for comparison)
+- `interaction_log` (list): Dynamic runtime container array holding micro-interaction rows before direct saving.
 
 #### Bipolarization Diagnostics
 - `neutral_zone_width` (float): ρ - ε (should be positive)
@@ -149,13 +168,16 @@ Control individual differences:
 2. Validate data loading (check subfactor normalization)
 ↓
 3. Create debate ID mapping (control agents get their unique debate)
+- Generate integer mapping values via stable_group_map and export mapping records to "debate_id_mapping.csv"
 ↓
 4. Initialize_agents_for_debate(selected_debate_id)
 - Detect condition for specified debate
 - Load subfactors from csv data rows (for T1 and T2)
 - Sample agent specific parameters from distributions
 - Compute initial_opinion from subfactors using DB_Index formula
-- set opinion = initial_opinion
+- Set opinion = initial_opinion
+- Set initial_opinion_snapshot <- initial_opinion / previous_opinion <- initial_opinion
+- Initialize total_influences_received <- 0, retention_discount <- 1.0, cumulative_opinion_change <- 0.0, recent_speech <- []
 - Assign random spatial location for each agent in environment (for GUI)
 ↓
 5. Create network
@@ -173,55 +195,61 @@ In each batch simulation, one of the two interaciton models is active, determine
 1. Opinion update (MUTUALLY EXCLUSIVE):
 
    IF speaking_mode = FALSE:
-   └─> Each agent executes compute_opinion
-       - Calculate influence from neighbors (given length(neighbors) > 0)
-       - Update opinion (bounded [0,1])
+   └─> Each agent runs repeat_compute_opinion which executes compute_opinion
+       - Update attitude from neighbors at t-1 (bounded [0,1])
        - Update color
+       - Each agent triggers update_tracking reflex to refresh agent_net_change, agent_is_saturated, and agent_wrong_direction.
 
    IF speaking_mode = TRUE:
    └─> Speaking turn mechanic (see step 2)
 
 2. Speaking turn (only if speaking_mode = TRUE)
+   - Invoke speaking_turn reflex
    - Compute speak_weight per agent: 1 / (sum(recent_speech) + 1)
    - Select speaker via weighted probabilistic selection (rnd_choice)
-   - Speaker calls talk_to_all: all other agents update via compute_opinion_speaker
+   - Speaker calls talk_to_all: all other agents update via compute_opinion_speaker, incrementing total_influences_received counter and applies retention_discount.
    - Update recent_speech rolling window (window size = N agents)
-     - Speaker appends 1, non-speakers append 0
-     - Drop oldest entry if window exceeds N
+     - Speaker appends 1, non-speakers append 0.
+     - Appends compiled entry to interaction_log string array.
+     - All agents trigger update_tracking reflex to refresh agent_net_change, agent_is_saturated, and agent_wrong_direction.
 
-3. Update previous_opinion for all agents
+3. Update previous_opinion for all agents (previous_opinion <- opinion).
 
 [every 10 cycles]
-4. Compute pro/anti stats (heterogeneous debates)
-- Count pro and anti agents
+4. Execute compute_pro_anti_stats (heterogeneous debates)
+- Execute compute_statistics to list opinions for all agents, calculate mean and variance, count clusters using logical histogram, compute polarization index.
 - Calculate mean opinion of both groups
 
-5. Compute statistics
-- List opinions for all agents
-- Calculate mean and variance of opinions
-- Count opinion clusters using histogram 
-- Compute polarization index using variance of pairwise distances
 
-[every 5 cycles after cycle 10]
-6. Convergence check
-- Collect |opinion - previous_opinion| for all agents
-- If max_change < mae_convergence_threshold
-  - Set end_simulation to true
-  - Call compute_fit
-  - Call compute_final_statistics
-- If mode_batch then save_results
+[every 5 cycles after cycle 10 from debate start, if end_simulation_at_convergence is true]
+5. Convergence check (`check_convergence`)
+- Collect `|opinion - previous_opinion|` for all agents.
+- If `max_change < mae_convergence_threshold` (0.01):
+  - Set `convergence_cycle <- cycle - debate_start_cycle`
+  - Set `end_simulation` to true.
+  - Call `compute_fit` and `compute_final_statistics`.
+  - If `mode_batch` is true, execute `save_batch_results` (which saves summary, per-agent records, and logs).
+  - Evaluate sequential loop control: if `debate_counter < length(m_debate_list) - 1`, increment counter, update `selected_debate_id`, clear all current population instances via `do die`, and invoke `init_debate`.
 
-[if cycle > max_cycles and not converged]
-7. max_cycles_reached
-- Force convergence
-- Compute fit and save
+[every cycle]
+6. Maximum Cycles Reached (`max_cycles_reached`)
+- If `(cycle - debate_start_cycle) >= max_cycles` (where `max_cycles` default = 100) and `end_simulation` is false:
+  - Force loop termination by setting `end_simulation` to true.
+  - Call `compute_fit` and `compute_final_statistics`.
+  - If `mode_batch` is true, write final execution results using identical file-saving functions.
+  - Execute sequential group progression and memory cleanup logic (`do die`, increment counter, call `init_debate`).
 
 ### Update Order
 Within-agent updates are done simultaneously (all agents update their opinion based on their t-1 neighbors).
 
-Rationale: The within-agent updates procedure avoids order effects and maintains symmetry. This implies that network structure matters more than update sequence, consistent with the social influence models of Flache et al., (2017). The initialization sequence was designed to sequentially parse the csv for relevant data, populate the subfactor lists used for T1, then validate the data loading to ensure that the DB_Index variable is correctly calculated according to its equation defined in Dheilly et al. (unpublished). Once all data has been loaded and validated the agents are created according to the debate id and the opinion is set to initial_opinion to give a starting value for each subfactor for each agent. The network creation is initialized at each repetition of the simulation (e.g., in batch experiments to keep debates independent from each other). 
+### Update Order & Rationale
+Within-agent updates are done simultaneously (all agents update their opinion based on their t-1 neighbors).
 
-For each simulaiton loop agents execute the reflexes in parallel under one kind of model of social influence as the batch experiments are designed to calibrate parameters according to each model. This ligns up with the purpose of the study being to investigate how each model performs in comparison with the others and OLS. The decision to perform compute pro/anti stats is done every 10 cycles to allow for deliberation processes to occur and to reduce computational load when running the batch experiments. The convergence cycle reflex is activated every 5 cycles and after the 10th cycle to allow for an initial period of deliberation where the debates will most likely not converge and progressively check whether convergence occurs as a result of the deliberative process. The final reflex for max_cycles and no convergence is active after a pre-defined number of max cycles to reduce computational load. This is done as in initial testing, debates usually reached convergence below 110 cycles.
+Rationale: The within-agent updates procedure avoids order effects and maintains symmetry. This implies that network structure matters more than update sequence, consistent with the social influence models of Flache et al., (2017). The initialization sequence was designed to sequentially parse the csv (`train_data.csv`) for relevant data, populate the subfactor lists used for T1, then validate the data loading to ensure that the DB_Index variable is correctly calculated according to its equation defined in Dheilly et al. (unpublished). Once all data has been loaded and validated, the agents are created according to the debate id, and the opinion is set to initial_opinion to give a starting value for each subfactor for each agent. The network creation is initialized at each repetition of the simulation (e.g., in batch experiments to keep debates independent from each other). 
+
+For each simulation loop, agents execute reflexes under one kind of model of social influence as the batch experiments are designed to calibrate parameters according to each model. This aligns with the purpose of the study to investigate how each model performs in comparison with the others and OLS. The decision to perform compute pro/anti stats and global metrics is done every 10 cycles to allow for deliberation processes to occur and to reduce computational load when running the batch experiments. 
+
+The convergence cycle reflex (`check_convergence`) is evaluated every 5 cycles after the 10th cycle from debate start. This allows for an initial period of deliberation where the debates will most likely not converge, while progressively checking whether group stabilization has occurred against an exact absolute tolerance floor (`mae_convergence_threshold <- 0.01;`). The final reflex for max_cycles and no convergence evaluates the timeout boundary continuously every cycle after a pre-defined maximum length (`max_cycles <- 100;`). This design cap minimizes computational load across vast batch combinations, as empirical testing demonstrates that stable debate runs successfully settle within 100 cycles.
 
 # 4. DESIGN CONCEPTS
 
@@ -239,7 +267,7 @@ For each simulaiton loop agents execute the reflexes in parallel under one kind 
 **Emergent phenomena the model can produce:**
 - Opinion convergence or polarization (not pre-determined)
 - Opinion cluster formation in heterogeneous debates
-- Asymmetric attitude change (pro vs anti agents may behave differently)
+- Asymmetric attitude change (pro vs anti agents may behave differently): Empirical benchmarking reveals a systematic **anti-reduction bias** where symmetric parameter distributions consistently under-predict real-world shifts toward plant-based diets. The model captures this through asymmetric population parameter distributions
 - Opinion leader effects (agents with high convergence_rate may shift more and influence others)
 
 **Not emergent:**
@@ -313,7 +341,9 @@ For each neighbor n:
   diff = |n.opinion - opinion|
   If diff ≤ agent_confidence_threshold:    attraction += (n.opinion - opinion)
   If diff ≥ agent_repulsion_threshold:     repulsion += direction
-new_opinion = opinion + convergence_rate × attraction + repulsion_strength × repulsion
+  
+The raw adjustment is caled by an endogenous cognitive saturation coefficient (#\gamma$) that decays monotonically as a function of cumulative interactions throughout the debate to account for deliberation fatigue. The final value is clamped to the $[0,1]$ to prevent out of bounds artifacts:
+new_opinion = opinion + (convergence_rate × attraction + repulsion_strength × repulsion) x γ
 
 **Interaction is symmetric:** If i influences j, then j influences i (undirected network)
 

@@ -16,6 +16,7 @@ library(ggraph)
 library(janitor)
 library(tidygraph)
 library(patchwork)
+library(ComplexUpset)
 
 # run config declarations
 ## TODO 1/6/26, consider refactoring to different layers, makes run_type agnostic of the rest
@@ -148,11 +149,11 @@ process_run <- function(config) {
   # # EMPIRICAL
   # empirical_prep — same path regardless of run_type
   # canonical output: df_empirical
-  df_empirical <- NULL
-  empirical_path <- "./data/data_complete_anonymised.csv"
-  if (file.exists(empirical_path)) {
-    df_empirical <- empirical_prep(empirical_path)
-  }
+  # df_empirical <- NULL
+  # empirical_path <- "./data/data_complete_anonymised.csv"
+  # if (file.exists(empirical_path)) {
+  #   df_empirical <- empirical_prep(empirical_path)
+  # }
   
   # DERIVED (first written 29/4/26)
   # prepare_directional + summarize_directional from df_ag
@@ -169,11 +170,28 @@ process_run <- function(config) {
   # derive from df_directional_agents - split by pro_reduction, compute signed error
   # output: df_valence
   # df_valence <- NULL
+  df_sum_directional_valence <- NULL
+  df_valence <- NULL
+  df_upset <- NULL
   if (!is.null(df_directional_agents)) {
       df_sum_directional_valence <- summarize_directional_valence(df_directional_agents) # summarize directional valence for models
-      df_valence <- compute_valence_metrics(df_sum_directional_valence) # valence df with additional valence metrics
+      df_valence <- compute_valence_asymmetry(df_sum_directional_valence) # valence df with additional valence metrics
   }
 
+  df_upset <- df_sum_directional_valence %>% # added 6/7/26 for upset plots
+    group_by(selected_debate_id, model_type) %>%
+    summarize(pct_correct_dir = mean(pct_correct_dir), .groups = "drop") %>%
+    pivot_wider(names_from = model_type, values_from = pct_correct_dir) %>%
+    mutate(
+        bipol_correct = bipolarization > 0.5,
+        clust_correct = clustering > 0.5,
+        cons_correct = consensus > 0.5) %>%
+    left_join(
+        df_valence %>% select(selected_debate_id, accuracy_asymmetry, error_asymmetry),
+        by = "selected_debate_id") %>%
+    mutate(
+        pro_biased = accuracy_asymmetry > 0,
+        anti_biased = accuracy_asymmetry < 0)
     
   # RETURN LIST with consistent slot names regardless of run_type
   list(
@@ -184,11 +202,12 @@ process_run <- function(config) {
     df_interactions       = df_interactions,
     df_influence          = df_influence,
     df_susceptibility     = df_susceptibility,
-    df_empirical          = df_empirical,
+    # df_empirical          = df_empirical,
     df_directional        = df_directional,
     df_directional_agents = df_directional_agents,
     df_valence            = df_valence,
-    df_sum_directional_valence = df_directional_valence
+    df_sum_directional_valence = df_sum_directional_valence,
+    df_upset              = df_upset
   ) 
 }
 

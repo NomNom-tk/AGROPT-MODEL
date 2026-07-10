@@ -30,6 +30,7 @@ library(janitor)
 library(tidygraph)
 library(patchwork)
 library(knitr)
+library(ComplexUpset)
 ```
 
 ```{r, file-sourcing, include = FALSE, echo = FALSE, cache = FALSE}

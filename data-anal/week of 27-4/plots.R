@@ -537,34 +537,156 @@ plot_beta_distance <- function(df_raw, empirical_beta) {
     theme(legend.position = "none")
 }
 
-#' Grouped Bar Chart for Valence
+#' Grouped Bar Chart for Valence modif 6/7/26
 #' 
 #' Separates population into anti/pro reduction and illustrates the difference in valence
 #' (accuracy) for each model_type
 #'
+#' @param df Valence dataframe used with \code{df_sum_directional_valence} grouped by
+#' \{model_type, current_condition, selected_debate_id, pro_reduction} and returning
+#' one row per model x current_condition x selected_debate_id x pro_reduction, df contains:
+#' \describe{
+#'   \item{pro_reduction}{Factor. mutated to factor from Logical}
+#'   \item{model_type}{Character. Model type identifier (e.g., consensus, clustering, bipolarization)
+#'   \item{pct_correct_dir}{Numerical. Mean of \{correct_dir} (agents move in direction of empir opinion}
+#'   \item{geom_hline}{Plot Option. Intercept of 0.5 is represents a coin flip in \{pct_correct_dir}
+#' }
+#' @return a ggplot bar chart by model type with \code{geom_line()} (one bar for pro/anti per model)
+#' @note TODO need to integrate into Rmd with valence metrics (new chunk or initial chunk)
+plot_valence_accuracy <- function(df) {
+    df %>%
+    mutate(pro_reduction = as.factor(pro_reduction)) %>%
+    ggplot(aes(x = model_type, y = pct_correct_dir, fill = pro_reduction)) +
+    geom_col(position = "dodge") +
+    geom_hline(yintercept = 0.5, linetype = "dashed", color = "red") + # chance baseline, anything below is worse than random
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(x = "Model Type", y = "% Correct Direction", title = "Directional Accuracy by Model and Valence",
+        fill = "Pro Reduction")
+}
+
+#' Asymmetry Lollipop gap plot 6/7/26
+#' 
+#' Used to identify the tendency of which debates (aggregated from agents) for each model are systematically biased
+#' towards one direction (pro/anti), end of line indicates magnitude on x-axis
+#'
 #' @param df Valence dataframe used with \code{df_sum_directional_valence} containing:
 #' model_type, current_condition, selected_debate_id, pro_reduction, pct_correct_dir,
 #' pct_wrong_dir, mean_signed_error, pro_signed_error, mean_mae, mean_baseline_mae, n 
-#' \describe{
-#'   \item{
+#'
+#' describe{
+#'  \item{accuracy_asymmetry}{Numerical. 
 
-# TODO figure out a way to make pro_reduction within each model_type
-plot_valence_accuracy <- function(df) {
-    ggplot(df, aes(x = current_condition, y = pct_correct_dir_0, fill = model_type)) +
-    geom_bar(stat = "identity", position = "dodge") +
-    geom_hline(yintercept = 0.5, linetype = "dashed", color = "red") +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    labs(x = "Condition", y = "% accurate agents", title = "Directional Valence Accuracy")
+plot_asymmetry_gap <- function(df) {
+    ggplot(df, aes(x=accuracy_asymmetry, y = selected_debate_id, color = accuracy_asymmetry > 0)) +
+    geom_point(alpha = 0.3) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+    geom_segment(aes(x = 0, xend = accuracy_asymmetry,
+                     y = selected_debate_id, yend = selected_debate_id), alpha = 0.3) +
+    facet_wrap(~ model_type) +
+    scale_color_brewer(palette = "Set1") +
+    labs(title = "Model Type Asymmetry per debate",
+         subtitle = "Positive = Pro-reduction bias | Negative = Anti-reduction bias | Dashed line = No asymmetry",
+         x = "Accuracy Asymmetry (Pro - Anti % Correct Direction)",
+         y = "Debate ID")
 }
 
+#' Scatter Plot of Model Performance Considering Distinct Agents (Optional version aware)
+#'
+#' Creates a flipped coordinate scatter plot with error bars to illustrate the impact of using SDs for each agent across model types
+#' Optionally version aware (through use of \code{facet_wrap})
+#' 
+#' @param df A dataframe (usually \code{model_comparison_detailed}), a version of df_batch
+#' grouped by \{model_type, version, speaking_mode, use_distinct_agents} aand then summarized in terms of mean MAE
+#' \describe{
+#'   \item{reordered model_type, mae_mean}{Numerical. Meant to sort mae_mean by model_type}
+#'   \item{mae_mean}{Numerical. MAE for each model_type}
+#'   \item{version}{Character. Optional only if for different LHS/GA versions add this to speaking_mode and use_distinct_agents with \code{facet_wrap}}
+#' @return a ggplot object with \code{coord_flip()} and \code{geom_errorbar()}
+#' @note see (framework_analysis.R for calls in outputs list) / not used in Rmd.
 
-### top right and bottom left are correct direction / top let and bottom right are wrong
-plot_directional_accuracy <- function(df) { # use with df_lhs_directional
-  ggplot(df, aes(x = current_condition, y = pct_correct_dir, fill = model_type)) +
-    geom_bar(stat = "identity", position = "dodge") +
-    geom_hline(yintercept = 0.5, linetype = "dashed", color = "red") +
+
+#' Colord Scatter Directional Agents 6/7/26
+#'
+#' Scatter plot to distinguish between pro/anti agents clustering relative to perfect 
+#' model prediction
+plot_delta_color_direction_scatter <- function(df) { # use with df_directional_agents
+  df <- df %>%
+    mutate(
+      simulated_delta = opinion - initial_opinion,
+      empirical_delta = final_attitude - initial_opinion,
+      pro_reduction = as.factor(pro_reduction) 
+    )
+  
+  ggplot(df, aes(x = simulated_delta, y = empirical_delta, color = pro_reduction)) +
+    geom_point(alpha = 0.3) +
+    geom_abline(slope = 1, intercept = 0) + # perfect prediction line
+    geom_hline(yintercept = 0, linetype = "dashed") + # no empirical change
+    geom_vline(xintercept = 0, linetype = "dashed") + # no simulated change
+    facet_wrap(~ model_type) +
     theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    labs(x = "Condition", y = "% accurate agents")
+    labs(title = "Directional Agents Clustering for Pro/Anti Population",
+         x = "Simulated Change", y = "Empirical Change")
+}
+
+#' Simulated Delta to check opinion - initial opinion distribution 6/7/26
+#'
+#' Density plot of simulated variance in opinion change by valence
+#' Illustrates whether the distribution of variance is centered around zero (implies random walk behavior from the model)
+#' for pro and anti agents
+plot_simulated_delta_dist <- function(df) { # use with df_directional_agents
+  df %>%
+    mutate(
+      simulated_delta = opinion - initial_opinion,
+      pro_reduction = as.factor(pro_reduction)
+    ) %>%
+    ggplot(aes(x = simulated_delta, fill = pro_reduction)) +
+    geom_density(alpha = 0.5) +
+    geom_vline(xintercept = 0, linetype = "dashed") +
+    facet_wrap(~ model_type) +
+    scale_fill_brewer(palette = "Set1") +
+    theme_minimal() +
+    labs(x = "Simulated Delta (opinion - initial_opinion)",
+         y = "Density",
+         title = "Distribution of Simulated Opinion Change by Valence")
+}
+
+## Model performance with distinct agents
+# fix version aware and defensive wrap
+
+#' Scatter Plot of Model Performance Considering Distinct Agents (Optional version aware)
+#'
+#' Creates a flipped coordinate scatter plot with error bars to illustrate the impact of using SDs for each agent across model types
+#' Optionally version aware (through use of \code{facet_wrap})
+#' 
+#' @param df A dataframe (usually \code{model_comparison_detailed}), a version of df_batch
+#' grouped by \{model_type, version, speaking_mode, use_distinct_agents} aand then summarized in terms of mean MAE
+#' \describe{
+#'   \item{reordered model_type, mae_mean}{Numerical. Meant to sort mae_mean by model_type}
+#'   \item{mae_mean}{Numerical. MAE for each model_type}
+#'   \item{version}{Character. Optional only if for different LHS/GA versions add this to speaking_mode and use_distinct_agents with \code{facet_wrap}}
+#' @return a ggplot object with \code{coord_flip()} and \code{geom_errorbar()}
+#' @note see (framework_analysis.R for calls in outputs list) / not used in Rmd.
+plot_model_comparison_uncertainty <- function(df) {
+  p <- ggplot(df, aes(x = reorder(model_type, mae_mean), y = mae_mean)) +
+    geom_point(size = 2.5, color = "blue") +
+    geom_errorbar(aes(
+      ymin = mae_mean - mae_sd,
+      ymax = mae_mean + mae_sd
+    ), width = 0.2) +
+    coord_flip() +
+    theme_minimal() +
+    labs(
+      title = "Model Performance with Distinct Agents",
+      subtitle = "Error bars = +- SD",
+      x = "Model Type",
+      y = "Mean MAE"
+    )
+  
+  if ("version" %in% colnames(df)) {
+    p <- p + facet_grid(version ~ speaking_mode + use_distinct_agents)
+  } else {
+    p <- p + facet_wrap(~ speaking_mode + use_distinct_agents)
+  }
+  return(p)
 }

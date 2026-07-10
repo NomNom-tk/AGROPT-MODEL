@@ -976,9 +976,9 @@ param_region_extraction <- function(df, percentile = 0.25,
 prepare_directional <- function(df) { # use with df_ag
   df_directional <- df %>%
     filter(speaking_mode == TRUE) %>%
-    mutate(empirical_dir = sign(final_attitude - initial_opinion),
-           simulated_dir = sign(opinion - initial_opinion),
-           correct_dir = empirical_dir == simulated_dir,
+    mutate(empirical_dir = sign(final_attitude - initial_opinion), #vector of direction (posi = positive end opin) 
+           simulated_dir = sign(opinion - initial_opinion), #vector positive implies simulated opinion is larger
+           correct_dir = empirical_dir == simulated_dir, # returns TRUE/FALSE for equal or not
            empirical_moved = empirical_dir != 0
            ) %>%
     filter(empirical_moved) 
@@ -1013,8 +1013,8 @@ summarize_directional_valence <- function(df) {
     df %>%
       group_by(model_type, current_condition, selected_debate_id, pro_reduction) %>%
       summarize(
-          pct_correct_dir = mean(correct_dir),
-          pct_wrong_dir = mean(agent_wrong_direction),,
+          pct_correct_dir = mean(correct_dir), # mean of magnitude of debates that ended up with positive opin_change
+          pct_wrong_dir = mean(agent_wrong_direction),
           mean_signed_error = mean(opinion - final_attitude),
           pro_signed_error = mean(opinion[pro_reduction==1] - final_attitude[pro_reduction==1]),
           mean_mae = mean(abs(opinion - final_attitude)),
@@ -1026,7 +1026,8 @@ summarize_directional_valence <- function(df) {
 
 #' Compute Valence Asymmetry 1/7/26
 #' 
-#' Takes output of summarize_directional_valence() and pivots wide for coppmutation of accuracy and error asymmetry
+#' Takes output of summarize_directional_valence() and pivots wide for computation of accuracy and error asymmetry
+#' i.e. the 
 #' 
 #' @param df Aggregated agent-level dataframe (df_directional_valence) with:
 #' model_type, current_condition, selected_debate_id, pro_reduction, 

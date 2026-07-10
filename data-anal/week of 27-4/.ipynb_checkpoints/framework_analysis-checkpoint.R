@@ -20,6 +20,9 @@ analyze_processed_run <- function(df) {
   df_empirical          <- df$df_empirical
   df_directional        <- df$sim_inputs$df_directional
   df_directional_agents <- df$sim_inputs$df_directional_agents
+  df_sum_directional_valence <- df$sim_inputs$df_sum_directional_valence
+  df_valence <- df$sim_inputs$df_valence
+  df_upset <- df$sim_inputs$df_upset
   
   # Master Guard: Check that core batch data was loaded successfully
   if (is.null(df_batch)) {
@@ -409,7 +412,10 @@ analyze_processed_run <- function(df) {
         directional     = df_directional,
         directional_agents = df_directional_agents,
         beta_distance = beta_distance, # beta empir distance relative to simulated data 3/6/26
-        beta_distance_raw = simulated_betas_raw
+        beta_distance_raw = simulated_betas_raw,
+        sum_dir_valence = df_sum_directional_valence,
+        valence_metrics = df_valence,
+        upset_prep = df_upset
       ),
       behavioral = list(
         composition = h_vs_m,

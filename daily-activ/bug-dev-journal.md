@@ -134,6 +134,13 @@ species opinion_agent virtual: true  {
 --> starts_with expects a string but first() returns a char // types must match!
 - single quotes = char / double quotes = string
 
+# 12/7/26
+- Discovered data duplication bug, problem with agents init and recycle from debate to debate (causes 40% data duplication)
+--> need to ensure that agents exit the last cycle of debate, log results, then kill agents and re-init
+--> solution: create snapshot of final debate cycle in (check_convergence and max_cycles), if cycle > cycle_snapshot (do init_debate)
+- further discovered how to optimize RNG generation for SDs distributions for agents (instead of pulling from global RNG generator)
+--> solution: constrain the SD initialization based on seed and ID (for reproducibility)
+
 
 
 

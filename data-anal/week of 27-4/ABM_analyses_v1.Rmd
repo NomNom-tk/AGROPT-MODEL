@@ -1,6 +1,6 @@
 ---
-title: "ABM_orchest_v1" (add the date and nature of the run)
-params: "lhs_v1"
+title: "ABM_orchest_v1" #(add the date and nature of the run)
+params:
   config_key: "lhs_main"
 output: 
   html_document:
@@ -71,6 +71,81 @@ if(exists("processed_ga")) {
   )
   ga_outputs <- analyze_processed_run(ga_bundle)
 }
+```
+
+``` {r, asdf}
+library(dplyr)
+ 
+check_duplication <- function(df) {
+ 
+  # Identifying columns: everything that defines "one intended
+  # simulation run" for one agent, EXCLUDING outcome columns
+  # (opinion, mae, error_*, etc.) — those are what we're checking
+  # for exact repetition, not what defines uniqueness.
+  id_cols <- c("model_type", "current_condition", "selected_debate_id",
+               "debate_label", "current_experiment_id", "use_distinct_agents",
+               "speaking_mode", "seed", "agent_id",
+               "convergence_rate", "confidence_threshold",
+               "repulsion_threshold", "repulsion_strength")
+ 
+  id_cols <- intersect(id_cols, names(df))  # only keep cols that exist
+ 
+  dup_summary <- df %>%
+    count(across(all_of(id_cols)), name = "n_occurrences") %>%
+    filter(n_occurrences > 1) %>%
+    arrange(desc(n_occurrences))
+ 
+  cat("Rows with more than one occurrence of the same",
+      "(model_type, condition, debate, seed, agent, params) combination:\n")
+  print(dup_summary)
+ 
+  cat("\nTotal duplicated row-groups:", nrow(dup_summary), "\n")
+  cat("Total rows involved in duplication:", sum(dup_summary$n_occurrences), "\n")
+  cat("As % of full dataset:",
+      round(100 * sum(dup_summary$n_occurrences) / nrow(df), 1), "%\n")
+ 
+  # Breakdown by model_type — tells you if this is isolated to
+  # no_change or spread across consensus/clustering/bipolarization
+  cat("\n--- Breakdown by model_type ---\n")
+  by_model <- df %>%
+    count(across(all_of(id_cols)), name = "n_occurrences") %>%
+    filter(n_occurrences > 1) %>%
+    count(model_type, name = "n_duplicated_groups")
+  print(by_model)
+ 
+  # For non-no_change models specifically: check if the SIMULATED
+  # opinion also matches exactly across duplicates (this is the
+  # part that would actually bias MAE/variance estimates, since
+  # for no_change it's expected/harmless — see chat discussion)
+  if ("opinion" %in% names(df)) {
+    cat("\n--- Are simulated 'opinion' values also identical across duplicates? ---\n")
+    opinion_check <- df %>%
+      group_by(across(all_of(id_cols))) %>%
+      filter(n() > 1) %>%
+      summarize(n_distinct_opinion = n_distinct(opinion), .groups = "drop") %>%
+      count(n_distinct_opinion == 1, name = "n_groups")
+    print(opinion_check)
+    cat("(n_distinct_opinion == 1 means the 'duplicate' runs produced\n",
+        " identical simulated output — i.e. NOT independent replicates.)\n")
+  }
+ 
+  invisible(dup_summary)
+}
+ 
+# ---- Usage ----
+result <- check_duplication(processed_lhs$df_ag)
+# or per model_type, e.g.:
+# result_noc <- check_duplication(df_ag %>% filter(model_type == "no_change"))
+result_cons <- check_duplication(processed_lhs$df_ag %>% filter(model_type == "consensus"))
+
+total_rows <- nrow(processed_lhs$df_ag)
+print(total_rows)
+unique_param_combos <- processed_lhs$df_ag %>%
+  select(confidence_threshold, convergence_rate, repulsion_threshold, repulsion_strength) %>%
+  distinct() %>%
+  nrow()
+print(unique_param_combos)
+
 ```
 
 # Preface

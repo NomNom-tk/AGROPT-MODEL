@@ -567,26 +567,54 @@ plot_valence_accuracy <- function(df) {
 
 #' Asymmetry Lollipop gap plot 6/7/26
 #' 
-#' Used to identify the tendency of which debates/models are systematically biased
-#' towards one direction (pro/anti), points and lines illustrate the sway of bias
+#' Used to identify the tendency of which debates (aggregated from agents) for each model are systematically biased
+#' towards one direction (pro/anti), end of line indicates magnitude on x-axis
 #'
 #' @param df Valence dataframe used with \code{df_sum_directional_valence} containing:
 #' model_type, current_condition, selected_debate_id, pro_reduction, pct_correct_dir,
 #' pct_wrong_dir, mean_signed_error, pro_signed_error, mean_mae, mean_baseline_mae, n 
 #'
+#' describe{
+#'  \item{accuracy_asymmetry}{Numerical. Pct of agents where simulated direction change is in accordance with empirical (for pro_reduction) - those of anti_reduction}
+#'  \item{selected_debate_id}{String. Identifier of current debate for experiment}
+#'  \item{accuracy_asymmetry}{Boolean. Color injection: TRUE when pro_reduction 
+
+# plot_asymmetry_gap <- function(df) {
+#     ggplot(df, aes(x=accuracy_asymmetry, y = selected_debate_id, color = accuracy_asymmetry > 0)) +
+#     geom_point(alpha = 0.3) +
+#     geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+#     geom_segment(aes(x = 0, xend = accuracy_asymmetry,
+#                      y = selected_debate_id, yend = selected_debate_id), alpha = 0.3) +
+#     facet_wrap(~ model_type) +
+#     scale_color_brewer(palette = "Set1") +
+#     labs(title = "Model Type Asymmetry per debate",
+#          subtitle = "Positive = Pro-reduction bias | Negative = Anti-reduction bias | Dashed line = No asymmetry",
+#          x = "Accuracy Asymmetry (Pro - Anti % Correct Direction)",
+#          y = "Debate ID")
+# }
 
 plot_asymmetry_gap <- function(df) {
-    ggplot(df, aes(x=accuracy_asymmetry, y = selected_debate_id, color = accuracy_asymmetry > 0)) +
-    geom_point(alpha = 0.3) +
-    geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+    # If the df has multiple replicates per debate, aggregate to a single mean per debate first
+    df_plot <- df %>%
+      group_by(model_type, current_condition, selected_debate_id) %>%
+      summarize(accuracy_asymmetry = mean(accuracy_asymmetry, na.rm = TRUE), .groups = "drop")
+    
+    ggplot(df_plot, aes(x = accuracy_asymmetry, y = reorder(selected_debate_id, accuracy_asymmetry), color = accuracy_asymmetry > 0)) +
+    geom_point(size = 2.5) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "darkgray", size = 0.8) +
     geom_segment(aes(x = 0, xend = accuracy_asymmetry,
-                     y = selected_debate_id, yend = selected_debate_id), alpha = 0.3) +
+                     y = selected_debate_id, yend = selected_debate_id), size = 0.6) +
     facet_wrap(~ model_type) +
-    scale_color_brewer(palette = "Set1") +
-    labs(title = "Model Type Asymmetry per debate",
-         subtitle = "Positive = Pro-reduction bias | Negative = Anti-reduction bias | Dashed line = No asymmetry",
-         x = "Accuracy Asymmetry (Pro - Anti % Correct Direction)",
-         y = "Debate ID")
+    scale_color_manual(values = c("TRUE" = "#377eb8", "FALSE" = "#e41a1c"),
+                       labels = c("TRUE" = "Pro-Reduction Bias", "FALSE" = "Anti-Reduction Bias")) +
+    theme_minimal() +
+    labs(title = "Model Type Directional Asymmetry per Debate Group",
+         subtitle = "Positive space implies better tracking of pro-reduction shifts | Negative implies anti-reduction tracking shifts",
+         x = "Accuracy Asymmetry Delta (Pro - Anti % Correct Direction)",
+         y = "Debate Group ID (Ordered by Asymmetry Magnitude)",
+         color = "Model Bias Vector") +
+    theme(axis.text.y = element_text(size = 6), # shrinks text so large batch debate lists fit cleanly
+          panel.spacing = unit(1, "lines"))
 }
 
 #' Scatter Plot of Model Performance Considering Distinct Agents (Optional version aware)

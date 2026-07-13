@@ -3,7 +3,7 @@
 # 1. Purpose and Patterns
 ## 1.1 Purpose
 -Description
-The model addresses the idea that what we eat impacts the world around us, our health (Springmann et al., 2016; Forouzanfar et al., 2015), and the environment (Garnett., 2008; Vermeulen et al., 2012). It focuses on identifying and characterizing the mechanisms by which humans interact in social contexts (i.e. debates) to encourage behavioral change toward more sustainable food choices, such as meat consumption reduction. This model draws inspiration from the definition of deliberation, highlighted by Baechtiger et al. (2018) and takes the example of ¨mini-publics" (Niemeyer, 2011) to characterize a virtual environment where individuals interact and "deliberate" on the reduction of meat consumption. The model in this study uses data and experimental characteristics (i.e. number of debate participants) from an ongoing study by Dheilly et al (unpublished). 
+The model addresses the idea that what we eat impacts the world around us, our health (Springmann et al., 2016; Forouzanfar et al., 2015), and the environment (Garnett, 2008; Vermeulen et al., 2012). It focuses on identifying and characterizing the mechanisms by which humans interact in social contexts (i.e. debates) to encourage behavioral change toward more sustainable food choices, such as meat consumption reduction. This model draws inspiration from the definition of deliberation, highlighted by Baechtiger et al. (2018) and takes the example of ¨mini-publics" (Niemeyer, 2011) to characterize a virtual environment where individuals interact and "deliberate" on the reduction of meat consumption. The model in this study uses data and experimental characteristics (i.e. number of debate participants) from an ongoing study by Dheilly et al (unpublished). 
 
 The purpose of the model is to understand how individual, debate level and global attitudes change in the context of debates that address meat consumption reduction. The ultimate purpose of the model is to characterize the underlying processes and phenomena implicated in this debate process...and further to understand whether the addition of argumentation dynamics improves the predictive efficiency of attitude evolution through the debates. The model social influence model is explicitly based on moels of social influence (Flache et al., 2017). 
 
@@ -60,7 +60,7 @@ Five subfactors measured on [1,7] scale, normalized to [0,1]:
 - `subfactor_4_t1` & `subfactor_4_t2`: Cultural tradition (CONTRA-reduction)
 - `subfactor_5_t1` & `subfactor_5_t2`: Economic concerns (CONTRA-reduction)
 
-**Overall attitude formula:**
+**Overall attitude formula (canonical statement — referenced, not repeated, in Sections 5.2 and 6.2):**
 DB_Index = mean(subfactor_1, subfactor_2) - mean(subfactor_3, subfactor_4, subfactor_5)
 Normalized: opinion = (DB_Index + 6) / 12  → [0,1] range
 
@@ -98,7 +98,7 @@ Constraint: agent_repulsion_threshold > agent_confidence_threshold
 **Temporal:** Discrete time steps (abstract, not calibrated to real time)
 **Typical simulation length:** 15-110 cycles until convergence 
 (max 100 cycles — applies equally to speaking and non-speaking mode)
-**Convergence threshold:** max |opinion - previous_opinion| < 0.01 (see Submodel 7.2 for full algorithm
+**Convergence threshold:** max |opinion - previous_opinion| < 0.01 (see Submodel 7.2 for the full convergence-checking algorithm and its consequences)
 **Opinion scale:** Continuous [0,1] where 0=strongly anti-reduction, 1=strongly pro-reduction  
 **Empirical basis:** Real debates lasted ~60 minutes; model time is abstract (not calibrated to real minutes)
 
@@ -137,9 +137,9 @@ Control individual differences:
 
 #### Simulation Control
 - `selected_debate_id` (integer): Which debate to simulate
-- `max_cycles` (integer, default=100): Maximum simulation length for local debate.
+- `max_cycles` (integer, default=100): Maximum simulation length for local debate. This is the sole cycle-limit parameter in the model — there is no separate 300-cycle timeout; see Submodel 7.2.
 - `step` (float, default=0.5): Time step duration
-- `mae_convergence_threshold` (float, default=0.01): Opinion change below this triggers end
+- `mae_convergence_threshold` (float, default=0.01): Opinion change below this triggers end. This is the model's only convergence-threshold variable; earlier drafts of this document referred to a separate `opinion_delta_threshold`, which does not exist in the implementation and has been removed.
 - `end_simulation_at_convergence` (boolean): Global toggle that determines early halt or forcs continuous run until max_cycles.
 - `convergence_cycle` (integer): Cycle when convergence occurred (-1 if not converged)
 - `debate_start_cycle` (integer): Records the absolute simulation baseline cycle when active debate group loop instantiated.
@@ -163,9 +163,9 @@ Control individual differences:
 
 # 3. Process overview and scheduling
 ## 3.1 Initialization Sequence
-1. Load CSV data ("data_complete_anonymised.csv")
+1. Load CSV data ("train_data.csv" — see Section 6.1)
 ↓
-2. Validate data loading (check subfactor normalization)
+2. Validate data loading (check subfactor normalization — see Section 6.2)
 ↓
 3. Create debate ID mapping (control agents get their unique debate)
 - Generate integer mapping values via stable_group_map and export mapping records to "debate_id_mapping.csv"
@@ -174,7 +174,7 @@ Control individual differences:
 - Detect condition for specified debate
 - Load subfactors from csv data rows (for T1 and T2)
 - Sample agent specific parameters from distributions
-- Compute initial_opinion from subfactors using DB_Index formula
+- Compute initial_opinion from subfactors using DB_Index formula (Section 2.2)
 - Set opinion = initial_opinion
 - Set initial_opinion_snapshot <- initial_opinion / previous_opinion <- initial_opinion
 - Initialize total_influences_received <- 0, retention_discount <- 1.0, cumulative_opinion_change <- 0.0, recent_speech <- []
@@ -222,22 +222,10 @@ In each batch simulation, one of the two interaciton models is active, determine
 
 
 [every 5 cycles after cycle 10 from debate start, if end_simulation_at_convergence is true]
-5. Convergence check (`check_convergence`)
-- Collect `|opinion - previous_opinion|` for all agents.
-- If `max_change < mae_convergence_threshold` (0.01):
-  - Set `convergence_cycle <- cycle - debate_start_cycle`
-  - Set `end_simulation` to true.
-  - Call `compute_fit` and `compute_final_statistics`.
-  - If `mode_batch` is true, execute `save_batch_results` (which saves summary, per-agent records, and logs).
-  - Evaluate sequential loop control: if `debate_counter < length(m_debate_list) - 1`, increment counter, update `selected_debate_id`, clear all current population instances via `do die`, and invoke `init_debate`.
+5. Convergence check (`check_convergence`) — see Submodel 7.2 for the full algorithm, threshold value, and finalization/debate-progression logic triggered on convergence.
 
 [every cycle]
-6. Maximum Cycles Reached (`max_cycles_reached`)
-- If `(cycle - debate_start_cycle) >= max_cycles` (where `max_cycles` default = 100) and `end_simulation` is false:
-  - Force loop termination by setting `end_simulation` to true.
-  - Call `compute_fit` and `compute_final_statistics`.
-  - If `mode_batch` is true, write final execution results using identical file-saving functions.
-  - Execute sequential group progression and memory cleanup logic (`do die`, increment counter, call `init_debate`).
+6. Maximum Cycles Reached (`max_cycles_reached`) — see Submodel 7.2 for the fallback algorithm triggered when `max_cycles` is reached without convergence.
 
 ### Update Order
 Within-agent updates are done simultaneously (all agents update their opinion based on their t-1 neighbors).
@@ -428,16 +416,15 @@ sender_opinion,opinion_before,opinion_after,delta,agent_is_saturated,agent_wrong
 
 **Environment:** Empty 100×100 continuous space (for GUI visualization)
 
-**Agent creation:** Conditional on `selected_debate_id` coordinated sequently by global controller `initialize_agents_for_debate`.
+**Agent creation:** Conditional on `selected_debate_id` coordinated sequentially by global controller `initialize_agents_for_debate`.
 - Only agents with matching debate records from data loader and instantiated.
 - Typical size of debates is between 4-7 agents.
 - Control debates: 1 agent per simulation session.
 
 ### 5.2 Data Loading
-**Source:** `../data-dictionary/exp-dat/train_data.csv`, loaded via `load_csv_data` in 
-the model's `init` block. This is the calibration split only — see Section 6.1/6.2 for 
-data structure, column mapping, and integrity checks, and Appendix C for how this file 
-is produced from the full dataset.
+**Source:** `../data-dictionary/exp-dat/train_data.csv`, loaded via `load_csv_data` in the model's `init` block. This is the calibration split only — see Section 6.1/6.2 for data structure, column mapping, and integrity checks, and Appendix C for how this file is produced from the full dataset.
+
+**Note on validation runs:** the file path above is currently hardcoded in `main_4-3.gaml`'s `init` block, with no runtime switch to `test_data.csv`. Validation-set runs (Section 8.1.2, Hypotheses H3/H5/H6) therefore currently require either a manual path edit or a separate model/experiment configuration not yet documented here. **[TODO: document how validation runs are actually invoked before H3/H5/H6 validation-set results are reported in Section 8.4.]**
 
 ### 5.3 Debate ID Mapping
 Multi-agent debates are parsed using an explicit string-to-integer translation map (`stable_group_map`). 
@@ -501,7 +488,7 @@ The global controller computes starting state tracking values at $t = 0$ before 
 
 ## 6. INPUT DATA
 ### 6.1 Data Source
-**Primary Input File:** `../data-dictionary/exp-dat/train_data.csv` (structured training split of the empirical data set used for model calibration). 
+**Primary Input File:** `../data-dictionary/exp-dat/train_data.csv` (structured training split of the empirical data set used for model calibration; see Section 5.2 for how and when this file is loaded, and Appendix C for how it is produced from the full dataset). 
 **Format:** CSV with an initial header row.  
 **Structure:** Contains individual participant records mapped into unique debate sessions.
 - **Multi-Agent Debates:** 55 multi-agent interactive groups (4–7 participants per group).
@@ -523,10 +510,12 @@ The global data loader parses the CSV columns dynamically at initialization and 
 | Timepoint 1 Subfactors | `subfactors_t1` | `list<list<float>>` (Matrix of 5 subfactors, each bounded $[0, 1]$) |
 | Timepoint 2 Subfactors | `subfactors_t2` | `list<list<float>>` (Matrix of 5 subfactors, each bounded $[0, 1]$) |
 
+**Data transformations:** Raw empirical metrics are normalized prior to runtime input processing within the base data framework, using the DB_Index → opinion formula defined in Section 2.2.
+
 **Data Quality and Integrity Checks:**
 The data initialization block performs defensive consistency checks when `debug_mode` is enabled:
 - Verifies that all required position variables and attitude columns fall strictly within normalized $[0.0, 1.0]$ bounds.
-- Runs an algebraic check via `do debug_init` to confirm that the empirical initial attitude matches the calculated composite balance of the 5 input subfactors within floating-point tolerances ($10^{-10}$).
+- Runs an algebraic check via `do debug_init` to confirm that the empirical initial attitude matches the calculated composite balance of the 5 input subfactors (formula in Section 2.2), within floating-point tolerances ($10^{-10}$).
 
 ### 6.3 Environmental Data
 **None.** The simulation world does not include:
@@ -658,29 +647,31 @@ When dyadic speaking variants are activated, the complete neighbor loop step is 
 ### 7.2 Convergence Detection
 **Purpose:** Stop simulation when opinions stabilize (computational efficiency + realism)
 
-**Mechanism:** The global orchestration loop executes a structural tracking check every 5 execution cycles (beginning on step 10) to determine if state stabilization has been reached.
+**Mechanism:** The global orchestration loop executes a structural tracking check every 5 execution cycles (beginning on step 10, relative to `debate_start_cycle`) via the `check_convergence` reflex, to determine if state stabilization has been reached. A separate `max_cycles_reached` reflex provides a fallback timeout, evaluated every cycle.
 
-**Algorithm:**
-1. Collect opinion displacements across the active population:
+**Algorithm (`check_convergence`):**
+1. Collect each agent's opinion displacement since the previous cycle:
    $$\text{max\_delta} = \max \left( |o_i(t) - o_i(t-1)| \right) \quad \forall i$$
-   (evaluated at each check, not against a 5-cycle-old snapshot — previous_opinion is 
-   updated every cycle via a separate reflex, so this compares consecutive cycles at 
-   the moment of checking)
+   (`previous_opinion` is refreshed every cycle by a separate reflex, so this is always a one-cycle comparison, evaluated on the 5-cycle check schedule.)
 2. If $\text{max\_delta} < \text{mae\_convergence\_threshold}$ (hardcoded to $0.01$):
    - Set `convergence_cycle` $\leftarrow$ current cycle $-$ `debate_start_cycle`.
    - Trigger `end_simulation <- true`.
-   - Call `do compute_fit` and `do compute_final_statistics`, then (if `mode_batch`) 
-     `do save_batch_results`.
-3. **Fallback:** If `(cycle - debate_start_cycle) >= max_cycles` (default 100) without 
-   meeting the convergence criterion, `max_cycles_reached` forces `end_simulation <- true` 
-   and runs the same finalization steps.
+   - Call `do compute_fit` and `do compute_final_statistics`.
+   - If `mode_batch` is true, execute `do save_batch_results`.
+   - Sequential loop control: if `debate_counter < length(m_debate_list) - 1`, increment the counter, update `selected_debate_id` to the next debate, remove all current agent instances, and call `do init_debate`; otherwise set `end_simulation <- true`.
 
-**Convergence criterion:** Maximum opinion change < 0.01, checked every 5 cycles 
-starting at cycle 10 relative to debate start.w
+**Algorithm (`max_cycles_reached`, fallback):**
+1. If `(cycle - debate_start_cycle) >= max_cycles` (default 100) and `end_simulation` is still false:
+   - Set `convergence_cycle` to the current elapsed cycle count (recorded regardless of non-convergence).
+   - Trigger `end_simulation <- true`.
+   - Call `do compute_fit` and `do compute_final_statistics`, then (if `mode_batch`) `do save_batch_results`.
+   - Same sequential debate-progression logic as above.
 
-**Rationale:** Opinion change becomes negligible; further cycles add no information
+**Convergence criterion:** Maximum opinion change < 0.01, checked every 5 cycles starting at cycle 10 relative to debate start.
 
-**Fallback:** If max_cycles (100) reached without convergence, force stop
+**Rationale:** Opinion change becomes negligible; further cycles add no information. The 10-cycle initial grace period allows deliberation to begin before checking is meaningful; checking every 5 cycles (rather than every cycle) reduces computational load across large batch runs.
+
+**Fallback:** If `max_cycles` (100) is reached without convergence, the simulation is force-stopped by `max_cycles_reached` and finalized identically to a converged run, with `convergence_cycle` still recorded for diagnostic purposes.
 
 ### 7.3 Model Fit Computation
 **Mechanism:** Quantifies structural error performance against empirical data profiles by running a post-simulation calculation loop.
@@ -759,7 +750,7 @@ Stratified random sampling:
 -- Homogeneous debates
 -- (Control debates excluded from calibration as they have no interactions)
 
-Implementation details (R code) are provided in Appendix X. 
+Implementation details (R code) are provided in Appendix X. **[Cross-reference note: Section 5.2 flags that the main GAML model currently loads `train_data.csv` unconditionally, with no confirmed automated path for running against `test_data.csv`. Resolve before validation-set MAE (Section 8.4) is reported.]**
 
 **Model selection procedure:**
 1. Run GA calibration separately for each model (consensus, clustering, bipolarization)
@@ -782,21 +773,33 @@ To further explore the feasible parameter region, Latin Hypercube Sampling (LHS)
 
 The use of LHS in this context is justified as this sampling method ensure more uniform coverage of the multidimensional parameter spaces considered in this study compared with simple random samplig. This smapling method is widely used in the ABM field and is recommended for calibration and sensitivity analysis (Lee et al., 2015). 
 
-The number of LHS sample is determined as a function of model dimensionality. We use a sample size that is approximately 20-50 times the number of calibrated parameters resulting in approximately 300 samples per model. This was chosen to ensure consistent cross-model comparison, regardless of the number of calibrated parameters varying between the models (consensus, clustering, bipolarization), as well as ensuring computational feasibility.
+**[NOTE — reconcile with registered OSF protocol:** this section states an LHS sample size of "20–50× the number of calibrated parameters, ≈300 samples per model." The registered OSF protocol states 200 samples per model. These describe the same design decision and currently disagree; pick one figure and update both documents before further reporting.]
+
+The number of LHS sample is determined as a function of model dimensionality. This was chosen to ensure consistent cross-model comparison, regardless of the number of calibrated parameters varying between the models (consensus, clustering, bipolarization), as well as ensuring computational feasibility.
 
 The second stage exploration enables a more comprehensive assessment of parameter sensitivity, interaction effects and robustness of model outcomes. This supports the study's exploratory objective (RQ1) of understanding how parameter variation influences the emergent opinion dynamics. 
 
 #### 8.1.5 Parameter Bounds for LHS
-The parameter bounds used for LHS are derived from the retained set of high-performing GA solutions.
+The parameter bounds used for LHS are derived from the retained set of high-performing GA solutions (top-25%-MAE GA runs, per Section 8.1.3), summarized below by `model_type` and `use_distinct_agents`:
 
-******TODO to do*******
-[PARAMETER TABLE]
+| model_type | use_distinct_agents | best_mae | cr_min | cr_max | ct_min | ct_max | rs_min | rs_max | rt_min | rt_max |
+|---|---|---|---|---|---|---|---|---|---|---|
+| bipolarization | FALSE | 0.0112 | — | — | — | — | — | — | — | — |
+| bipolarization | TRUE | 0.0099 | — | — | — | — | — | — | — | — |
+| clustering | FALSE | 0.0112 | — | — | — | — | — | — | — | — |
+| clustering | TRUE | 0.0081 | — | — | — | — | — | — | — | — |
+| consensus | FALSE | 0.0112 | — | — | — | — | — | — | — | — |
+| consensus | TRUE | 0.0081 | — | — | — | — | — | — | — | — |
+
+Population-variation (SD) bounds (`use_distinct_agents = TRUE`) are similarly derived: `cr_min_sd`/`cr_max_sd`, `ct_min_sd`/`ct_max_sd`, `rs_min_sd`/`rs_max_sd`, `rt_min_sd`/`rt_max_sd`, per model_type.
+
+**[TODO — before finalizing this table: (1) fill in the numeric `cr_min`–`rt_max` cell values from the R output (`generate_gaml_bounds`); (2) verify whether the `best_mae` values above (0.0081–0.0112) are computed on the same pooled calibration set as the overall GA MAE reported in Section 8.2/8.4 (~0.0644), or a narrower subset (e.g. top-25% filter only) — these are not directly comparable as currently labeled and should not be presented side-by-side without that clarification.]**
 
 #### 8.1.6 Computational Budget
 **Computational budget:**
 - Phase 1: Grid search exploration (~50-100 parameter combinations per model)
 - Phase 2: GA optimization (5 gen × 5 pop = 25 evaluations per parameter set)
-- Phase 3: LHS exploration (~200 samples per model)
+- Phase 3: LHS exploration (~300 samples per model — see reconciliation note in 8.1.4)
 - Phase 4: Validation (best params × 44 debates × 3 seeds ≈ 130 runs)
 - Total per model: ~200-300 simulation runs
 - Total for 3 models: ~600-900 runs
@@ -841,36 +844,36 @@ Calibration MAE: [VALUE]
 Validation MAE: [VALUE]
 Typical convergence: [X] cycles
 
-**Key findings:** [INTERPRETATION FROM DATA]
-- Which model performs best overall?
-- Do different debate types require different models?
-- Does agent heterogeneity (SD > 0) improve predictions?
-- Does homophily improve predictions over random/complete networks?
+**Key findings (confirmed from existing LHS/GA output; see caveats in 8.1.5):**
+- **Which model performs best overall (unoptimized/LHS, pooled global ranking)?** With `speaking_mode = true`: `no_change` (0.0399) < clustering (0.0528) < consensus (0.0616) < bipolarization (0.0873). With `speaking_mode = false`: clustering (0.0920) < consensus (0.1058) < bipolarization (0.1112). No social-influence model beats `no_change` under either speaking mode.
+- **Does GA optimization improve on this?** Yes, but not enough: GA reduces MAE from an LHS baseline of μ=0.0875 to μ=0.0644 (~26% reduction, Welch's t-test t(63394)=−48.96, p<2.2×10⁻¹⁶), still above the 0.0399 `no_change` baseline.
+- **Do different debate types require different models?** Composition/behavioral diagnostics data (by `debate_composition`, `model_type`, `speaking_mode`, `use_distinct_agents`) exists to answer this but has not yet been summarized into an explicit conclusion — **[TODO]**.
+- **Does agent heterogeneity (SD > 0) improve predictions?** Yes, consistently: `use_distinct_agents = TRUE` outperforms `FALSE` across all three models in the composition/behavioral diagnostics comparison.
+- **Does homophily improve predictions over random/complete networks?** Not applicable as tested — the current network is always fully connected (Section 5.5); no random/homophilous network variant has been implemented or compared. **[TODO if this comparison is intended — currently out of scope of the implemented model.]**
 
 ### 8.3 Sensitivity Analysis
+**[DEFERRED — to be completed following the final consolidated LHS/GA rerun described in the registered OSF protocol's Analysis Status section.]**
+
 **Stochasticity analysis:**
 - Variance in MAE across different random seeds
-- Expected finding: Near-zero variance (deterministic dynamics given initial conditions)
-- Implication for seed replication strategy
+- Confirmed finding (Section 4.9/8.1.7): near-zero variance across seeds (deterministic dynamics given initial conditions when `speaking_mode = false`; minor stochasticity from speaker selection when `speaking_mode = true`)
+- Implication for seed replication strategy: 1–3 seed replicates sufficient, consistent with implementation.
 
 **Parameter sensitivity:**
-- Which parameters have largest effect on MAE?
-- Are there parameter interactions?
-- Are there non-linear threshold effects?
+- Which parameters have the largest effect on MAE? — not yet formally assessed beyond preliminary PCC/PRCC exploration (inconclusive).
+- Are there parameter interactions? — not yet assessed.
+- Are there non-linear threshold effects? — not yet assessed.
 
-**Analysis methods:**
-- Scatter plots: parameter value vs MAE
-- Correlation matrix
-- Sobol indices (if comprehensive sensitivity analysis performed)
+**Planned method:** random forest–based permutation importance (Antoniadis, Lambert-Lacroix & Poggi, 2021), applied post-hoc to pooled LHS+GA parameter/output pairs. Selected over formal Sobol' index estimation because the existing and planned sampling design (LHS + GA refinement, not a Saltelli-type factorial design) does not support valid Sobol' estimation, while RF-based permutation importance can be computed directly on irregular samples without a specific sampling structure.
 
-**[NEED TO FILL IN AFTER ANALYSIS]**
+**Targets:** MAE (primary), skewness of signed error and variance of absolute error (secondary, probing directional bias and stability respectively, motivated by the anti-reduction bias noted in Section 4.2). Cross-checked against a moment-independent measure (δ or β^Ku; Baucells & Borgonovo, 2013) per the multi-measure logic in Borgonovo et al. (2022).
 
 ### 8.4 Validation
 **Quantitative validation:**
-- MAE on held-out validation debates
-- Comparison to OLS regression baseline (Hypotheses H3, H5, H6)
-- Condition-specific performance (H4)
-- Distribution matching: predicted vs empirical T2 distributions
+- MAE on held-out validation debates — **not yet computed**; see the validation-path gap flagged in Section 5.2/8.1.2.
+- Comparison to OLS regression baseline (Hypotheses H3, H5, H6) — OLS baseline not yet computed within this pipeline.
+- Condition-specific performance (H4) — data available (Section 8.2 composition table) but not yet summarized against H4 specifically.
+- Distribution matching: predicted vs empirical T2 distributions — not yet assessed.
 
 **Qualitative validation:**
 - Opinion trajectories show realistic patterns:
@@ -880,22 +883,29 @@ Typical convergence: [X] cycles
 - Final opinion distributions match empirical patterns
 - Convergence times reasonable (15-35 cycles ≈ plausible for 60-minute debates conceptually)
 
+**[NEED TO FILL IN AFTER ANALYSIS — none of the qualitative validation checks above have been formally run yet.]**
+
 **Pattern matching (from Section 1.2):**
-- ✓/✗ Pre-post correlation maintained (H1)
-- ✓/✗ Heterogeneous > homogeneous change (H4)
-- ✓/✗ ABM < OLS on MAE (H3, H5, H6)
-- ? Directional asymmetry (pro vs anti change) - exploratory
-- ? Role of perceived norms/self-control (H2) - regression only, not ABM
+- ✓/✗ Pre-post correlation maintained (H1) — not yet tested (individual-level regression not yet run against this pipeline's output).
+- ✓/✗ Heterogeneous > homogeneous change (H4) — data available, not yet summarized against this specific claim.
+- ✓/✗ ABM < OLS on MAE (H3, H5, H6) — **partially answerable now**: ABM (social-influence, all variants tested) does not beat the trivial `no_change` baseline (Section 8.2), which is a stronger requirement than beating OLS; OLS comparison itself not yet run.
+- ? Directional asymmetry (pro vs anti change) - exploratory — **confirmed present** (Section 4.2, anti-reduction bias), not yet formally decomposed by model/condition.
+- ? Role of perceived norms/self-control (H2) - regression only, not ABM — not applicable to this ABM by design (Section 6.4).
 
 **Comparison to benchmark (OLS regression):**
-Model             | Individual MAE | Debate MAE | Global MAE
-------------------+----------------+------------+-----------
-OLS (baseline)    | [VALUE]        | [VALUE]    | [VALUE]
-Consensus         | [VALUE]        | [VALUE]    | [VALUE]
-Clustering        | [VALUE]        | [VALUE]    | [VALUE]
-Bipolarization    | [VALUE]        | [VALUE]    | [VALUE]
 
-**[FILL IN AFTER VALIDATION]**
+Model level of comparison is defined as follows (see also cross-referenced discussion in accompanying analysis materials): **Global** = metrics pooled across all debates by `model_type` alone; **Debate** = metrics grouped by `model_type` + `selected_debate_id`; **Individual** = per-agent `individual_error` from `agent_level_results.csv`.
+
+| Model | Individual MAE | Debate MAE | Global MAE |
+|---|---|---|---|
+| no_change (baseline, not OLS) | [VALUE] | [VALUE] | 0.0399 |
+| OLS (baseline) | [VALUE] | [VALUE] | [VALUE — not yet run] |
+| Consensus (LHS, speaking_mode=true) | [VALUE] | [VALUE — requires debate-level groupby, not yet run] | 0.0616 |
+| Clustering (LHS, speaking_mode=true) | [VALUE] | [VALUE — not yet run] | 0.0528 |
+| Bipolarization (LHS, speaking_mode=true) | [VALUE] | [VALUE — not yet run] | 0.0873 |
+| GA-optimized (all models pooled) | [VALUE] | [VALUE — not yet run] | 0.0644 |
+
+**[FILL IN AFTER VALIDATION — Global column is partially populated from confirmed LHS output above; Individual and Debate columns, and the OLS row entirely, remain to be computed.]**
 
 ## 9. REFERENCES
 
@@ -924,13 +934,17 @@ Bipolarization    | [VALUE]        | [VALUE]    | [VALUE]
 - Guest, O., & Martin, A. E. (2021). How computational modeling can force theory building in psychological science. *Perspectives on Psychological Science*, 16(4), 789-802.
 - MacCoun, R. J. (2017). Computational models of social influence and collective behavior. In *Computational social psychology* (pp. 258-280). Routledge.
 
+**Sensitivity analysis:**
+- Thiele, J. C., Kurth, W., & Grimm, V. (2014). Facilitating parameter estimation and sensitivity analysis of agent-based models: A cookbook using NetLogo and R. *Journal of Artificial Societies and Social Simulation*, 17(3), 11.
+- Lee, J. S., Filatova, T., Ligmann-Zielinska, A., Hassani-Mahmooei, B., Stonedahl, F., Lorscheid, I., ... & Parker, D. C. (2015). The complexities of agent-based modeling output analysis. *Journal of Artificial Societies and Social Simulation*, 18(4).
+- Williams, T. G., Guikema, S. D., Brown, D. G., & Agrawal, A. (2020). Assessing model equifinality for robust policy analysis in complex socio-environmental systems. *Environmental Modelling & Software*, 134, 104831.
+- Borgonovo, E., Pangallo, M., Rivkin, J., Rizzo, L., & Siggelkow, N. (2022). Sensitivity analysis of agent-based models: a new protocol. *Computational and Mathematical Organization Theory*, 28(1), 52-94.
+- Antoniadis, A., Lambert-Lacroix, S., & Poggi, J. M. (2021). Random forests for global sensitivity analysis: A selective review. *Reliability Engineering & System Safety*, 206, 107312.
+
 **Model validation:**
 - Windrum, P., Fagiolo, G., & Moneta, A. (2007). Empirical validation of agent-based models: Alternatives and prospects. *Journal of Artificial Societies and Social Simulation*, 10(2), 8.
 - Railsback, S. F., & Grimm, V. (2019). *Agent-based and individual-based modeling: A practical introduction*. Princeton University Press.
 - Lorscheid, I., Heine, B. O., & Meyer, M. (2012). Opening the 'black box' of simulations: increased transparency and effective communication through the systematic design of experiments. *Computational and Mathematical Organization Theory*, 18(1), 22-62.
-- Lee, J. S., Filatova, T., Ligmann-Zielinska, A., Hassani-Mahmooei, B., Stonedahl, F., Lorscheid, I., ... & Parker, D. C. (2015). The complexities of agent-based modeling output analysis. Journal of Artificial Societies and Social Simulation, 18(4).
-- Thiele, J. C., Kurth, W., & Grimm, V. (2014). Facilitating parameter estimation and sensitivity analysis of agent-based models: A cookbook using NetLogo and R. Journal of Artificial Societies and Social Simulation, 17(3), 11.
-- Williams, T. G., Guikema, S. D., Brown, D. G., & Agrawal, A. (2020). Assessing model equifinality for robust policy analysis in complex socio-environmental systems. Environmental Modelling & Software, 134, 104831.
 
 **ODD protocol:**
 - Grimm, V., Railsback, S. F., Vincenot, C. E., Berger, U., Gallagher, C., DeAngelis, D. L., ... & Ayllón, D. (2020). The ODD protocol for describing agent-based and other simulation models: A second update to improve clarity, replication, and structural realism. *Journal of Artificial Societies and Social Simulation*, 23(2), 7.
@@ -942,6 +956,9 @@ Bipolarization    | [VALUE]        | [VALUE]    | [VALUE]
 - Rockström, J., et al. (2025). The EAT–Lancet Commission on healthy, sustainable, and just food systems. *The Lancet*, 406(10512), 1625-1700.
 - Steinfeld, H., et al. (2006). *Livestock's long shadow: Environmental issues and options*. FAO.
 - Springmann, M., et al. (2016). Analysis and valuation of the health and climate change cobenefits of dietary change. *PNAS*, 113(15), 4146-4151.
+- Forouzanfar, M. H., et al. (2015). Global, regional, and national comparative risk assessment of 79 behavioural, environmental and occupational, and metabolic risks or clusters of risks in 188 countries, 1990-2013. *The Lancet*, 386(10010), 2287-2323.
+- Garnett, T. (2008). Cooking up a storm: Food, greenhouse gas emissions and our changing climate. Food Climate Research Network.
+- Vermeulen, S. J., Campbell, B. M., & Ingram, J. S. I. (2012). Climate change and food systems. *Annual Review of Environment and Resources*, 37, 195-222.
 
 
 ## APPENDICES
@@ -959,15 +976,17 @@ Bipolarization    | [VALUE]        | [VALUE]    | [VALUE]
 - DBFactor4: Cultural tradition (items 14-17, CONTRA-reduction)
 - DBFactor5: Economic concerns (items 18-20, CONTRA-reduction)
 
-**DB_Index formula:**
+**DB_Index formula:** (see also Section 2.2, the canonical statement of this formula)
 ```
 DB_Index = mean(DBFactor1, DBFactor2) - mean(DBFactor3, DBFactor4, DBFactor5)
          = [(F1 + F2) / 2] - [(F3 + F4 + F5) / 3]
 Range: [-6, +6] on original scale
 Normalized: [0, 1] for model
+```
 
 ### C. Data Splitting R Implementation
 Implementation in R:
+```r
 library(dplyr)
 
 # debate data seleciton
@@ -1012,5 +1031,4 @@ write.csv(control_data, "./data/control_data.csv", row.names = FALSE)
 # check split
 cat("Train Debates:", nrow(distinct(train_data, ID_Group_all)), "\n") # 43 debates
 cat("Test Debates:", nrow(distinct(test_data, ID_Group_all)), "\n") # 12 debates
-
-
+```

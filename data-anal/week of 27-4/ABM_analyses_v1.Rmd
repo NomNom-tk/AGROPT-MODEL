@@ -171,7 +171,7 @@ lhs_outputs$results$comparisons$empirical_cohen
 
 ``` {r, ols-compar, echo = FALSE, cache = FALSE}
 # display linear comparisons
-if(!is.null(lhs_outputs$results$comparisons$ols)) {
+if(!is.null(lhs_outputs$results$comparisons$ols_debate_mae)) {
   lhs_outputs$results$comparisons$ols %>%
     mutate(across(where(is.numeric), ~ round(., 4))) %>%
     flextable() %>%

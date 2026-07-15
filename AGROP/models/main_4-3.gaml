@@ -262,11 +262,15 @@ loop idx from: 0 to: length(debate_id_list) - 1 {
             subfactor_5_t2 <- subfactors_t2[4][idx];
 
             // PARAMETERS (if/else for use individual (heterogeneous agents))
+            // modif to constrain SD to gaussian with seed + idx for debate 13/7/26
             if use_distinct_agents {
-                agent_convergence_rate <- max([0.01, min([0.99, gauss(convergence_rate, convergence_rate_sd)])]);
-                agent_confidence_threshold <- max([0.01, min([0.99, gauss(confidence_threshold, confidence_threshold_sd)])]);
-                agent_repulsion_strength <- max([0.01, min([0.99, gauss(repulsion_strength, repulsion_strength_sd)])]);
-                agent_repulsion_threshold <- max([0.01, min([0.99, gauss(repulsion_threshold, repulsion_threshold_sd)])]);
+                // bind draw to global seed + unique loop index 
+                int local_agent_seed <- int(seed + idx)
+
+                agent_convergence_rate <- max([0.01, min([0.99, gauss({convergence_rate, convergence_rate_sd}, local_agent_seed)])]);
+                agent_confidence_threshold <- max([0.01, min([0.99, gauss({confidence_threshold, confidence_threshold_sd}, local_agent_seed + 1)])]);
+                agent_repulsion_strength <- max([0.01, min([0.99, gauss({repulsion_strength, repulsion_strength_sd}, local_agent_seed + 2)])]);
+                agent_repulsion_threshold <- max([0.01, min([0.99, gauss({repulsion_threshold, repulsion_threshold_sd}, local_agent_seed + 3)])]);
                 agent_repulsion_threshold <- max([agent_confidence_threshold + 0.05, agent_repulsion_threshold]);
             } else {
                 agent_convergence_rate <- convergence_rate;

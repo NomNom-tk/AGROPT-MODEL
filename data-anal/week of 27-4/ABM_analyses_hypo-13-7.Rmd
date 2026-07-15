@@ -1,0 +1,236 @@
+---
+title: "ABM_orchest_hypo" #(add the date and nature of the run)
+params:
+  config_key: "lhs_main"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+    theme: lumen
+date: "2026-04-02"
+---
+
+```{r-setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width = 15,
+                      fig.height = 10)
+```
+
+```{r, setup_1, echo = FALSE, message = FALSE}
+library(tidyverse)
+library(rvg)
+library(broom)
+library(officer)
+library(flextable)
+library(sensitivity)
+library(lm.beta)
+library(igraph)
+library(ggraph)
+library(janitor)
+library(tidygraph)
+library(patchwork)
+library(knitr)
+library(ComplexUpset)
+library(DT)
+```
+
+```{r, file-sourcing, include = FALSE, echo = FALSE, cache = FALSE}
+source("./functions.R")
+source("./data_processing.R")
+source("./plots.R")
+source("framework_analysis.R")
+```
+
+```{r, analysis-calls, include = FALSE, echo = FALSE, cache = FALSE}
+# empirical data loading 4/6/26
+df_empirical <- empirical_prep("./data/data_complete_anonymised.csv")
+
+# LHS pipeline
+if (!exists("processed_lhs")) {
+  message("Processing raw LHS data files")
+  processed_lhs <- process_run(run_configs$lhs_main)
+}
+
+if(exists("processed_lhs")) {
+  lhs_bundle <- list(
+    sim_inputs = processed_lhs,
+    df_empirical = df_empirical
+  )
+  lhs_outputs <- analyze_processed_run(lhs_bundle)
+}
+
+# GA pipeline
+if (!exists("processed_ga")) {
+  message("Processing raw GA data files")
+  processed_ga <- process_run(run_configs$ga_main)
+}
+
+if(exists("processed_ga")) {
+  ga_bundle <- list( # 4/6/26
+    sim_inputs = processed_ga,
+    df_empirical = df_empirical
+  )
+  ga_outputs <- analyze_processed_run(ga_bundle)
+}
+```
+
+# Preface
+- this document considers one version of LHS and one of GA (100 fixed cycles)
+-- the other with dynamic convergence (convergence_threshold at 0.01) which is designated as **v2**
+- Further all of the data displayed below is only considering M (mixed) debates which constitute a mix of pro and anti reduction agents (a future version to be run next week - form 25/5/26 onwards will introduce better segmentation and cross comparison of H and M debates)
+- All analyses where data is not labelled in **v1** or **v2** is run with **v1** (which biases the interpretation as each debate is forced to run until it reaches 100 cycles)
+- use_distinct_agents: __TRUE__ (each agent has the same base parameter value but has a standard deviation associated with each parameter) / __FALSE__ (all agents in that debate have the same parameter value -> assumes agents are all the same)
+
+# Global Data Discovery
+```{r, LHS_VS_GA, cache = FALSE}
+if (exists("ga_outputs") && !is.null(ga_outputs$results$comparisons$ranking)) {
+  p_lhs <- lhs_outputs$plots$model_performance_rank_main() + labs(subtitle = "LHS Exploration Footprint (Wide Space)")
+  p_ga  <- ga_outputs$plots$model_performance_rank_main() + labs(subtitle = "GA Optimization Footprint (Targeted Space)")
+  print(p_lhs + p_ga + plot_layout(guides = "collect"))
+  
+  cat("#### Inferential Statistical Progress Testing (Welch's Two-Sample t-Test):\n")
+  # Map underlying GAMA seed/replicate vector safely
+  lhs_vector <- lhs_outputs$inputs$raw$mae
+  ga_vector <- ga_outputs$inputs$raw$mae
+  print(t.test(ga_vector, lhs_vector, paired = FALSE, alternative = "two.sided"))
+}
+```
+
+# LHS SENSITIVITY
+``` {r, global_sensitivity_lhs, echo = FALSE, cache = FALSE}
+if (!is.null(lhs_outputs$plots$pcc)) lhs_outputs$plots$pcc()
+if (!is.null(lhs_outputs$plots$prcc)) lhs_outputs$plots$prcc()
+```
+
+# Debate Level Resolution & Asymmetry
+```{r, empir_vs_simulation_by_debate, cache = FALSE}
+if (!is.null(lhs_outputs$results$comparisons$ranking)) {
+  lhs_outputs$results$comparisons$ranking %>%
+    mutate(across(where(is.numeric), ~ round(., 4))) %>%
+    flextable() %>%
+    set_caption("Debate-Specific Performance Rankings (LHS Exploration)") %>%
+    autofit()
+}
+```
+# Debate-level Valence Accuracy & Asymmetry Gap
+## how well the model performs when tracking opposing sides insidie individual debates
+```{r, debate_asymmetry, echo = FALSE}
+# Extract underlying debate-level data structures
+df_directional_agents <- lhs_outputs$results$comparisons$directional_agents
+
+if (!is.null(df_directional_agents)) {
+  df_directional_valence <- summarize_directional_valence(df_directional_agents)
+  df_asymmetry <- compute_valence_asymmetry(df_directional_valence)
+  
+  cat("#### Interactive Debate Valence Accuracy Profiles\n")
+  print(lhs_outputs$plots$valence_accuracy())
+  
+  cat("#### Interactive Valence Asymmetry Gap Table\n")
+  print(datatable(df_asymmetry, options = list(pageLength = 10), class = 'cell-border stripe'))
+  
+  cat("#### Valence Asymmetry Gap Visualization (System Failure Signature)\n")
+  print(lhs_outputs$plots$asymmetry_gap())
+}
+```
+# Interpretation
+Should confirm that the models track anti-reduction better than pro-reduction. We must:
+- Lower minimum bound of confidence_threshold -> opens up bounds for dissimilar agents to exchange perspectives
+- Expand micro-variance SD for confidence_threshold and susceptibility -> might capture real world outliers better
+- Increase repulsion_strength -> ensure pro-agents polarize cleanly when exposed to opposing arguments
+
+# Micro-agent Analyses
+## Tracks how individual agents drift over the course of the debates
+``` {r, H1_H2_regressions, echo = FALSE, cache = FALSE}
+if(!is.null(lhs_outputs$results$models$ols_h1)) {
+  cat("#### Hypothesis 1: Pre/Post Attitude Associations (Isolated Replicate Base)\n")
+  tidy(lhs_outputs$results$models$ols_h1) %>% flextable() %>% autofit()
+}
+
+
+# tODO fix thiS!!!!!!!
+if(!is.null(lhs_outputs$results$models$ols_h2)) {
+  cat("#### Hypothesis 2: Social Norms & Self-Control Structural Impact\n")
+  tidy(lhs_outputs$results$models$ols_h2) %>% flextable() %>% autofit()
+}
+```
+
+## Four Quadrants micro-agent drift
+``` {r, micro-agents, echo = FALSE, cache = FALSE}
+if (!is.null(df_directional_agents)) {
+  cat("#### Four-Quadrant Micro-Agent Drift Direction Scatter\n")
+  print(lhs_outputs$plots$delta_color_direction_shift())
+  
+  cat("#### Simulated Drift vs Empirical Drift Distributions Across Replicates\n")
+  print(lhs_outputs$plots$simulated_delta_dist())
+}
+```
+### Interpretation:
+- should demonstrate that there is a regression to the mean (top left pro-reduction moved further pro empirically - model forces negative change)
+- bottom right anti-reduction agents (dug in to their opinions - model shifted the positive)
+- To correct this we should:
+- lower global convergence_rate -> slows down rate of interaction
+- compress the lower confidence_threshold bounds -> shrinking interaction width ensure that opinionated agents find counter-arguments entirely incompatible (halting false regression)
+
+
+## Post-optimization GA Diagnostic Check
+``` {r, ga_diag_check, echo = FALSE, cache = FALSE}
+if (exists("ga_outputs")) {
+  df_directional_agents_ga <- ga_outputs$results$comparisons$directional_agents
+  
+  if (!is.null(df_directional_agents_ga)) {
+    df_directional_valence_ga <- summarize_directional_valence(df_directional_agents_ga)
+    df_asymmetry_ga <- compute_valence_asymmetry(df_directional_valence_ga)
+    
+    cat("### Optimized GA Valence Asymmetry Gap Evaluation\n")
+    print(ga_outputs$plots$asymmetry_gap())
+    
+    cat("### Optimized GA Four-Quadrant Replicate Agent Drift\n")
+    print(ga_outputs$plots$delta_color_direction_shift())
+  }
+} else {
+  cat("### Optimization Notice: Active GA compilation run results not detected. GAML bounds successfully written to disk.\n")
+}
+```
+
+## Composition and speaking effects
+``` {r, comp_and_speaking, echo = FALSE, cache = FALSE}
+if (!is.null(lhs_outputs$plots$debate_comp_errors)) lhs_outputs$plots$debate_comp_errors()
+
+if (!is.null(lhs_outputs$results$behavioral$composition)) {
+  lhs_outputs$results$behavioral$composition %>%
+    mutate(across(where(is.numeric), ~ round(., 4))) %>%
+    flextable() %>%
+    set_caption("Debate Composition Behavioral Diagnostics") %>%
+    autofit()
+}
+```
+
+# Summary & Key Insights
+## 1. Statistical Validation of algorithmic progress
+A Welch's t-test run on the raw output data, found that the transition from LHS to GA proved statistically significant (<0.01). The GA drove down the MAE from an LHS baseline of $\mu = 0.0875$ to an optimized mean of $\mu = 0.0644$ across all debates ($t(63394) = -48.96, p < 2.2 \times 10^{-16}$). This decrease of roughly 26% in mae demonstrates that the GA is effectively optimizing parameters and we are making progress towards reaching the no_change baseline.
+
+The case for agent heterogeneity: Across all three regimes, models that assume homogeneous agents ("use_distinct_agents" = FALSE, where all agents have the same parameter values without SDs) perform worse than when they have an SD associated to each parameter. More specifically, under the clustering and consensus regimes, incorporating the SDs (distinct agents) dropped the mean mae.
+
+## 2. Key Parameter Drivers & Sensitivity (PRCC)
+**Consensus** is mostly governed by the parameter "convergence_rate" (speed at which agents making "opinion steps") which reduces mae.
+**Clustering & Bipolarization** are driven by the parameter "confidence_threshold" (threshold under which agents interact with others in the same opinion, i.e. "attract") and "repulsion_threshold" (threshold above which agents repulse/refuse to interact with others). These two parameters confirm that the models are working correctly whereby agents create isolated echo chambers of opinion or in severe cases (i.e. bipolarization) two opposite opinion groups.
+
+## 3. The Best Debate Model Fit
+The lowest MAE found across all debates and both algorithms is **$\text{MAE} = 0.0081$** which was captured under **Clustering** and **Consensus** models. This was found with heterogeneous agents on debate M24. 
+
+## 4. Interpretation of Sign vs Scale
+Evaluating the simulated outputs relies on distinguishing between **directional sign** (are model shifts going in the right direction, wrt T2) and **systemic scale** (the magnitude of this shift). 
+**Bipolarization:** the GA successfully matched both sign and scale ($\text{MAE} \approx 0.0425$) implying that the simulation successfully mirrored the real world dynamics of echo chambers.
+**Consensus:** This model moved in the correct direction across debates but overshot the empirical scale ($\text{MAE} \approx 0.0352$). 
+
+## 4. Initial Beta Distributions
+The wide range of simulated betas (compared with the empirical beta) demonstrates that the ABM parameters are highly sensitive and explory structural spaces rather than outputting a flat random distribution. The fact that the dashed line (empirical beta) cuts through some of the distributions demonstrates that the ABM is not just simulating noise (besides the very weak empirical signal). 
+**Bipolarization:** The empirical line cuts right through the center of the simulated distribution, so the model matches the direction and real-world scale of the echo chambers (MAE ~ 0.0425).
+**Consensus:** The empirical line intersects the outer tail, implying that the model got the direction right but overshot the scale, simulated consensus was too strong compared with real world groups that have stubborn outliers (MAE ~ 0.0352).
+**Clustering:** The empirical line intersects the far right tail of the bimodal simulated distribution. The model only hits the human signal in extreme edges cases, implying that the parameters are on a critical tipping point. The current parameter bounds are too broad, which allows the model to drift away from the human signal.
+
+## 5. Next Steps
+- Relaunch GA algorithm with dynamic convergence
+- Relaunch GA algorithm with adjusted parameter ranges for **Consensus** and **Clustering**
+- Integrate the argumentation framework and test it
+- 

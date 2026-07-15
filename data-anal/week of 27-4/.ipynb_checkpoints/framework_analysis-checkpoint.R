@@ -66,6 +66,15 @@ analyze_processed_run <- function(df) {
       lm.beta() %>%
       tidy()
   }
+
+  # Valence Calculations Introduction
+  df_asymmetry_processed <- NULL
+  df_valence_processed <- NULL
+
+  if(!is.null(df_directional_agents)) {
+      df_valence_processed <- summarize_directional_valence(df_directional_agents)
+      df_asymmetry_processed <- compute_valence_asymmetry(df_valence_processed)
+  }
   
   # ────────────────────────────────────────────────────────────────────────────
   # 2. SENSITIVITY ANALYSIS (LHS ONLY)
@@ -122,16 +131,30 @@ analyze_processed_run <- function(df) {
   comparison_summary <- NULL
   ols_global_mae     <- NULL
   ols_model          <- NULL
+  ols_model_h1       <- NULL # standardized lm for H1
+  ols_model_h2       <- NULL # standardize lm for H2 with perceived_norms and self_control
   abm_mae_debate     <- NULL
   empirical_beta_val <- NULL
   beta_distance <- NULL
-  simulated_betas_raw <- NULL 
+  simulated_betas_raw <- NULL
   
   if (!is.null(df_ag)) {
     ols_result     <- compute_ols_baseline(df_ag)
     ols_model      <- ols_result$model
     df_ag_ols      <- ols_result$data
     ols_global_mae <- ols_result$ols_mae
+
+    # Hypothesis refit (fixing H1 pseudoreplication of df_ag duplicating rows for each agent) 13/7/26
+    df_ag_deduped <- df_ag %>%
+      distinct(agent_id, .keep_all = TRUE)
+
+    # corrected H1 test
+    ols_model_h1 <- lm(final_attitude ~ initial_opinion, data = df_ag_deduped)
+
+    # H2 test set up
+    if ("perceived_norms" %in% colnames(df_ag_deduped) && "self_control" %in% colnames(df_ag_deduped) {
+        ols_model_h2 <- lm(final_attitude ~ perceived_norms + self_control, data = df_ag_deduped)
+    }
     
     ols_mae_debate <- df_ag_ols %>%
       group_by(selected_debate_id, debate_label) %>%
@@ -388,11 +411,11 @@ analyze_processed_run <- function(df) {
   # ────────────────────────────────────────────────────────────────────────────
   analysis_output_package <- list(
     inputs = list(
-      raw              = df_batch,
-      versions         = lhs_versions,
-      version_summary  = df_version_summary,
-      influence        = df_influence,
-      raw_interactions = df_interactions 
+      raw              = df_batch, # raw batch file (per debate x speaking_mode x model)
+      versions         = lhs_versions, # differentiates between different lhs version runs
+      version_summary  = df_version_summary, # aggregated versions for pcc/prcc
+      influence        = df_influence, # pulled from df_interactions to compute influence of each speaking agent on others
+      raw_interactions = df_interactions # df of cleaned itneractions (per cycle between all agents in a debate)
     ),
     results = list(
       sensitivity = list(
@@ -400,35 +423,39 @@ analyze_processed_run <- function(df) {
         v1       = if(!is.null(sensi_v1)) list(pcc = sensi_v1$pcc, prcc = sensi_v1$prcc) else NULL,
         v2       = if(!is.null(sensi_v2)) list(pcc = sensi_v2$pcc, prcc = sensi_v2$prcc) else NULL
       ),
-      models = list(conv = run_conv_model(df_conv_debate), ols = ols_model),
+      models = list(conv = run_conv_model(df_conv_debate), 
+                    ols = ols_model, # raw pooled individual model 13/7/26
+                    ols_h1 = ols_model_h1, # deduplicated H1 test
+                    ols_h2 = ols_model_h2 # integrated H2 test with perceived_norms and self_control
+                   ),
       comparisons = list(
-        empirical       = empirical_stat_check,
-        empirical_cohen = empir_cohen,
-        ols             = comparison_clean,
-        summary         = comparison_summary,
-        ranking         = model_comparison_main,
-        mae_delta_compar = model_comparison_relative,
-        baseline        = baseline_comparison,
-        directional     = df_directional,
-        directional_agents = df_directional_agents,
-        beta_distance = beta_distance, # beta empir distance relative to simulated data 3/6/26
-        beta_distance_raw = simulated_betas_raw,
-        sum_dir_valence = df_sum_directional_valence,
-        valence_metrics = df_valence,
+        empirical       = empirical_stat_check, # from df_empirical, computed mean and SD for each time (T0,T1,T2)
+        empirical_cohen = empir_cohen, # linear regression from raw df_empirical pro_reduction on changet1t2, filtered by Mixed debates)
+        ols_debate_mae  = comparison_clean, # inner join abm_mae (from df_batch) and ols_mae (from df_ag) by selected_debate_id and calculates delta 
+        summary         = comparison_summary, # df to calculate mean delta, SD, and CI for when ABM is better/worse than pure OLS
+        ranking         = model_comparison_main, # version aware df_batch grouped by model_type and speaking mode, summarizes mean_mae and SD arranged by mean_mae
+        mae_delta_compar = model_comparison_relative, # pull from model_comparison_main, creates best_mae from grouped model_type and delta_mae
+        baseline        = baseline_comparison, # pulls from df_batch and filter for no_change, left_join by selected_debate_id, mutates delta_mae
+        directional     = df_directional, # applies \code{summarize_directional} to df_directional_agents (from df_ag), groups by model_type, current_condition, selected_debate_id to calculate right and wrong dir
+        directional_agents = df_directional_agents, # unsummarized directional, applies \code{prepare_directional} to df_ag to calculate sign of empirical and simualated direction change among agents that ACTUALLY moved 
+        beta_distance = beta_distance, # based on simulated_betas_raw, grouped by model_type, summarizes mean delta compared to empirical beta and calculates zscore
+        beta_distance_raw = simulated_betas_raw, # pulls from df_ag, groups by model_type, selected_debate_id and seed, linear regression of pro_reduction on opinion_change and filters by pro_reduction
+        sum_dir_valence = df_sum_directional_valence, # pulls from \code{df_directional_agents}, one row per model x current_condition x selected_debate_id x pro_reduction and returns right and wrong dir/signed error of simul data
+        valence_metrics = df_valence, # applies \code{compute_valence_asymmetry} to sum_dir_valence, wide pivot to calculate error_asymmetery and accuracy_asymmetry
         upset_prep = df_upset
       ),
       behavioral = list(
-        composition = h_vs_m,
-        speaking    = speaking_compar,
-        convergence = convergence_anal,
-        stochastic  = stochasticity_check_1,
-        heterogen   = heterogeneity_check
+        composition = h_vs_m, # pulls from df_batch (grouped by debate_composition, model_type, speaking_mode, use_distinct_agents) summarizes mean_mae and SD
+        speaking    = speaking_compar, # pulls from df_batch, grouped (speaking_mode, debate_composition, model_type, use_distinct_agents) summarizes mean_mae, SD and normalized convergence
+        convergence = convergence_anal, # pulls from df_batch, grouped (model_type, speaking_mode, selected_debate_id) summarizes mean convergence cyle, min, max, SD and normalized
+        stochastic  = stochasticity_check_1, # pulls from df_batch, grouped (model_type, use_distinct_agents, selected_debate_id, seed) summarizes SD mae
+        heterogen   = heterogeneity_check # pulls from df_batch, grouped (model_type, use_distinct_agents) summarize mean MAE, median, SD
       ),
       dynamics = list(
-        conv_debate = df_conv_debate,
-        conv_diff   = conv_diff,
-        failures    = failures_comp,
-        clusters    = clusters
+        conv_debate = df_conv_debate, # pulls from df_batch, grouped (model_type, selected_debate_id, speaking_mode) summarizes mean convergence cycle, MAE, SD conv and SD MAE
+        conv_diff   = conv_diff, # pulls from df_batch, mutates opinion variance < 0.1 for "convergence/bipolarization", grouped (model_type, current_condition, outcome)
+        failures    = failures_comp, # pulls from df_batch, mutates failure = mae > 0.18, grouped (model_type, failures), summarizes mean convergence, pct_hetero in debate composition)
+        clusters    = clusters # pulls from df_batch, mutates cluster change (from beginning to end), grouped (model_type, selected_debate_id), summarizes mean_cluster_change
       ),
       regions  = ga_bounds_export,
       networks = network_data_package
@@ -459,7 +486,13 @@ analyze_processed_run <- function(df) {
       direction_by_position        = function() plot_dir_by_pro(df_susceptibility),
       directional_accuracy         = function() plot_directional_accuracy(df_directional),
       delta_direction_sim_vs_empir = function() plot_delta_direction_scatter(df_directional_agents),
-      
+
+      # VALENCE MEASURES
+      asymmetry_gap = function() plot_asymmetry_gap(df_asymmetry_processed),
+      delta_color_direction_shift = function() plot_delta_color_direction_scatter(df_directional_agents),
+      simulated_delta_dist = function() plot_simulated_delta_dist(df_directional_agents),
+      valence_accuracy = function() plot_valence_accuracy(df_valence_processed),
+        
       beta_distance_vs_empir = function() plot_beta_distance(simulated_betas_raw, empirical_beta_val),
       
       homogeneous_network_plots   = homogeneous_plots_combined,

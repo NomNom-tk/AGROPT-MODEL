@@ -234,4 +234,7 @@ structure (in gama there is no compartmentalization of global variables, loads i
 -- TODO
 - improve pipeline version awareness for sensitivity
 
+# 15/7/26
+- documented bugs in rnd leaks for GAMA model
+- started cleaning up pipeline documentation and links to protocol hypotheses --> hopefully protocol submission by end of week
 

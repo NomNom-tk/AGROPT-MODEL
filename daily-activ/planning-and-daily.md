@@ -237,4 +237,6 @@ structure (in gama there is no compartmentalization of global variables, loads i
 # 15/7/26
 - documented bugs in rnd leaks for GAMA model
 - started cleaning up pipeline documentation and links to protocol hypotheses --> hopefully protocol submission by end of week
-
+- process_run is documented, meeting with Nicolas (finish analyses and create middle layer document that details the assumptions for analyses)
+- need to finish plots and functions file
+- started on phd prep, to follow tomorrow

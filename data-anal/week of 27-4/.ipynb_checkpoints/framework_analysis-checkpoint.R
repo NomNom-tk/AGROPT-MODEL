@@ -147,12 +147,19 @@ analyze_processed_run <- function(df) {
     # Hypothesis refit (fixing H1 pseudoreplication of df_ag duplicating rows for each agent) 13/7/26
     df_ag_deduped <- df_ag %>%
       distinct(agent_id, .keep_all = TRUE)
+    
+    # TODO modify this so that empirical joins with agent level data
+    # # bridge gap between empirical with norms and self control and agent data
+    # if (!is.null(df_empirical)) {
+    #   df_ag_deduped <- df_ag_deduped %>%
+    #     left_join(df_empirical %>% select())
+    # }
 
     # corrected H1 test
     ols_model_h1 <- lm(final_attitude ~ initial_opinion, data = df_ag_deduped)
 
     # H2 test set up
-    if ("perceived_norms" %in% colnames(df_ag_deduped) && "self_control" %in% colnames(df_ag_deduped) {
+    if ("perceived_norms" %in% colnames(df_ag_deduped) && "self_control" %in% colnames(df_ag_deduped)) {
         ols_model_h2 <- lm(final_attitude ~ perceived_norms + self_control, data = df_ag_deduped)
     }
     
@@ -219,15 +226,15 @@ analyze_processed_run <- function(df) {
       # compute simualted beta distribution per model type and seed
       simulated_betas_raw <- df_ag %>%
         group_by(model_type, selected_debate_id, seed) %>%
-        do(tidy(lm(opinion_change ~ pro_reduction, data = .))) %>%
+        do(lm(opinion_change ~ pro_reduction, data = .) %>% lm.beta() %>% tidy()) %>%
         filter(term == "pro_reduction")
       
       # safe distance calculation (type-matching ensured)
       beta_distance <- simulated_betas_raw %>%
         group_by(model_type) %>%
         summarize(
-          mean_simulated_beta = mean(estimate, na.rm = TRUE),
-          sd_simulated_beta = sd(estimate, na.rm = TRUE),
+          mean_simulated_beta = mean(std_estimate, na.rm = TRUE), # added std pull to ensure comparison of standardized estimates 13/7/26
+          sd_simulated_beta = sd(std_estimate, na.rm = TRUE),
           n = n(),
           empirical_beta = empirical_beta_scalar,
           # z score: where does empirical beta sit in simulated distribution
@@ -442,7 +449,8 @@ analyze_processed_run <- function(df) {
         beta_distance_raw = simulated_betas_raw, # pulls from df_ag, groups by model_type, selected_debate_id and seed, linear regression of pro_reduction on opinion_change and filters by pro_reduction
         sum_dir_valence = df_sum_directional_valence, # pulls from \code{df_directional_agents}, one row per model x current_condition x selected_debate_id x pro_reduction and returns right and wrong dir/signed error of simul data
         valence_metrics = df_valence, # applies \code{compute_valence_asymmetry} to sum_dir_valence, wide pivot to calculate error_asymmetery and accuracy_asymmetry
-        upset_prep = df_upset
+        upset_prep = df_upset,
+        df_ols_agent_data = df_ag_deduped
       ),
       behavioral = list(
         composition = h_vs_m, # pulls from df_batch (grouped by debate_composition, model_type, speaking_mode, use_distinct_agents) summarizes mean_mae and SD

@@ -16,6 +16,8 @@ library(ggraph)
 library(janitor)
 library(tidygraph)
 library(patchwork)
+library(plotly)
+library(DT)
 library(ComplexUpset)
 
 # run config declarations
@@ -63,9 +65,91 @@ ga$interaction$v1$path <- "./data/ga_interaction_log.csv"
 run_configs$lhs_main <- lhs
 run_configs$ga_main  <- ga
 
-# Instantiate processing 28/5/26
-## update 2/6/26, easier loading based on config update
-## update 30/6/26 added valence metrics
+#' Load and process one simulation run (LHS or GA) into canonical analysis objects 28/5/26
+#' 
+#' updates: update 2/6/26, easier loading based on config update / 30/6/26 added valence metrics
+#' 
+#' Orchestrates the full per-run data pipeline: loads batch-level, agent-level,
+#' and interaction-level simulation output from disk; derives directional,
+#' valence/asymmetry, and UpSet-plot-ready summaries from the agent-level data;
+#' and returns everything under consistent slot names regardless of whether
+#' \code{config} describes an LHS or GA run. This is the single entry point
+#' each run type (LHS/GA) passes through before reaching
+#' \code{analyze_processed_run}.
+#'
+#' @param config A run configuration list (e.g. \code{run_configs$lhs_main} or
+#'   \code{run_configs$ga_main}), built from \code{lhs}/\code{ga} in this
+#'   script. Must contain at minimum:
+#'   \describe{
+#'     \item{run_type}{"LHS" or "GA" — controls only the \code{lhs_versions}
+#'       slot in the return value, not the loading logic itself.}
+#'     \item{version_scope}{"v1", "v2", or "both". If "both" (LHS only),
+#'       both dataset versions are loaded and combined via
+#'       \code{combine_df_versions}, falling back to whichever version
+#'       loaded successfully if only one did. If "v1" or "v2" singly, a
+#'       single version is loaded, with a fallback to v1 if "v2" is
+#'       requested but \code{batch$v2$path}/\code{agent$v2$path} is
+#'       \code{NULL} (see Details).}
+#'     \item{batch$v1/$v2$path, $version}{Paths and version labels for
+#'       batch-summary CSVs.}
+#'     \item{agent$v1/$v2$path}{Paths for agent-level-results CSVs.}
+#'     \item{interaction$v1/$v2$path}{Paths for interaction-log CSVs.}
+#'   }
+#'
+#' @return A named list with consistent slots regardless of run type:
+#'   \describe{
+#'     \item{config}{The input config, unchanged (for provenance/traceability).}
+#'     \item{df_batch}{Debate x model x seed grain. If \code{version_scope ==
+#'       "both"}, this is the v2 data specifically (v1 is folded into
+#'       \code{lhs_versions} instead, not discarded).}
+#'     \item{lhs_versions}{Combined v1+v2 batch data, only populated when
+#'       \code{run_type == "LHS"} AND \code{version_scope == "both"};
+#'       \code{NULL} otherwise.}
+#'     \item{df_ag}{Agent-level grain — one row per agent per parameter
+#'       combination per seed (NOT deduplicated at this stage). Downstream,
+#'       \code{framework_analysis.R} derives \code{df_ag_deduped} from this
+#'       object specifically to fit \code{ols_model_h1}/\code{ols_model_h2}
+#'       without pseudoreplication (resolved 13/7/26 — see
+#'       \code{results$models$ols_h1}, \code{ols_h2}, and
+#'       \code{results$comparisons$df_ols_agent_data} in the output
+#'       contract). MAE-based uses of the raw (non-deduplicated) \code{df_ag}
+#'       remain unaffected regardless, as established earlier.}
+#'     \item{df_interactions, df_influence, df_susceptibility}{Interaction-level
+#'       outputs. All three are \code{NULL} if the interaction log file for
+#'       this config doesn't exist on disk — expected/normal for
+#'       non-speaking-mode runs, not an error state.}
+#'     \item{df_directional, df_directional_agents}{Directional (sign-of-change)
+#'       summaries; \code{NULL} if \code{df_ag} failed to load.}
+#'     \item{df_valence, df_sum_directional_valence}{Valence/asymmetry summaries
+#'       (added 30/6/26); \code{NULL} if \code{df_directional_agents} is \code{NULL}.}
+#'     \item{df_upset}{UpSet-plot-ready wide-format summary (added 6/7/26).
+#'       \code{NULL} if \code{df_sum_directional_valence} is \code{NULL} —
+#'       guard added 13/7/26 to match the pattern used elsewhere in this
+#'       function (previously unguarded and would error, not return
+#'       \code{NULL}, in that case).}
+#'   }
+#'
+#' @details
+#' \code{df_empirical} is intentionally NOT included in the return list —
+#' the empirical-loading block above is commented out. ownstream,
+#' \code{framework_analysis.R} derives \code{df_ag_deduped} from this
+#' object specifically to fit \code{ols_model_h1}/\code{ols_model_h2}
+#' without pseudoreplication.
+#'
+#' Batch-level and agent-level loading now share the same fallback rule
+#' when \code{version_scope == "v2"} (fixed 13/7/26 — previously batch-level
+#' had no fallback at all and would return \code{NULL} outright, while
+#' agent-level silently fell back to v1; batch-level now mirrors
+#' agent-level's behavior): if \code{v2$path} is \code{NULL}, both fall
+#' back to the corresponding \code{v1} path/version, and a \code{message()}
+#' is emitted so a genuine v2-path misconfiguration doesn't silently
+#' masquerade as a successful v2 run.
+#'
+#' @examples
+#' \dontrun{
+#' processed_lhs <- process_run(run_configs$lhs_main)
+#' processed_ga  <- process_run(run_configs$ga_main)
+#' }
 process_run <- function(config) {
   # BATCH LEVEL
   # load via load_and_prepare (prepare_data + append_metadata + composition_filter)
@@ -93,9 +177,20 @@ process_run <- function(config) {
       lhs_versions <- NULL
     }
     
-  } else {
-    target_path    <- if (config$version_scope == "v1") config$batch$v1$path else config$batch$v2$path
-    target_version <- if (config$version_scope == "v1") config$batch$v1$version else config$batch$v2$version
+  } else { # fixed fallback to v1 bug with version_scope == v2 15/7/26
+    target_path    <- if (config$version_scope == "v2" && !is.null(config$batch$v2$path)) {
+        config$batch$v2$path
+    } else {
+        if (config$version_scope == "v2") {
+          message("batch$v2$path is NULL for version_scope = v2 - falling back to batch$v1$path")
+        }
+        config$batch$v1$path
+    }
+    target_version <- if (config$version_scope == "v2" && !is.null(config$batch$v2$path)) {
+        config$batch$v2$version
+    } else {
+        config$batch$v1$version
+    }
     
     df_batch     <- if (!is.null(target_path)) load_and_prepare(target_path, config, target_version) else NULL
     lhs_versions <- NULL
@@ -178,20 +273,22 @@ process_run <- function(config) {
       df_valence <- compute_valence_asymmetry(df_sum_directional_valence) # valence df with additional valence metrics
   }
 
+  if (!is.null(df_sum_directional_valence)) {
   df_upset <- df_sum_directional_valence %>% # added 6/7/26 for upset plots
-    group_by(selected_debate_id, model_type) %>%
-    summarize(pct_correct_dir = mean(pct_correct_dir), .groups = "drop") %>%
-    pivot_wider(names_from = model_type, values_from = pct_correct_dir) %>%
-    mutate(
-        bipol_correct = bipolarization > 0.5,
-        clust_correct = clustering > 0.5,
-        cons_correct = consensus > 0.5) %>%
-    left_join(
-        df_valence %>% select(selected_debate_id, accuracy_asymmetry, error_asymmetry),
-        by = "selected_debate_id") %>%
-    mutate(
-        pro_biased = accuracy_asymmetry > 0,
-        anti_biased = accuracy_asymmetry < 0)
+        group_by(selected_debate_id, model_type) %>%
+        summarize(pct_correct_dir = mean(pct_correct_dir), .groups = "drop") %>%
+        pivot_wider(names_from = model_type, values_from = pct_correct_dir) %>%
+        mutate(
+            bipol_correct = bipolarization > 0.5,
+            clust_correct = clustering > 0.5,
+            cons_correct = consensus > 0.5) %>%
+        left_join(
+            df_valence %>% select(selected_debate_id, accuracy_asymmetry, error_asymmetry),
+            by = "selected_debate_id") %>%
+        mutate(
+            pro_biased = accuracy_asymmetry > 0,
+            anti_biased = accuracy_asymmetry < 0)
+  }
     
   # RETURN LIST with consistent slot names regardless of run_type
   list(
@@ -226,7 +323,3 @@ param_cols_by_model <- list(
 
 # define output columns
 output_cols <- c("mae", "opinion_variance", "convergence_cycle")
-
-
-
-

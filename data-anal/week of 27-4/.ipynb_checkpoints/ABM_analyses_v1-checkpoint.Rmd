@@ -41,6 +41,7 @@ source("framework_analysis.R")
 ```
 
 ```{r, analysis-calls, include = FALSE, echo = FALSE, cache = FALSE}
+rm(list = intersect(c("processed_lhs", "processed_ga", "lhs_outputs", "ga_outputs"), ls())) # added to remove dead objects when rerunning simulations and testing (15/7/26)
 # empirical data loading 4/6/26
 df_empirical <- empirical_prep("./data/data_complete_anonymised.csv")
 
@@ -172,7 +173,7 @@ lhs_outputs$results$comparisons$empirical_cohen
 ``` {r, ols-compar, echo = FALSE, cache = FALSE}
 # display linear comparisons
 if(!is.null(lhs_outputs$results$comparisons$ols_debate_mae)) {
-  lhs_outputs$results$comparisons$ols %>%
+  lhs_outputs$results$comparisons$ols_debate_mae %>%
     mutate(across(where(is.numeric), ~ round(., 4))) %>%
     flextable() %>%
     set_caption("Debate-Level Benchmark: ABM MAE vs OLS MAE") %>%

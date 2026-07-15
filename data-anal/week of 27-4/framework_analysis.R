@@ -226,15 +226,15 @@ analyze_processed_run <- function(df) {
       # compute simualted beta distribution per model type and seed
       simulated_betas_raw <- df_ag %>%
         group_by(model_type, selected_debate_id, seed) %>%
-        do(tidy(lm(opinion_change ~ pro_reduction, data = .))) %>%
+        do(lm(opinion_change ~ pro_reduction, data = .) %>% lm.beta() %>% tidy()) %>%
         filter(term == "pro_reduction")
       
       # safe distance calculation (type-matching ensured)
       beta_distance <- simulated_betas_raw %>%
         group_by(model_type) %>%
         summarize(
-          mean_simulated_beta = mean(estimate, na.rm = TRUE),
-          sd_simulated_beta = sd(estimate, na.rm = TRUE),
+          mean_simulated_beta = mean(std_estimate, na.rm = TRUE), # added std pull to ensure comparison of standardized estimates 13/7/26
+          sd_simulated_beta = sd(std_estimate, na.rm = TRUE),
           n = n(),
           empirical_beta = empirical_beta_scalar,
           # z score: where does empirical beta sit in simulated distribution

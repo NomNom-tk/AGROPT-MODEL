@@ -24,46 +24,46 @@ Building on this literature, the current study formulates hypotheses on the indi
 
 - Analyze how statistical and simulation methods can predict individual, debate level and global attitudes and attitude change with the goal of understanding the underlying mechanisms of social interactions in the context of meat consumption reduction.
 
-# Hypotheses (3 levels)
+# Hypotheses (3 levels: Individual level, debate level, global level)
 
-## Individual-level hypotheses
+## Behavioral Hypotheses
 
 Deliberation contexts where individuals can reflect on their individual norms, social expectations and values can interact with pre-existing attitudes toward meat consumption reduction (Bächtiger et al., 2018; Niemeyer et al., 2024; Colin-Jaeger, 2025). Individual self-regulatory capacities and social influences can have an influence on attitude stability and variability in food-related domains (Cruwys et al., 2015; Higgs, 2015). This study thus investigates how pre-deliberation attitudes and individual susceptibility to social influence predict post-deliberation attitude changes.
 
-**H1**: Pre-deliberation attitudes toward meat consumption are expected to be positively associated with post-deliberation attitudes, accounting for a meaningful share of variance when controlling for the nested nature of agents within distinct debate groups (i.e. heterogeneous, homogeneous debates). `[Status: not yet analyzed — prospective]`
+**H1a** (Empirical - Individual Level): Empirical pre-deliberation attitudes toward meat consumption are expected to be positively associated with empirical post-deliberation attitudes, accounting for a meaningful share of variance when controlling for the nested nature of agents within distinct debate groups.
+**H1b** (Simulated - Individual Level): Simulated pre-deliberation attitudes toward meat consumption are expected to be positively associated with simulated post-deliberation attitudes, accounting for a meaningful share of variance when controlling for the nested nature of agents within distinct debate groups.
 
-**H2**: Individuals with higher perceived social norms and lower self-control will exhibit greater absolute attitude change between pre- and post-deliberation measurement points, moderated by their initial opinion strength. `[Status: not yet analyzed — prospective]`
+**H2** (Empirical - Individual Level): Individuals with higher perceived social norms and lower self-control will exhibit greater absolute attitude change between pre- and post-deliberation measurement points, moderated by their initial opinion strength. `[Status: not yet analyzed — prospective]`
 
-## Debate-level hypotheses
+**H4a** (Empirical - Debate Level): Debates with a heterogeneous composition of participants are expected to exhibit a greater mean attitude change between empirical pre- and post-deliberation attitudes compared with homogeneous debates. `[Status: not yet analyzed — prospective]`
+**H4b** (Simulated - Debate Level): Debates with a heterogeneous composition of participants are expected to exhibit a greater mean attitude change between simulated pre- and post-deliberation attitudes compared with homogeneous debates. `[Status: not yet analyzed — prospective]`
+
+## Model Performance Hypotheses
 
 The shift of attitudes within debates illustrates participant interactions and how micro-level social influence processes are aggregated (Miller & Page., 2009; Flache et al., 2017). Deliberation with diverse viewpoints has been argued to foster reflection and reconsideration of prior positions (Bächtiger et al., 2018; Niemeyer et al., 2024). This section looks into the relation of debate composition and its impact on aggregate changes and whether the predictive capability of debate modeling improves upon simple regression approaches.
 
-**H3**: Agent-based simulations initialized with pre-deliberation attitudes alone will generate a lower mean of absolute error [MAE] predictions of post-deliberation attitudes for individual participants compared with a naive "no_change" baseline and a predictive multilevel linear model, at both the individual participant level and aggregated at the debate group level. `[Status: RETROSPECTIVE — LHS/GA analysis substantially conducted prior to registration; see "Analysis Status at Registration" below. Reported as exploratory, not confirmatory.]`
+**H3a** (Simulated - Individual Level): Agent-based simulations initialized with pre-deliberation attitudes alone will generate a lower mean of absolute error [MAE] predictions of post-deliberation attitudes for individual participants compared with a naive "no_change" baseline and a predictive multilevel linear model, at the individual participant level. `[Status: RETROSPECTIVE — LHS/GA analysis substantially conducted prior to registration; see "Analysis Status at Registration" below. Reported as exploratory, not confirmatory.]`
+**H3b** (Simulated - Debate Level): Agent-based simulations initialized with pre-deliberation attitudes alone will generate a lower mean of absolute error [MAE] predictions of post-deliberation attitudes for individual participants compared with a naive "no_change" baseline and a predictive multilevel linear model, at the debate group level. `[Status: RETROSPECTIVE — LHS/GA analysis substantially conducted prior to registration; see "Analysis Status at Registration" below. Reported as exploratory, not confirmatory.]`
 
-**H4**: Debates with a heterogeneous composition of participants are expected to exhibit a greater mean attitude change between pre- and post-deliberation attitudes compared with homogeneous debates. `[Status: not yet analyzed — prospective]`
+**H5** (Simulated - Global Level): When pooled at a global level, ABMs calibrated with pre-deliberation attitudes should reproduce a global post-deliberation attitude shift toward meat consumption reduction with a lower MAE than a single global multilevel regression model. `[Status: RETROSPECTIVE — see Analysis Status below.]`
 
-/// FORGET THIS< ALREADY CONDENSED WITH H3
-**H5**: Agent-based models initialized with pre-deliberation attitudes will generate lower MAE (and potentially lower Variance of Absolute Errors) predictions of post-deliberation attitudes for individual debates compared with a naive "no_change" baseline and a predictive multilevel linear regression model initialized with pre-deliberation attitudes alone. `[Status: RETROSPECTIVE — see Analysis Status below.]`
+**H6**: Agent-based models upgraded with argumentation mechanisms alongside models of social influence are expected to yield more accurate and stable predictions of global attitude distributions (using MAE) than models only using social influence mechanisms (Bächtiger et al., 2018; Niemeyer et al., 2024). `[Status: PROSPECTIVE — CONFIRMATORY. Not yet implemented or tested. This is the confirmatory component this registration is intended to protect.]`
 
 **Note on debate-level vs. global-level analysis (resolved)**: "debate level" (H3, H5) = metrics grouped by `model_type` **and** `selected_debate_id`; "global level" (H6, H7) = metrics grouped by `model_type` alone (pooling across all debates), as in the existing `model_comparison_main`/`model_comparison_relative` code. `df_batch` (LHS and GA held as separate files) is inherently structured per debate/model/seed, since debates are run under each of the 3 social-influence models — so a debate-level breakdown for H5 requires no new computation, only adding `selected_debate_id` to the existing grouping.
 
 **Data sources by level of analysis**:
-- **Agent level** (H1, H2, individual-participant error): `agent_level` — one row per individual agent per debate per run.
-- **Debate level** (H3, H5): `df_batch` grouped by `model_type` + `selected_debate_id`.
-- **Global level** (H6, H7): `df_batch` grouped by `model_type` only, as already implemented in `model_comparison_main`/`model_comparison_relative`.
+- **Agent level** (H1a, H1b, H2, H3a, individual-participant error): `agent_level` — one row per individual agent per debate per run.
+- **Debate level** (H3b, H4a, H4b): `df_batch` grouped by `model_type` + `selected_debate_id`.
+- **Global level** (H5, H6, RQ1): `df_batch` grouped by `model_type` only, as already implemented in `model_comparison_main`/`model_comparison_relative`.
 - **Interaction-level detail** (supporting/diagnostic, e.g. network construction, valence dynamics): `interaction_log`, one row per individual agent-agent interaction.
 
-This mapping is adopted as the basis for centralizing the analysis pipeline against H1–H7 going forward.
+This mapping is adopted as the basis for centralizing the analysis pipeline against H1–H6 going forward.
 
-## Global-level dynamics
+## Exploratory Macro-Dynamics Hypotheses
 
 Cumulative micro-level interactions can help reveal macro-level patterns and help highlight non-linear dynamics not captured by linear regression (MacCoun, 2017; Guest & Martin., 2021). This section investigates whether agent-based modeling calibrated with pre-deliberation data can illustrate global attitude distributions and whether argumentation based modeling adds predictive value.
 
-**H6**: ABMs calibrated with pre-deliberation attitudes should reproduce a global post-deliberation attitude shift toward meat consumption reduction with a lower MAE than a single global regression model. `[Status: RETROSPECTIVE — see Analysis Status below.]`
-
 **RQ1**: Exploratory analyses will examine how variations in optimized model parameters influence global attitude trajectories and convergence patterns. `[Status: exploratory as originally designated; substantially conducted prior to registration — this designation is unchanged by that fact, since RQ1 was never intended as confirmatory.]`
-
-**H7**: Agent-based models upgraded with argumentation mechanisms alongside models of social influence are expected to yield more accurate and stable predictions of global attitude distributions (using MAE) than models only using social influence (Bächtiger et al., 2018; Niemeyer et al., 2024). `[Status: PROSPECTIVE — CONFIRMATORY. Not yet implemented or tested. This is the confirmatory component this registration is intended to protect.]`
 
 Exploratory analyses are pre-specified but not used for confirmatory inference.
 
@@ -71,18 +71,18 @@ Exploratory analyses are pre-specified but not used for confirmatory inference.
 
 Data were made available on [DATE]. This protocol was originally drafted on [DATE]. Prior to formal registration on this platform (submitted [TODAY'S DATE]), the following analyses had already been conducted as part of iterative model development:
 
-- Latin hypercube sampling (200 samples) and genetic algorithm refinement for the three social influence models (consensus, clustering, bipolarization), evaluated on MAE against linear regression and a no-change baseline (relates to H3, H5, H6). **Neither LHS nor GA outperformed the no-change baseline; GA converged toward near-zero predicted opinion change rather than learning genuine debate dynamics.** This result is what motivates progression to the argumentation model (H7).
-- Exploratory analysis of parameter sensitivity via partial and semi-partial correlation coefficients (PCC/PRCC) and of convergence patterns (RQ1), consistent with RQ1's original non-confirmatory designation.
+- Latin hypercube sampling (200 samples) and genetic algorithm refinement for the three social influence models (consensus, clustering, bipolarization), evaluated on MAE against a multilevel regression and a no-change baseline (relates to H3, H5, H6). **Neither LHS nor GA outperformed the no-change baseline; GA converged toward near-zero predicted opinion change rather than learning genuine debate dynamics.** This result is what motivates progression to the argumentation model (H6).
+- Exploratory analysis of parameter sensitivity via partial and semi-partial correlation coefficients (PCC/PRCC), Random Forest (RF) and of convergence patterns (RQ1), consistent with RQ1's original non-confirmatory designation.
 - Exploratory valence/directional-bias analysis (not originally specified in this protocol; developed during RQ1) identifying a systematic anti-reduction bias — models under-predict movement toward reduced meat consumption relative to movement away from it — consistent across all three social influence models. This analysis is reported as emergent exploratory work, distinct from RQ1 as originally scoped.
 
 These are reported as **retrospective/exploratory, not confirmatory**, for H3, H5, H6, and RQ1. The following components of the originally registered calibration pipeline have not been completed:
 
 - **Simulated annealing** (the third calibration stage after LHS and GA) has not been run and will not be conducted. Given LHS and GA results already show no social-influence configuration beats the no-change baseline, with GA converging to a degenerate near-zero-change solution, further local refinement via SA is judged unlikely to alter this conclusion. This is a deviation from the original calibration pipeline, disclosed here rather than silently omitted.
-- **Variance of Absolute Errors (VAE)** and **Median MAE**, specified below as dependent variables, have not yet been integrated into the analysis pipeline. Both remain planned prior to final reporting of H3/H5/H6.
+- **Variance of Absolute Errors (VAE)** and **Median MAE**, specified below as dependent variables, will not be integrated into the analysis pipeline. 
 
-One further consolidation pass on the existing LHS/GA output is planned: a final rerun correcting known data-pipeline issues (pro/anti agent count columns, valence/signed-error columns) and one further round of LHS/GA with parameter ranges adjusted in light of the valence findings above (see Parameter Adjustment Note below), followed by a chronological walkthrough of the analysis across dataset versions. This pass does not constitute a new confirmatory test — it re-derives and extends already-observed results on corrected data and adjusted ranges for reporting accuracy and completeness, and is the final action taken on social-influence models before proceeding to H7.
+One further consolidation pass on the existing LHS/GA output is planned: a final rerun correcting known data-pipeline issues (pro/anti agent count columns, valence/signed-error columns) and one further round of LHS/GA with parameter ranges adjusted in light of the valence findings above (see Parameter Adjustment Note below), followed by a chronological walkthrough of the analysis across dataset versions. This pass does not constitute a new confirmatory test — it re-derives and extends already-observed results on corrected data and adjusted ranges for reporting accuracy and completeness, and is the final action taken on social-influence models before proceeding to H6.
 
-The argumentation model (H7) has not yet been implemented or tested and remains the prospective, confirmatory component of this registration.
+The argumentation model (H6) has not yet been implemented or tested and remains the prospective, confirmatory component of this registration.
 
 # Methods
 
@@ -127,8 +127,6 @@ The implementation of the social influence and argumentative models in GAMA is c
 Full parameter ranges are provided in the ODD protocol (see Appendix X). These ranges were standardized across models to ensure cross-model comparability, except bipolarization models where the confidence threshold range is constrained below the repulsion threshold to ensure model validity.
 
 **Parameter Adjustment Note (finalized, based on 04/06/26 LHS/GA analysis)**: exploratory analysis identified two findings not yet reflected in the confirmatory parameter space: (1) heterogeneous per-agent parameterization (`use_distinct_agents` = TRUE, i.e. agents draw parameter values from a distribution around a base value with an associated SD, rather than sharing one fixed value) consistently outperforms homogeneous parameterization across all three models, and is therefore fixed as TRUE for the final run rather than left as a free/compared factor; (2) `confidence_threshold` and `repulsion_threshold` are currently defined as single, model-wide ranges applied identically regardless of an agent's pro- or anti-reduction stance, despite exploratory valence analysis showing a systematic anti-reduction bias — the models under-predict movement toward reduced meat consumption relative to movement away from it. This asymmetry is not representable under the current single-range parameterization.
-
-The final social-influence run will therefore split `confidence_threshold`, `repulsion_threshold`, and `convergence_rate` into separate pro- and anti-agent ranges (e.g. `confidence_threshold_pro`/`confidence_threshold_anti`), initialized around the existing top-25%-LHS bounds but allowed to diverge, so that any pro/anti asymmetry in influence dynamics can be expressed and tested rather than averaged away. This requires (a) GAML changes to declare and assign the split parameters per agent type at initialization, and (b) R changes to `generate_gaml_bounds` (to emit asymmetric bounds) and `apply_batch_mutations`/`conv_cols` (already carrying `pro_count`/`anti_count`, extended to carry the split parameter columns). This is disclosed prospectively here as a one-time, final adjustment motivated by already-observed exploratory patterns; it is reported as exploratory/RQ1-adjacent regardless of outcome, is run once, and is the last modification made to the social-influence parameter space before proceeding to H7.
 
 ## Data
 

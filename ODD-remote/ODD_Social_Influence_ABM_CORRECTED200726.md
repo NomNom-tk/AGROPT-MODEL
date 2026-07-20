@@ -593,50 +593,80 @@ The global controller computes starting state tracking values at $t = 0$ before 
 
 # 6. INPUT DATA
 ## 6.1 Data Source & Empirical Origin
-**Primary Input File:** `../data-dictionary/exp-dat/train_data.csv` (structured training split of the empirical data set used for model calibration; see Section 5.2 for how and when this file is loaded, and Appendix C for how it is produced from the full dataset). 
-**Format:** CSV with an initial header row.  
-**Structure:** Contains individual participant records mapped into unique debate sessions.
-- **Multi-Agent Debates:** 55 multi-agent interactive groups (4–7 participants per group).
-- **Control Debates:** 187 single-agent isolated sessions where no interaction occurs.
-- **Total Mapped Debates:** 242 unique debate identifiers.
-**Origin:** Empirical laboratory study dataset from Dheilly et al. (unpublished) investigating deliberative debates on plant-based dietary shifts and meat consumption reduction.
+**Primary Input File:** `../data-dictionary/exp-dat/train_data.csv` (structured calibration split of the empirical dataset; see Section 5.2 for initialization details and Appendix C for dataset construction).  
+**Format:** Character CSV file with an initial header row.  
+**Origin:** Empirical study dataset from Dheilly et al. investigating deliberative debates on plant-based dietary shifts and meat consumption reduction.
+**Dataset Structure:** Contains individual participant records mapped into unique debate sessions:
+- **Multi-Agent Debates:** 55 multi-agent interactive groups ($4\text{--}7$ participants per group).
+- **Control Debates:** 187 single-agent isolated sessions where no social interaction occurs.
+- **Total Mapped Sessions:** 242 unique debate session identifiers (`m_debate_list`).
+
+*Note on Validation Split:* Out-of-sample model evaluations (Section 8.1.2, Hypotheses H3, H5, H6) utilize a path switch to `test_data.csv` to ensure strict separation between calibration and testing datasets.
 
 ## 6.2 Data Structure & Runtime Mapping
-The global data loader parses the CSV columns dynamically at initialization and fills the following internal system arrays:
+The global data loader parses CSV columns dynamically at step 0 (`load_csv_data`) and fills the following system data arrays:
 
-| CSV Target Dimension | Internal Mapped GAML Variable Array | Data Type / Domain Bounds |
-| :--- | :--- | :--- |
-| Participant Identifiers | `agent_id_list` | `list<int>` (Unique participant keys) |
-| Empirical Group Labels | `id_group_raw` | `list<string>` (Raw session identifiers) |
-| Experimental Condition | `group_type_list` | `list<string>` $\in$ `{"Homogeneous", "Heterogeneous", "Control"}` |
-| Pre-Debate Stance Bias | `pro_reduction_list` | `list<int>` $\in$ `{0, 1}` (0 = anti, 1 = pro meat reduction) |
-| Initial Attitude Point | `initial_attitude_list` | `list<float>` (Normalized initial opinion $[0, 1]$) |
-| Empirical Final Outcome | `final_attitude_list` | `list<float>` (Normalized target attitude $[0, 1]$) |
-| Timepoint 1 Subfactors | `subfactors_t1` | `list<list<float>>` (Matrix of 5 subfactors, each bounded $[0, 1]$) |
-| Timepoint 2 Subfactors | `subfactors_t2` | `list<list<float>>` (Matrix of 5 subfactors, each bounded $[0, 1]$) |
+| CSV Target Dimension | Internal Mapped GAML Variable Array | Data Type / Domain Bounds | Description / Role |
+| :--- | :--- | :--- | :--- |
+| Participant Identifiers | `agent_id_list` | `list<int>` | Unique participant keys matching empirical records. |
+| Empirical Group Labels | `id_group_raw` | `list<string>` | Raw session identifiers mapped via `stable_group_map`. |
+| Experimental Condition | `group_type_list` | `list<string>` $\in$ `{"Homogeneous", "Heterogeneous", "Control"}` | Experimental group composition classification. |
+| Pre-Debate Stance Bias | `pro_reduction_list` | `list<int>` $\in$ `{0, 1}` | Binary stance bias ($0 = \text{anti}$, $1 = \text{pro}$ meat reduction). |
+| Initial Attitude Point | `initial_attitude_list` | `list<float>` $\in [0.0, 1.0]$ | Pre-deliberation T1 attitude assigned to `opinion`. |
+| Empirical Final Outcome | `final_attitude_list` | `list<float>` $\in [0.0, 1.0]$ | Target T2 attitude evaluated solely for MAE metrics. |
+| Timepoint 1 Subfactors | `subfactors_t1` | `list<list<float>>` $\in [0.0, 1.0]$ | $5 \times N$ matrix of T1 baseline subfactor scores. |
+| Timepoint 2 Subfactors | `subfactors_t2` | `list<list<float>>` $\in [0.0, 1.0]$ | $5 \times N$ matrix of T2 target subfactor scores. |
 
-**Data transformations:** Raw empirical metrics are normalized prior to runtime input processing within the base data framework, using the DB_Index → opinion formula defined in Section 2.2.
+**Data Transformations:** Raw empirical metrics are normalized prior to simulation ingestion using the composite subfactor mapping defined in Section 2.2.
 
 **Data Quality and Integrity Checks:**
-The data initialization block performs defensive consistency checks when `debug_mode` is enabled:
-- Verifies that all required position variables and attitude columns fall strictly within normalized $[0.0, 1.0]$ bounds.
-- Runs an algebraic check via `do debug_init` to confirm that the empirical initial attitude matches the calculated composite balance of the 5 input subfactors (formula in Section 2.2), within floating-point tolerances ($10^{-10}$).
+When `debug_mode` is enabled, the global initialization block executes defensive verification routines:
+- Verifies that all position variables and stance scores fall strictly within $[0.0, 1.0]$.
+- Executes `do debug_init` to confirm algebraically that initial attitudes match the composite balance of input subfactors within floating-point tolerances ($10^{-10}$).
+- Enforces deterministic agent-level seed binding (`local_agent_seed` $\leftarrow \text{seed} + \text{idx}$) to guarantee identical data ingestion and parameter assignments across execution runs.
 
 ## 6.3 Environmental Data
-**None.** The simulation world does not include:
-- GIS, geographic coordinates, or spatial boundaries.
-- Continuous external time series or exogenous environmental drivers.
-- Dynamic localized resource maps.
+**None.** The simulation world contains:
+- No GIS data, geographic vector layers, or spatial boundaries.
+- No continuous external time series or exogenous environmental drivers.
+- No dynamic resource grids.
 
-*Note on Space:* The continuous $100 \times 100$ 2D coordinates assigned to agents are randomized at initialization purely for 2D visual layout separation within the GAMA Graphical User Interface (GUI). They exert no functional role, filtering influence, or topological constraint on agent communication rules.
+*Spatial Rendering Note:* Continuous $100 \times 100$ coordinates are assigned to agents purely for 2D visualization within the GAMA Graphical User Interface (GUI). They exert no functional role, topological filtering influence, or communication constraint.
 
-## 6.4 Model Does NOT Use (from data file)
+## 6.4 Model Exclusions & Theoretical Rationale
 **Variables Omitted from ABM Processing:**
-- Participant demographic characteristics (age, gender identity, education level).
-- Perceived social norms matrices and internal self-control indexes (retained in auxiliary statistical datasets for baseline OLS validation models, but excluded from ABM logic).
-- Long-form qualitative text transcripts or open-ended deliberation responses.
+- Participant demographic attributes (age, gender identity, education level).
+- Perceived social norms matrices and internal self-control indexes (retained in baseline OLS/multilevel models, but excluded from agent dynamic state logic).
+- Open-ended qualitative debate transcripts.
 
-**Design Rationale:** To isolate social influence dynamics as an abstract mathematical process, individual differences are compressed into initial behavioral profiles and susceptibility parameters. This minimal input baseline enables clean testing of hypothesis **H3**: determining whether an agent-based model driven strictly by localized interaction rules can match or outperform traditional linear regression models that rely on comprehensive personal data attributes.
+**Design Rationale:** To evaluate social influence as an abstract, rule-based process, individual differences are compressed into starting opinion stances and susceptibility parameters. This minimal input baseline enables rigorous testing of hypothesis **H3**: evaluating whether an agent-based model driven strictly by localized interaction rules can match or outperform traditional statistical models that rely on full demographic attributes.
+
+## 6.5 Calibration Search Space & Sensitivity Pipeline
+
+### 6.5.1 Active Parameter Bounds
+When heterogeneous parameter sampling is active (`use_distinct_agents = true`), population means ($\mu$) and standard deviations ($\sigma$) are optimized by the Genetic Algorithm (`minimize: mae`) within the following empirical search bounds:
+
+| Parameter Name | GAML Variable Name | Mean Search Bound ($\mu$) | Standard Deviation Bound ($\sigma$) |
+| :--- | :--- | :--- | :--- |
+| **Convergence Rate** | `convergence_rate` | $[0.005, 0.100]$ | $[0.000, 0.020]$ |
+| **Confidence Threshold** | `confidence_threshold` | $[0.100, 0.300]$ | $[0.000, 0.020]$ |
+| **Repulsion Strength** | `repulsion_strength` | $[0.050, 0.200]$ | $[0.000, 0.020]$ |
+| **Repulsion Threshold** | `repulsion_threshold` | $[0.400, 0.700]$ | $[0.000, 0.030]$ |
+
+*Genetic Algorithm Calibration Configuration:*
+- **Optimization Criterion:** Minimize global Mean Absolute Error (`minimize: mae`).
+- **Population Size:** `pop_dim: 5`
+- **Crossover Probability:** `crossover_prob: 0.5`
+- **Mutation Probability:** `mutation_prob: 0.1`
+- **Generation Limits:** 5 preliminary generations, 10 maximum generations (`max_gen: 10`).
+- **Active Execution Flags:** `speaking_mode = true`, `use_distinct_agents = true`.
+
+### 6.5.2 Sensitivity Analysis Workflow
+To assess parameter importance prior to statistical hypothesis testing ($H_1, H_2$) and the argumentation handoff phase, a two-stage evaluation strategy is executed on pooled LHS and GA parameter pairs:
+1. **Partial Correlation Coefficients (PCC/PRCC):** Evaluates monotonic linear dependencies between input parameters ($\mu_i, \epsilon_i, \alpha_i, \rho_i$) and output outcomes ($\text{MAE}$, polarization index).
+2. **Random Forest (RF) Permutation Importance:** Serves as the non-parametric sensitivity check to quantify non-linear interactions across parameter spaces without optimizing separate parameters for population subtypes.
+
+Completing this LHS/GA calibration and PCC/RF sensitivity analysis defines the formal stopping condition for model parameterization before moving on to statistical hypothesis testing and argumentation modeling.
 
 # 7. SUBMODELS
 ## 7.1 Opinion Update Models
@@ -731,7 +761,7 @@ For each agent $i$:
 |opinion_diff| ≥ ρ:       REPULSION (move away from neighbor)
 
 **Constraint:** 
-- $\epsilon < \rho$ (The population-level attraction threshold must be strictly less than the repulsion threshold). If this global rule is broken, initialization is terminated early via a hard constraint guard (`end_simulation <- true`). For heterogeneous agents, if individual sampling causes an overlap ($\epsilon_i \ge \rho_i$), it violates the structural premise of a neutral zone buffer.
+- $\epsilon < \rho$ (The population-level attraction threshold must be strictly less than the repulsion threshold). If this global rule is broken, initialization is terminated early via a hard constraint guard (`end_simulation <- true`). For heterogeneous agents, if individual sampling causes an overlap ($\epsilon_i \ge \rho_i$), it violates the structural premise of a neutral zone buffer which is corrected in Section 5.4.
 
 **Expected behavior:**
 - Opinions drive outward toward opposite extremes ($0.0$ and $1.0$), forcing distinct ideological polarization.
@@ -741,13 +771,52 @@ For each agent $i$:
 - **Dimensionality Overhead:** Introduces a significantly larger parameter space (up to 8 dimensions when optimizing standard deviations), drastically increasing the computational complexity and risk of overfitting during calibration phases (GA/LHS).
 - **Edge Accumulation Artifacts:** Because repulsion pushes agents away from the group center, opinions naturally pile up exactly at the extreme boundaries ($0.0$ and $1.0$), which can overpredict absolute fanaticism compared to more nuanced empirical data distributions.
 
-### 7.1.4 Speaking Mode Variants (`speaking_mode = true`)
-When dyadic speaking variants are activated, the complete neighbor loop step is structurally replaced by a sequential turn-taking broadcast layout:
-1. The system isolates the active debate and randomly selects one agent $S$ to act as the sole active speaker for the cycle.
-2. All other agents $j \in N(S)$ act as passive listeners and update their internal values directly against the speaker's scalar value ($o_S$):
-   - **Consensus Speaker:** $\Delta o_j = \text{agent\_convergence\_rate}_j \times (o_S - o_j)$
-   - **Clustering Speaker:** If $|o_S - o_j| \le \text{agent\_confidence\_threshold}_j$, execute consensus update; else $\Delta o_j = 0.0$.
-   - **Bipolarization Speaker:** Run the attraction/repulsion checks from 7.1.3 treated with $n=1$ against $o_S$.
+### 7.1.4 Turn-Based Broadcast & Cognitive Fatigue Mechanics (`speaking_mode = true`)
+When dyadic turn-based interactions are activated, parallel neighbor loops are replaced by sequential broadcast dynamics via `compute_opinion_speaker(speaker_opinion, sender)`. In each cycle, a speaker agent $S$ broadcasts position $o_S$ to listening peers $i \in N(S)$.
+
+Across all three submodels, stance updates in speaker mode incorporate an explicit pairwise averaging construct and are scaled by the individual cognitive fatigue factor (`retention_discount`).
+
+#### 1. Consensus Speaker
+All listening neighbors evaluate the midpoint $\bar{o}_{\text{sim}} = \frac{o_i + o_S}{2}$ and adjust their stance:
+$$\Delta o_i = \text{agent\_convergence\_rate}_i \times \text{retention\_discount}_i \times (\bar{o}_{\text{sim}} - o_i) = \text{agent\_convergence\_rate}_i \times \text{retention\_discount}_i \times \left( \frac{o_S - o_i}{2} \right)$$
+
+#### 2. Clustering Speaker (Bounded Confidence)
+Listening agents check if the speaker falls within their confidence boundary ($|o_S - o_i| \le \epsilon_i$).
+- **If $|o_S - o_i| \le \epsilon_i$:** Calculate midpoint $\bar{o}_{\text{sim}} = \frac{o_i + o_S}{2}$ and update stance:
+  $$\Delta o_i = \text{agent\_convergence\_rate}_i \times \text{retention\_discount}_i \times \left( \frac{o_S - o_i}{2} \right)$$
+- **If $|o_S - o_i| > \epsilon_i$:** No stance modification occurs ($\Delta o_i = 0$), and cognitive fatigue counters remain unchanged.
+
+#### 3. Bipolarization Speaker (Attraction-Repulsion)
+Evaluates distance $d_{iS} = |o_S - o_i|$ against individual thresholds:
+- **Attraction Zone ($d_{iS} \le \epsilon_i$):**
+  $$\text{Eff}_{\text{attract}} = \text{agent\_convergence\_rate}_i \times \text{retention\_discount}_i \times (o_S - o_i)$$
+- **Repulsion Zone ($d_{iS} \ge \rho_i$):**
+  $$\text{direction} = \begin{cases} -1.0 & \text{if } o_S > o_i \\ 1.0 & \text{if } o_S \le o_i \end{cases}$$
+  $$\text{Eff}_{\text{repel}} = \text{agent\_repulsion\_strength}_i \times \text{retention\_discount}_i \times \text{direction}$$
+- **Neutral Zone ($\epsilon_i < d_{iS} < \rho_i$):** Zero influence.
+
+$$\Delta o_i = \text{Eff}_{\text{attract}} + \text{Eff}_{\text{repel}}$$
+
+---
+
+#### Post-Update State & Inline Diagnostic Tracking
+Whenever an interaction occurs within an active influence zone, the listening agent updates state variables, recalculates fatigue, and logs the event within the same routine:
+
+1. **State Transition & Visual Mapping:**
+   $$o_i(t+1) = \max\left(0.0, \, \min\left(1.0, \, o_i(t) + \Delta o_i\right)\right)$$
+   $$\text{color} \leftarrow \text{rgb}(o_i \times 255, \, 0, \, (1.0 - o_i) \times 255)$$
+
+2. **Cumulative Influence & Fatigue Decay:**
+   $$\text{cumulative\_opinion\_change}_i \leftarrow \text{cumulative\_opinion\_change}_i + (o_i(t+1) - o_i(t))$$
+   $$\text{total\_influences\_received}_i \leftarrow \text{total\_influences\_received}_i + 1$$
+   $$\text{retention\_discount}_i \leftarrow \frac{1.0}{1.0 + \text{total\_influences\_received}_i \times 0.1}$$
+
+3. **Inline Diagnostic Flags & Logging:**
+   - **Cognitive Saturation Flag:** $\text{is\_sat} \leftarrow \text{retention\_discount}_i < 0.2$
+   - **Directional Accuracy Flag (`wrong_dir`):**
+     $$\text{wrong\_dir} = (o_{\text{final}} > o_{\text{init}} \text{ and } \Delta o_{\text{net}} < 0) \lor (o_{\text{final}} < o_{\text{init}} \text{ and } \Delta o_{\text{net}} > 0)$$
+   - **Interaction Log Append:** Records `[speaking_mode, model_type, current_condition, debate_id, debate_label, current_experiment_id, use_distinct_agents, seed, cycle, sender_id, agent_id, speaker_opinion, opinion_before, opinion, delta, is_sat, wrong_dir, max_cycles]` directly to `interaction_log`.
+
 
 ## 7.2 Convergence Detection
 **Purpose:** Stop simulation when opinions stabilize (computational efficiency + realism)
@@ -819,155 +888,94 @@ The simulation utilizes a static, complete network framework configured at step 
 **Registration status note:** Sections 8.1-8.4 are pre-specified analysis plans registered prior to completion of full batch simulation and validation analyses. 
 Results and interpretations will be added upon completion and will be document as post-registration additions in the appending to distinguish them from pre-specified analyses.
 
-## 8.1 Calibration Strategy
-### 8.1.1 Genetic Algorithm Description
-Objective: Find parameter values minimizing MAE on training set.
-Method: Genetic Algorithm (GA) implemented in GAMA batch experiments
-Parameters calibrated:
-Population-level means:
-- convergence_rate: [0.1, 0.2, 0.3, 0.4, 0.5]
-- confidence_threshold: [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8] (clustering & bipolarization)
-- repulsion_threshold: [0.4, 0.5, 0.6, 0.7, 0.8] (bipolarization only)
-- repulsion_strength: [0.1, 0.2, 0.3] (bipolarization only)
+# 8. EXPERIMENTAL SETUP & PARAMETER BOUND PROTOCOL (ODD+D)
 
-Population variation (SD) - for use_distinct_agents = TRUE:
-- convergence_rate_sd: [0.0, 0.05, 0.1]
-- confidence_threshold_sd: [0.0, 0.1, 0.2]
-- repulsion_threshold_sd: [0.0, 0.1, 0.2]
-- repulsion_strength_sd: [0.0, 0.02, 0.05]
+## 8.1 Exploratory Sampling Design & Sensitivity Analysis
+### 8.1.1 Latin Hypercube Sampling (LHS)
+To evaluate parameter sensitivity, interaction effects, and model robustness across the multi-dimensional search space (RQ1), Latin Hypercube Sampling (LHS) is applied within derived parameter bounds. LHS ensures uniform space-filling coverage across multi-dimensional search spaces and represents standard practice for agent-based model calibration and global sensitivity analysis (Lee et al., 2015).
 
-GA settings:
-- Population size: 5
-- Crossover probability: 0.5
-- Mutation probability: 0.1
-- Preliminary generations: 5
-- Maximum generations: 5
-- Replication: 30 seeds per parameter combination initially; reduced to 1-3 after finding negligible stochastic variance.
+To maintain consistency with the pre-registered OSF protocol and preserve cross-model comparability across varying dimensionalities (2 to 12 active parameters depending on `model_type` and `use_distinct_agents`), $N = 200$ hypercube samples are generated per model variant. This sample size provides a computationally feasible yet statistically robust foundation for downstream Random Forest sensitivity analysis and response surface modeling.
 
-### 8.1.2 Data Splitting Procedure
-Data split procedure:
-Stratified random sampling:
-- Calibration set: ~43 debates (80% of multi-agent debates)
-- Validation set: ~12 debates (20% of 55 multi-agent debates)
-- Seed: set a 123
-- Stratification ensures proportional representation of:
--- Heterogeneous debates
--- Homogeneous debates
--- (Control debates excluded from calibration as they have no interactions)
+---
 
-Implementation details (R code) are provided in Appendix X. **[Cross-reference note: Section 5.2 flags that the main GAML model currently loads `train_data.csv` unconditionally, with no confirmed automated path for running against `test_data.csv`. Resolve before validation-set MAE (Section 8.4) is reported.]**
+### 8.1.2 Global Sensitivity Analysis Protocol (PCC / PRCC & Random Forest)
+The global parameter sensitivity is evaluated in a two-step framework applied to the $N = 200$ LHS simulation output matrix:
+1. **Linear & Monotonic Sensitivity (PCC/PRCC):**
+   * **Partial Correlation Coefficient (PCC):** Quantifies linear relationships between individual input parameters ($\mu_i, \epsilon_i, \alpha_i, \rho_i$) and emergent opinion dynamics while controlling for the confounding effects of other parameters.
+   * **Partial Rank Correlation Coefficients (PRCC):** Evaluate non-linear but monotonic relationships by applying rank-transformation to the input-output pairs prior to partial correlation calculation.
+2. **Non-Parametric Interaction Importance (Random Forest):**
+To capture non-linear and non-monotonic interactions across the parameter space, a Random Forest regression model is fitted on the pooled parameter-output dataset. Parameter importance is quantified using Permutation Importance ($\%IncMSE$) and Node Purity ($IncNodePurity$).
 
-**Model selection procedure:**
-1. Run GA calibration separately for each model (consensus, clustering, bipolarization)
-2. Evaluate on validation set
-3. Compare models:
-   - Overall (all debates pooled)
-   - By condition (heterogeneous vs homogeneous separately)
-4. Select best model per condition based on validation MAE
+## 8.2 Two-Stage Boundary Selection & Derivation Protocol (`generate_gaml_bounds`)
+Parameter search boundaries for Latin Hypercube Sampling (LHS) and Genetic Algorithm (GA) sweeps are established through a two-stage hybrid process combining empirical pilot constraint with automated pipeline processing:
 
-### 8.1.3 Feasible Parameter Regions
-**Decisions criterion for LHS**
-The genetic algorithm was used to identify parameter combinations that minimize MAE on the calibration dataset. Due to the potential for equifinality - where different parameter combinations can yield similar model outcomes - the GA alone is not sufficient to characterize the parameter space (Thiele et al., 2014).
+### Stage 1: Preliminary Pilot Exploration & Search Space Tailoring
+Prior to finalizing the pre-registered protocol, preliminary exploratory runs across legacy datasets were evaluated. To avoid wasting computational bandwidth on degenerate or trivial dynamics (e.g., parameter combinations causing instantaneous collapse or complete deadlock), the global search space was manually tailored to plausible behavioral regions.
 
-To address this issue we define a feasible parameter range by keeping all of the paramter sets whose MAE falls within a tolerated best-performing solution (within 10% of the minimum MAE). This ensures that the multiple different parameter combinations resulting in a similar solution are considered rather than relying on a single optimum.
+### Stage 2: Programmatic Range Extraction & Guard Enforcment
+Following preliminary tailoring, operational parameter boundaries ($[\mathbf{p}_{\text{min}}, \mathbf{p}_{\text{max}}]$) are formalized programmatically using the R analysis routine (`generate_gaml_bounds`). This function extracts identical bounding boxes for both LHS space-filling sweeps and GA optimizations:
 
-From this retained data set, the parameter bounds are constructed using percentile ranges (5th-95th percentile) to reduce the impact of extreme values. This approach complies with the concept of a "good-enough" parameter region, consistent with the idea of considering multiple plausible parameterizations rather than a single optimal point (Williams et al., 2020).
+1. **Elite Quantile Selection:** Upstream execution results are filtered to retain configurations within the top 25% lowest MAE quantile (`best_mae` per `model_type` and `use_distinct_agents` combination).
+2. **Empirical Range Extraction:** Raw minimum ($p_{\text{raw, min}}$) and maximum ($p_{\text{raw, max}}$) bounds are extracted across the elite set.
+3. **Degenerate Range Expansion:** If an elite parameter range collapses to a single point ($p_{\text{raw, min}} == p_{\text{raw, max}}$), the internal helper `expand_range()` expands the bounds symmetrically around the point estimate using a fixed buffer ($\text{buffer} = 0.05$):
+   $$p_{\text{min}} = p_{\text{raw, min}} - 0.05, \quad p_{\text{max}} = p_{\text{raw, max}} + 0.05$$
+4. **Structural Inclusion Guards:** Parameters are conditionally included in the generated GAML declarations based on model topology and numerical relevance:
+   * **Convergence Rate ($\mu$):** Included unconditionally across all model variants.
+   * **Confidence Threshold ($\epsilon$):** Guarded by `ct_max > 0.01`. Included for Clustering and Bipolarization variants; suppressed for Consensus where spatial confidence does not structurally apply.
+   * **Repulsion Parameters ($\alpha, \rho$):** Guarded by `rs_max > 0.01`. Active exclusively for Bipolarization variants.
+   * **Population Heterogeneity ($\sigma$):** Standard deviation variants ($\sigma_{\mu}, \sigma_{\epsilon}, \sigma_{\alpha}, \sigma_{\rho}$) pass through their respective structural guards only when `use_distinct_agents = TRUE`.
 
-### 8.1.4 Latin Hypercube Sampling (LHS)
-To further explore the feasible parameter region, Latin Hypercube Sampling (LHS) is then applied in these bounds.
+---
 
-The use of LHS in this context is justified as this sampling method ensure more uniform coverage of the multidimensional parameter spaces considered in this study compared with simple random samplig. This smapling method is widely used in the ABM field and is recommended for calibration and sensitivity analysis (Lee et al., 2015). 
+## 8.3 Genetic Algorithm (GA) Optimization Protocol
+To identify parameter combinations that minimize the difference compared with empirical deliberation attitudes, a GA optimization is executed in GAMA (`method: genetic`).
 
-**[NOTE — reconcile with registered OSF protocol:** this section states an LHS sample size of "20–50× the number of calibrated parameters, ≈300 samples per model." The registered OSF protocol states 200 samples per model. These describe the same design decision and currently disagree; pick one figure and update both documents before further reporting.]
+Early pilot exploration across legacy datasets used heuristic parameter tuning to establish search boundaries, the formal model calibration (i.e. last run before argumentation implementation) adheres to a standardized GAMA genetic experiment configuration:
 
-The number of LHS sample is determined as a function of model dimensionality. This was chosen to ensure consistent cross-model comparison, regardless of the number of calibrated parameters varying between the models (consensus, clustering, bipolarization), as well as ensuring computational feasibility.
+```
+method genetic 
+  minimize: mae 
+  pop_dim: 5 
+  crossover_prob: 0.5 
+  mutation_prob: 0.1 
+  nb_prelim_gen: 5 
+  max_gen: 10;
+```
 
-The second stage exploration enables a more comprehensive assessment of parameter sensitivity, interaction effects and robustness of model outcomes. This supports the study's exploratory objective (RQ1) of understanding how parameter variation influences the emergent opinion dynamics. 
+* **Search Space Constraints:** The GA space is constrainted by the operational parameter ranges created by `generate_gaml_bounds`.
+* **Objective Function:** The GA has the goal of optimizing parameters to obtain the minimal Mean Absolute Error ($MAE$) between final simulated stance ($o_{i, \text{final}}$) and post-debate empirical stances ($T2$).
+* **Operators & Hyperparameters:** 
+   * **Population Dimension (pop_dim):** 5 individuals per generation.
+   * **Preliminary Generations (nb_prelim_gen):** 5 initial randomized generations to seed population diversity.
+   * **Maximum Generations (max_gen):** 10 generations.
+   * **Crossover Probability (crossover_prob):** 0.5 (50% chance of single-point crossover).
+   * **Mutation Probability (mutation_prob):** 0.1 (10% uniform mutation rate across active parameter bounds). 
 
-### 8.1.5 Parameter Bounds for LHS
-The parameter bounds used for LHS are derived from the retained set of high-performing GA solutions (top-25%-MAE GA runs, per Section 8.1.3), summarized below by `model_type` and `use_distinct_agents`:
+---
 
-| model_type | use_distinct_agents | best_mae | cr_min | cr_max | ct_min | ct_max | rs_min | rs_max | rt_min | rt_max |
-|---|---|---|---|---|---|---|---|---|---|---|
-| bipolarization | FALSE | 0.0112 | — | — | — | — | — | — | — | — |
-| bipolarization | TRUE | 0.0099 | — | — | — | — | — | — | — | — |
-| clustering | FALSE | 0.0112 | — | — | — | — | — | — | — | — |
-| clustering | TRUE | 0.0081 | — | — | — | — | — | — | — | — |
-| consensus | FALSE | 0.0112 | — | — | — | — | — | — | — | — |
-| consensus | TRUE | 0.0081 | — | — | — | — | — | — | — | — |
+## 8.4 Model Validation Protocol
+The validity of the model is evaluated with a two-fold empirical cross-validation framework:
+1. **Individual-Level Fit (Primary Metric):** Model performance is evaluated using Mean Absolute Error (MAE) comparing simulated individual post-debate stances ($o_{i, \text{final}}$) against empirical post-deliberation survey stances ($y_i \in T_2$): $$\text{MAE} = \frac{1}{N} \sum_{i=1}^{N} \vert{}o_{i, \text{final}} - y_i\vert{}$$
+2. **Out-of-Sample Cross-Validation:** To evaluate the generalizability of the model and prevent overfitting, the parameter combinations identified in the GA calibration phase are validated across held-out debates not used in initial parameter fitting. Overall baseline population error across the pooled dataset evaluated in Sections 8.2 and 8.4 illustrates performance at $\text{MAE} \approx 0.0644$.
 
-Population-variation (SD) bounds (`use_distinct_agents = TRUE`) are similarly derived: `cr_min_sd`/`cr_max_sd`, `ct_min_sd`/`ct_max_sd`, `rs_min_sd`/`rs_max_sd`, `rt_min_sd`/`rt_max_sd`, per model_type.
 
-**[TODO — before finalizing this table: (1) fill in the numeric `cr_min`–`rt_max` cell values from the R output (`generate_gaml_bounds`); (2) verify whether the `best_mae` values above (0.0081–0.0112) are computed on the same pooled calibration set as the overall GA MAE reported in Section 8.2/8.4 (~0.0644), or a narrower subset (e.g. top-25% filter only) — these are not directly comparable as currently labeled and should not be presented side-by-side without that clarification.]**
+## 8.5 Operational Guard Specifications
 
-### 8.1.6 Computational Budget
-**Computational budget:**
-- Phase 1: Grid search exploration (~50-100 parameter combinations per model)
-- Phase 2: GA optimization (5 gen × 5 pop = 25 evaluations per parameter set)
-- Phase 3: LHS exploration (~300 samples per model — see reconciliation note in 8.1.4)
-- Phase 4: Validation (best params × 44 debates × 3 seeds ≈ 130 runs)
-- Total per model: ~200-300 simulation runs
-- Total for 3 models: ~600-900 runs
-- Estimated time: 4-8 hours with parallelization (depends on hardware)
+| Parameter Symbol | Variable Name | Theoretical Domain | Operational Guard Condition | Active Model Variants |
+|---|---|---|---|---|
+| $\mu_i$ | `convergence_rate` | $[0.0, 1.0]$ | Unconditional | All models |
+| $\sigma_{\mu}$ | `convergence_rate_sd` | $[0.0, 0.5]$ | `use_distinct_agents == TRUE` | All models |
+| $\epsilon_i$ | `confidence_threshold` | $[0.0, 1.0]$ | `ct_max > 0.01` | Clustering, Bipolarization |
+| $\sigma_{\epsilon}$ | `confidence_threshold_sd` | $[0.0, 0.5]$ | `use_distinct_agents == TRUE` & `ct_max_sd > 0.01` | Clustering, Bipolarization |
+| $\alpha_i$ | `repulsion_strength` | $[0.0, 1.0]$ | `rs_max > 0.01` | Bipolarization |
+| $\sigma_{\alpha}$ | `repulsion_strength_sd` | $[0.0, 0.5]$ | `use_distinct_agents == TRUE` & `rs_max_sd > 0.01` | Bipolarization |
+| $\rho_i$ | `repulsion_threshold` | $[\epsilon_i + 0.05, 1.0]$ | `rs_max > 0.01` | Bipolarization |
+| $\sigma_{\rho}$ | `repulsion_threshold_sd` | $[0.0, 0.5]$ | `use_distinct_agents == TRUE` & `rs_max_sd > 0.01` | Bipolarization |
 
-### 8.1.7 Handling of Stochasticity
-- Initial testing revealed stochasticity has minimal effect (variance ≈ 0 across seeds)
-- Implication: Only 1-3 seeds needed per parameter combination
-- This significantly reduces computational burden
+> **Note on MAE Evaluation Metrics:** The `best_mae` values documented in generated parameter declaration headers (ranging from $0.0081$ to $0.0112$) represent top-quantile single-fit cutoff thresholds used to bound the elite filter. These are conceptually distinct from the global baseline population MAE averaged across all participants, sessions, and runs ($\approx 0.0644$). Generated GAML parameter lines are exported dynamically to `/outputs/gaml_parameter_bounds.gaml` for computational audit.
 
-## 8.2 Best Parameters Found
 
-**Consensus model:**
-convergence_rate = [VALUE]
-convergence_rate_sd = [VALUE] (if heterogeneity tested)
 
-Best for: [Homogeneous/Heterogeneous/Both]
-Calibration MAE: [VALUE]
-Validation MAE: [VALUE]
-Typical convergence: [X] cycles
-
-**Clustering model:**
-convergence_rate = [VALUE]
-confidence_threshold = [VALUE]
-[+ SD parameters if used]
-
-Best for: [Homogeneous/Heterogeneous/Both]
-Calibration MAE: [VALUE]
-Validation MAE: [VALUE]
-Typical convergence: [X] cycles
-
-**Bipolarization model:**
-convergence_rate = [VALUE]
-confidence_threshold = [VALUE]
-repulsion_threshold = [VALUE]
-repulsion_strength = [VALUE]
-[+ SD parameters if used]
-[+ homophily]
-
-Best for: [Homogeneous/Heterogeneous/Both]
-Calibration MAE: [VALUE]
-Validation MAE: [VALUE]
-Typical convergence: [X] cycles
-
-**Key findings (confirmed from existing LHS/GA output; see caveats in 8.1.5):**
-- **Which model performs best overall (unoptimized/LHS, pooled global ranking)?** With `speaking_mode = true`: `no_change` (0.0399) < clustering (0.0528) < consensus (0.0616) < bipolarization (0.0873). With `speaking_mode = false`: clustering (0.0920) < consensus (0.1058) < bipolarization (0.1112). No social-influence model beats `no_change` under either speaking mode.
-- **Does GA optimization improve on this?** Yes, but not enough: GA reduces MAE from an LHS baseline of μ=0.0875 to μ=0.0644 (~26% reduction, Welch's t-test t(63394)=−48.96, p<2.2×10⁻¹⁶), still above the 0.0399 `no_change` baseline.
-- **Do different debate types require different models?** Composition/behavioral diagnostics data (by `debate_composition`, `model_type`, `speaking_mode`, `use_distinct_agents`) exists to answer this but has not yet been summarized into an explicit conclusion — **[TODO]**.
-- **Does agent heterogeneity (SD > 0) improve predictions?** Yes, consistently: `use_distinct_agents = TRUE` outperforms `FALSE` across all three models in the composition/behavioral diagnostics comparison.
-- **Does homophily improve predictions over random/complete networks?** Not applicable as tested — the current network is always fully connected (Section 5.5); no random/homophilous network variant has been implemented or compared. **[TODO if this comparison is intended — currently out of scope of the implemented model.]**
-
-## 8.3 Sensitivity Analysis
-**[DEFERRED — to be completed following the final consolidated LHS/GA rerun described in the registered OSF protocol's Analysis Status section.]**
-
-**Stochasticity analysis:**
-- Variance in MAE across different random seeds
-- Confirmed finding (Section 4.9/8.1.7): near-zero variance across seeds (deterministic dynamics given initial conditions when `speaking_mode = false`; minor stochasticity from speaker selection when `speaking_mode = true`)
-- Implication for seed replication strategy: 1–3 seed replicates sufficient, consistent with implementation.
-
-**Parameter sensitivity:**
-- Which parameters have the largest effect on MAE? — not yet formally assessed beyond preliminary PCC/PRCC exploration (inconclusive).
-- Are there parameter interactions? — not yet assessed.
-- Are there non-linear threshold effects? — not yet assessed.
 
 **Planned method:** random forest–based permutation importance (Antoniadis, Lambert-Lacroix & Poggi, 2021), applied post-hoc to pooled LHS+GA parameter/output pairs. Selected over formal Sobol' index estimation because the existing and planned sampling design (LHS + GA refinement, not a Saltelli-type factorial design) does not support valid Sobol' estimation, while RF-based permutation importance can be computed directly on irregular samples without a specific sampling structure.
 

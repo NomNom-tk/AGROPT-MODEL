@@ -237,12 +237,12 @@ structure (in gama there is no compartmentalization of global variables, loads i
 # 15/7/26
 - documented bugs in rnd leaks for GAMA model
 - started cleaning up pipeline documentation and links to protocol hypotheses --> hopefully protocol submission by end of week
-<<<<<<< Updated upstream
 - process_run is documented, meeting with Nicolas (finish analyses and create middle layer document that details the assumptions for analyses)
 - need to finish plots and functions file
 - started on phd prep, to follow tomorrow
-=======
-- documented process_run and otw to finish data_processing today (ready for meeting with Nicolas for protocol)
-- NEED to finish plots documentation and revise protocol modifications
-- NEED to create an intermediary layer with data analysis assumptions (to present to everyone for context of what I am analyzing)
->>>>>>> Stashed changes
+
+# 20/7/26
+- continued working on ODD (almost done, need to finish section 8 and then comprehensive review with GAML code)
+- next step is finishing protocol and ODD to be submitted by EOW
+- NEXT: finish documenting plots and functions and update data-dictionary
+- NEXT: implement upgraded LM functions and RF sensitivity analysis

@@ -9,23 +9,21 @@ The purpose of the model is to understand how individual, debate level and globa
 
 The investigation into the impact of deliberation is addressed by looking into 7 hypotheses and one research question (described below). The scope of the model spans across 55 debates (19 homogeneous; 36 heterogeneous) and 187 debates (with only one agent) with a total of 459 participants. Homogeneous debates consist of only pro or only contra meat consumption reduction; heterogeneous debates have an equal split of both. 
 
-The evaluation of the model is based on its ability to accurately predict the magnitude and direction of attitude change from pre- to post-debate compared with the data gathered in Dheilly et al (unpublished). This is quantitatively assessed through the model's ability to more accurately predict attitude change (using the Mean of Absolute Error) and the dynamics of agent interactions compared to Ordinary Least Squares (OLS) regressions.
+The evaluation of the model is based on its ability to accurately predict the magnitude and direction of attitude change from pre- to post-debate compared with the data gathered in Dheilly et al (unpublished). This is quantitatively assessed through the model's ability to more accurately predict attitude change (using the Mean of Absolute Error) and the dynamics of agent interactions compared to multi-level linear regressions.
+
+This protocol specifies the social influence dynamic models (including Consensus, Clustering and Bipolarization mechanisms for H1-H6). This architecture is designed to serve as the basis for the next planned step being the implementation of an argumentation extension (evaluating Dung-style argument dynamics for H7). The argumentation module represents the secondary research extensiuon of this project and will be registered under a Phase 2 protocol update prior to H7 testing.
 
 ## 1.2 Patterns
 The model aims to reproduce these empirical patterns:
-- Individual level -
-1) Pre-deliberation attitudes are positively associated with post-deliberation attitudes, independent of debate context.
-2) Higher perceived social norms and lower self-control exhibit higher absolute attitude change from pre- to post-deliberation, moderated by initial attitude strength.
+- Behavioral Patterns -
+1) Pre-deliberation attitudes toward meat consumption are expected to be positively associated with post-deliberation attitudes, accounting for a meaningful share of variance when controlling for the nested nature of agents within distinct debate groups.
+2) Individuals with higher perceived social norms and lower self-control will exhibit greater absolute attitude change between pre- and post-deliberation measurement points, moderated by their initial opinion strength.
 
-- Debate Level -
-3) ABM with social influence models initialized with pre-deliberation attitudes generates lower MAE than OLS.
-4) Heterogeneous debates exhibit a greater mean attitude change than homogeneous debates.
-5) ABM with pre-deliberation attitudes generate a lower MAE and Variance of Absolute Error (VAE) compared to OLS.
-
-- Global Level -
-6) ABM with social influence models initialized with pre-deliberation attitudes shows a post-deliberation attitude shift toward meat consumption reduction and generates a lower global MAE than a global OLS regression. 
-RQ1) Exploratory analyses examine how variations in model parameters influence global attitude trajectories and convergence patterns.
-7) ABM upgraded with argumentation mechanisms yield more accurate and stable predictions of MAE than ABM with social influence models.
+- Model Performance Patterns -
+3) Debates with a heterogeneous composition of participants are expected to exhibit a greater mean attitude change between pre- and post-deliberation attitudes compared with homogeneous debates.
+4) Agent-based simulations initialized with pre-deliberation attitudes alone will generate a lower mean of absolute error [MAE] predictions of post-deliberation attitudes for individual participants compared with a naive "no_change" baseline and a predictive multilevel linear model, at the individual participant and debate level.
+5) When pooled at a global level, ABMs calibrated with pre-deliberation attitudes should reproduce a global post-deliberation attitude shift toward meat consumption reduction with a lower MAE than a single global multilevel regression model.
+6) Agent-based models upgraded with argumentation mechanisms alongside models of social influence are expected to yield more accurate and stable predictions of global attitude distributions (using MAE) than models only using social influence mechanisms (Bächtiger et al., 2018; Niemeyer et al., 2024).
 
 Exploratory analyses are pre-specified but not used for confirmatory inference.
 
@@ -34,7 +32,6 @@ Exploratory analyses are pre-specified but not used for confirmatory inference.
 The following entities are present in the model: agents representing individuals who engaged in the debates (i.e. experiment participants), experiments (GUI and batch to calibrate and explore model parameters), grid cells (i.e. virtual geographical location in the environment for GUI testing), and the global environment representing the space in which the debates took place (i.e. the virtual meeting room).
 
 ## 2.2 State Variables
-### Agent State Variables
 ### 2.2.1 Agent State Variables
 
 | Variable Name | Data Type | Domain Bounds | Description |
@@ -119,7 +116,7 @@ Bounded: max(0.01, min(0.99, sampled_value))
 Constraint: agent_repulsion_threshold > agent_confidence_threshold
 
 #### Turn-Based & Cognitive Fatigue
-- `recent_speed` (list): Binary timeline vector recording whether the agent spoke during interaction cycles.
+- `recent_speech` (list): Binary timeline vector recording whether the agent spoke during interaction cycles.
 - `speak_weight` (float): Dynamic selection priority weight computed as: $$\text{speak\_weight} = \frac{1.0}{\sum(\text{recent\_speech}) + 1.0}$$
 - `total_influences_received` (integer): Cumulative counter tracking individual received incoming communication events.
 - `retention_discount` (float [0,1]): Dynamic cognitive fatigue modifier scaling down opinion adjustment steps, computed as: $$\text{retention\_discount} = \frac{1.0}{1.0 + \text{total\_influences\_received} \times 0.1}$$
@@ -252,6 +249,7 @@ Control individual differences:
 - `total_repulsive_interactions` (integer): Cumulative repulsion zone interactions
 - `total_neutral_interactions` (integer): Cumulative neutral zone interactions
 
+For a comprehensive elementing mapping chart, parameter sensitivity screening bounds and output variable links to hypotheses (H1-H7), see Supplementary File `model_elements_chart_CLEAN.md`.
 
 # 3. Process overview and scheduling
 ## 3.1 Initialization Sequence
@@ -318,9 +316,6 @@ In each batch simulation, one of the two interaciton models is active, determine
 
 [every cycle]
 6. Maximum Cycles Reached (`max_cycles_reached`) — see Submodel 7.2 for the fallback algorithm triggered when `max_cycles` is reached without convergence.
-
-### Update Order
-Within-agent updates are done simultaneously (all agents update their opinion based on their t-1 neighbors).
 
 ### Update Order & Rationale
 Within-agent updates are done simultaneously (all agents update their opinion based on their t-1 neighbors).
@@ -950,14 +945,25 @@ method genetic
    * **Maximum Generations (max_gen):** 10 generations.
    * **Crossover Probability (crossover_prob):** 0.5 (50% chance of single-point crossover).
    * **Mutation Probability (mutation_prob):** 0.1 (10% uniform mutation rate across active parameter bounds). 
+* **Protocol Deviation Note:** Simulated annealing which was originally planned as the third local calibration stage following GA was formally omitted. Prior legacy LHS and GA sweeps demonstrated that the social-influence variants do not beat the static `no_change` baseline, with GA converging to a near zero change state. Further local search refinement was via SA was thus judged as not capable of altering the macro-level conclusions.
 
 ---
 
 ## 8.4 Model Validation Protocol
-The validity of the model is evaluated with a two-fold empirical cross-validation framework:
+The validity of the model is evaluated with a multi-tiered empirical cross-validation framework:
+### 8.4.1 Quantitative Validation & Benchmarks
 1. **Individual-Level Fit (Primary Metric):** Model performance is evaluated using Mean Absolute Error (MAE) comparing simulated individual post-debate stances ($o_{i, \text{final}}$) against empirical post-deliberation survey stances ($y_i \in T_2$): $$\text{MAE} = \frac{1}{N} \sum_{i=1}^{N} \vert{}o_{i, \text{final}} - y_i\vert{}$$
 2. **Out-of-Sample Cross-Validation:** To evaluate the generalizability of the model and prevent overfitting, the parameter combinations identified in the GA calibration phase are validated across held-out debates not used in initial parameter fitting. Overall baseline population error across the pooled dataset evaluated in Sections 8.2 and 8.4 illustrates performance at $\text{MAE} \approx 0.0644$.
+3. **Benchmark Comparison:** Model variants are evaluated against a trivial `no_change` baseline ($T_1 \rightarrow T_1$) and an empirical regression baseline across grlobal, debate and individual groupings.
 
+| Model Variant | Execution / Sampling Mode | Global MAE | Status / Analytical Role |
+|---|---|---|---|
+| **`no_change` Baseline** | Static Persistence ($T_1 \rightarrow T_1$) | **0.0399** | Empirical Lower Bound Benchmark |
+| **OLS Regression** | Empirical Stance Predictor | *Pending* | Statistical Control Benchmark |
+| **Consensus Variant** | LHS Sweep (`speaking_mode = true`) | **0.0616** | Unimodal Convergence Model |
+| **Clustering Variant** | LHS Sweep (`speaking_mode = true`) | **0.0528** | Bounded Confidence Model |
+| **Bipolarization Variant** | LHS Sweep (`speaking_mode = true`) | **0.0873** | Repulsive Dynamics Model |
+| **GA-Optimized Composite** | Pooled Optimizations | **0.0644** | Calibrated Multi-Model Fit |
 
 ## 8.5 Operational Guard Specifications
 
@@ -973,52 +979,6 @@ The validity of the model is evaluated with a two-fold empirical cross-validatio
 | $\sigma_{\rho}$ | `repulsion_threshold_sd` | $[0.0, 0.5]$ | `use_distinct_agents == TRUE` & `rs_max_sd > 0.01` | Bipolarization |
 
 > **Note on MAE Evaluation Metrics:** The `best_mae` values documented in generated parameter declaration headers (ranging from $0.0081$ to $0.0112$) represent top-quantile single-fit cutoff thresholds used to bound the elite filter. These are conceptually distinct from the global baseline population MAE averaged across all participants, sessions, and runs ($\approx 0.0644$). Generated GAML parameter lines are exported dynamically to `/outputs/gaml_parameter_bounds.gaml` for computational audit.
-
-
-
-
-**Planned method:** random forest–based permutation importance (Antoniadis, Lambert-Lacroix & Poggi, 2021), applied post-hoc to pooled LHS+GA parameter/output pairs. Selected over formal Sobol' index estimation because the existing and planned sampling design (LHS + GA refinement, not a Saltelli-type factorial design) does not support valid Sobol' estimation, while RF-based permutation importance can be computed directly on irregular samples without a specific sampling structure.
-
-**Targets:** MAE (primary), skewness of signed error and variance of absolute error (secondary, probing directional bias and stability respectively, motivated by the anti-reduction bias noted in Section 4.2). Cross-checked against a moment-independent measure (δ or β^Ku; Baucells & Borgonovo, 2013) per the multi-measure logic in Borgonovo et al. (2022).
-
-## 8.4 Validation
-**Quantitative validation:**
-- MAE on held-out validation debates — **not yet computed**; see the validation-path gap flagged in Section 5.2/8.1.2.
-- Comparison to OLS regression baseline (Hypotheses H3, H5, H6) — OLS baseline not yet computed within this pipeline.
-- Condition-specific performance (H4) — data available (Section 8.2 composition table) but not yet summarized against H4 specifically.
-- Distribution matching: predicted vs empirical T2 distributions — not yet assessed.
-
-**Qualitative validation:**
-- Opinion trajectories show realistic patterns:
-  - No oscillations
-  - Monotonic convergence or stable equilibrium
-  - Maintained diversity (not complete consensus except in special cases)
-- Final opinion distributions match empirical patterns
-- Convergence times reasonable (15-35 cycles ≈ plausible for 60-minute debates conceptually)
-
-**[NEED TO FILL IN AFTER ANALYSIS — none of the qualitative validation checks above have been formally run yet.]**
-
-**Pattern matching (from Section 1.2):**
-- ✓/✗ Pre-post correlation maintained (H1) — not yet tested (individual-level regression not yet run against this pipeline's output).
-- ✓/✗ Heterogeneous > homogeneous change (H4) — data available, not yet summarized against this specific claim.
-- ✓/✗ ABM < OLS on MAE (H3, H5, H6) — **partially answerable now**: ABM (social-influence, all variants tested) does not beat the trivial `no_change` baseline (Section 8.2), which is a stronger requirement than beating OLS; OLS comparison itself not yet run.
-- ? Directional asymmetry (pro vs anti change) - exploratory — **confirmed present** (Section 4.2, anti-reduction bias), not yet formally decomposed by model/condition.
-- ? Role of perceived norms/self-control (H2) - regression only, not ABM — not applicable to this ABM by design (Section 6.4).
-
-**Comparison to benchmark (OLS regression):**
-
-Model level of comparison is defined as follows (see also cross-referenced discussion in accompanying analysis materials): **Global** = metrics pooled across all debates by `model_type` alone; **Debate** = metrics grouped by `model_type` + `selected_debate_id`; **Individual** = per-agent `individual_error` from `agent_level_results.csv`.
-
-| Model | Individual MAE | Debate MAE | Global MAE |
-|---|---|---|---|
-| no_change (baseline, not OLS) | [VALUE] | [VALUE] | 0.0399 |
-| OLS (baseline) | [VALUE] | [VALUE] | [VALUE — not yet run] |
-| Consensus (LHS, speaking_mode=true) | [VALUE] | [VALUE — requires debate-level groupby, not yet run] | 0.0616 |
-| Clustering (LHS, speaking_mode=true) | [VALUE] | [VALUE — not yet run] | 0.0528 |
-| Bipolarization (LHS, speaking_mode=true) | [VALUE] | [VALUE — not yet run] | 0.0873 |
-| GA-optimized (all models pooled) | [VALUE] | [VALUE — not yet run] | 0.0644 |
-
-**[FILL IN AFTER VALIDATION — Global column is partially populated from confirmed LHS output above; Individual and Debate columns, and the OLS row entirely, remain to be computed.]**
 
 # 9. REFERENCES
 
@@ -1079,23 +1039,6 @@ Model level of comparison is defined as follows (see also cross-referenced discu
 ## A. Parameter Summary Table
 
 [Reference to your model_elements_chart_CLEAN.md or create summary table here]
-
-## B. Data Dictionary
-
-**Subfactor definitions:** // should i include thomas questionnaire?
-- DBFactor1: Health considerations (items 1-6, PRO-reduction)
-- DBFactor2: Environmental impact (items 7-10, PRO-reduction)
-- DBFactor3: Taste/enjoyment (items 11-13, CONTRA-reduction)
-- DBFactor4: Cultural tradition (items 14-17, CONTRA-reduction)
-- DBFactor5: Economic concerns (items 18-20, CONTRA-reduction)
-
-**DB_Index formula:** (see also Section 2.2, the canonical statement of this formula)
-```
-DB_Index = mean(DBFactor1, DBFactor2) - mean(DBFactor3, DBFactor4, DBFactor5)
-         = [(F1 + F2) / 2] - [(F3 + F4 + F5) / 3]
-Range: [-6, +6] on original scale
-Normalized: [0, 1] for model
-```
 
 ### C. Data Splitting R Implementation
 Implementation in R:

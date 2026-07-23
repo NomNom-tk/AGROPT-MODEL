@@ -19,6 +19,9 @@ library(patchwork)
 library(plotly)
 library(DT)
 library(ComplexUpset)
+library(lme4)
+library(lmerTest)
+library(performance)
 
 # run config declarations
 ## TODO 1/6/26, consider refactoring to different layers, makes run_type agnostic of the rest

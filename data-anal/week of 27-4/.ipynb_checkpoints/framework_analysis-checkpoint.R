@@ -40,6 +40,8 @@ analyze_processed_run <- function(df) {
   empirical_stat_check <- NULL
   empirical_stat_pivot <- NULL
   empir_cohen          <- NULL
+  mlm_model_h2       <- NULL # standardize lm for H2 with perceived_norms and self_control
+  mlm_model_h2_cent        <- NULL # centered version to correct and decrease collinearity of variables
   
   if (!is.null(df_empirical)) {
     empirical_stat_check <- empirical_stats(df_empirical)
@@ -60,12 +62,35 @@ analyze_processed_run <- function(df) {
     df_empirical %>%
       filter(composition %in% c("H", "M")) %>%
       wilcox.test(change_t1_t2 ~ composition, data = .)
-    
-    empir_cohen <- lm(change_t1_t2 ~ pro_reduction,
-                      data = df_empirical %>% filter(composition == "M")) %>%
-      lm.beta() %>%
-      tidy()
-  }
+
+    # empirical mlm for pro_reduction effect to create standardized effects
+    df_emp_m <- df_empirical %>%
+      filter(composition == "M") %>%
+      mutate(change_t1_t2_z = as.numeric(scale(change_t1_t2)),
+             pro_reduction_z = as.numeric(scale(pro_reduction))
+      )
+
+    # empirical model m
+    empir_model_m <- lmer(
+        change_t1_t2_z ~ pro_reduction_z + (1 | id_group_all),
+        data = df_emp_m
+    )
+
+    # empir cohen with standardized coefficients
+    empir_cohen <- data.frame(
+      term = "pro_reduction",
+      std_estimate = fixef(empir_model_m)[["pro_reduction_z"]]
+    )
+
+
+    # H2 test set up
+    if (all(c("abs_change_t1_t2", "perceived_norms", "self_control") %in% colnames(df_empirical))) {
+        # Uncentered H2 model and diagnostics
+        mlm_model_h2 <- lmer(abs_change_t1_t2 ~ (perceived_norms + self_control) * opinion_strength + (1 | id_group_all), data = df_empirical)
+    if (all(c("perceived_norm_cent", "self_control_cent", "opinion_strength_cent") %in% colnames(df_empirical))) {
+        mlm_model_h2_cent <- lmer(abs_change_t1_t2 ~ (perceived_norm_cent + self_control_cent) * opinion_strength_cent + (1 | id_group_all), data = df_empirical)
+    }
+}
 
   # Valence Calculations Introduction
   df_asymmetry_processed <- NULL
@@ -75,6 +100,7 @@ analyze_processed_run <- function(df) {
       df_valence_processed <- summarize_directional_valence(df_directional_agents)
       df_asymmetry_processed <- compute_valence_asymmetry(df_valence_processed)
   }
+}
   
   # ────────────────────────────────────────────────────────────────────────────
   # 2. SENSITIVITY ANALYSIS (LHS ONLY)
@@ -131,42 +157,43 @@ analyze_processed_run <- function(df) {
   comparison_summary <- NULL
   ols_global_mae     <- NULL
   ols_model          <- NULL
-  ols_model_h1       <- NULL # standardized lm for H1
-  ols_model_h2       <- NULL # standardize lm for H2 with perceived_norms and self_control
+  mlm_model_h1a      <- NULL # standardized mlm for H1 with empirical data
+  mlm_model_h1b      <- NULL # standardized mlm for H1 with simulated data
   abm_mae_debate     <- NULL
   empirical_beta_val <- NULL
   beta_distance <- NULL
   simulated_betas_raw <- NULL
   
-  if (!is.null(df_ag)) {
-    ols_result     <- compute_ols_baseline(df_ag)
-    ols_model      <- ols_result$model
-    df_ag_ols      <- ols_result$data
-    ols_global_mae <- ols_result$ols_mae
+  if (!is.null(df_ag)) { # H1a and H1b implemented 22/7/26
 
     # Hypothesis refit (fixing H1 pseudoreplication of df_ag duplicating rows for each agent) 13/7/26
+    # opinion in df_ag_deduped is final simulated opinion / final_attitude is T2 target / initial_opinon is T1 empirical
     df_ag_deduped <- df_ag %>%
       distinct(agent_id, .keep_all = TRUE)
-    
-    # TODO modify this so that empirical joins with agent level data
-    # # bridge gap between empirical with norms and self control and agent data
-    # if (!is.null(df_empirical)) {
-    #   df_ag_deduped <- df_ag_deduped %>%
-    #     left_join(df_empirical %>% select())
-    # }
 
     # corrected H1 test
-    ols_model_h1 <- lm(final_attitude ~ initial_opinion, data = df_ag_deduped)
+    # Nesting individuals (ID) inside debate groups (ID_Group_all) / use with debate_label in deduped data
+    # empirical h1 comparison
+    mlm_model_h1a <- lme4::lmer(final_attitude ~ initial_opinion + (1 | debate_label), 
+                     data = df_ag_deduped)
 
-    # H2 test set up
-    if ("perceived_norms" %in% colnames(df_ag_deduped) && "self_control" %in% colnames(df_ag_deduped)) {
-        ols_model_h2 <- lm(final_attitude ~ perceived_norms + self_control, data = df_ag_deduped)
-    }
+    # MLM H1b test with simulated opinions for T2
+    mlm_model_h1b <- lme4::lmer(opinion ~ initial_opinion + (1 | debate_label), #removed (1 | seed)
+                  data = df_ag_deduped)
+
+    df_ag_ols <- df_ag_deduped %>%
+      mutate(
+        ols_pred = predict(mlm_model_h1a, newdata = ., allow.new.levels = TRUE),
+        ols_error = abs(final_attitude - ols_pred)
+      )
+
+    ols_global_mae <- mean(df_ag_ols$ols_error, na.rm = TRUE)
     
     ols_mae_debate <- df_ag_ols %>%
       group_by(selected_debate_id, debate_label) %>%
       summarize(ols_mae = mean(ols_error, na.rm = TRUE), .groups = "drop")
-    
+
+    # ABM simulation MAE summary
     abm_mae_debate <- df_batch %>%
       group_by(selected_debate_id) %>%  
       summarize(
@@ -175,7 +202,8 @@ analyze_processed_run <- function(df) {
         pct_hetero = mean(use_distinct_agents == TRUE, na.rm = TRUE),
         .groups = "drop"
       )
-    
+
+    # merge MAE scores for comparison
     common_ids <- intersect(ols_mae_debate$selected_debate_id, abm_mae_debate$selected_debate_id)
     
     if (length(common_ids) > 0) {
@@ -206,31 +234,46 @@ analyze_processed_run <- function(df) {
     }
     
     # beta distance check 3/6/26 check distribution of empirical beta compared with simulations
+    # comprehensive update with MLM and checks 22/7/26
     if (!is.null(empir_cohen)) {
-      # extract empirical beta
-      empirical_beta_val <- empir_cohen %>%
-        filter(term == "pro_reduction")
-      
-      # investigate which columns exist in empir_cohen 4/6/26 extra guard
-      if ("std_estimate" %in% colnames(empirical_beta_val)) {
-        empirical_beta_val <- empirical_beta_val %>% pull(std_estimate) 
-      } else if ("std.estimate" %in% colnames(empirical_beta_val)) {
-        empirical_beta_val <- empirical_beta_val %>% pull(std.estimate)
-      } else {
-        empirical_beta_val <- empirical_beta_val %>% pull(estimate) # fallback to understandardized
-      }
       
       # ensure empir is treated as a single numeric value
-      empirical_beta_scalar <- if(length(empirical_beta_val) > 0) as.numeric(empirical_beta_val[1]) else NA_real_
+      empirical_beta_scalar <- as.numeric(empir_cohen$std_estimate[1])
       
-      # compute simualted beta distribution per model type and seed
-      simulated_betas_raw <- df_ag %>%
+      # compute simualted beta distribution per model type and seed / removed no change given that opinion_change is zero
+      simulated_betas_raw <- df_ag_deduped %>%
+        filter(model_type != "no_change") %>%
         group_by(model_type, selected_debate_id, seed) %>%
-        do(lm(opinion_change ~ pro_reduction, data = .) %>% lm.beta() %>% tidy()) %>%
-        filter(term == "pro_reduction")
-      
-      # safe distance calculation (type-matching ensured)
-      beta_distance <- simulated_betas_raw %>%
+        do({
+        dat_sim <- .
+
+        # defensive chekc for sample size and non-zero variance for x and y
+        has_var_y <- !is.na(sd(dat_sim$opinion_change, na.rm = TRUE)) && sd(dat_sim$opinion_change, na.rm = TRUE) > 0
+        has_var_x <- !is.na(sd(dat_sim$pro_reduction, na.rm = TRUE)) && sd(dat_sim$pro_reduction, na.rm = TRUE) > 0
+
+        if (nrow(dat_sim) >= 2 && has_var_y && has_var_x) {
+            dat_sim$opinion_change_z <- as.numeric(scale(dat_sim$opinion_change))
+            dat_sim$pro_reduction_z  <- as.numeric(scale(dat_sim$pro_reduction))
+            
+            fit_sim <- lm(
+              opinion_change_z ~ pro_reduction_z, 
+              data = dat_sim)
+            beta_est <- coef(fit_sim)[["pro_reduction_z"]]
+        } else {
+            beta_est <- NA_real_ # assign NA for static/stalled runs
+        }
+            
+        data.frame(
+          term         = "pro_reduction",
+          std_estimate = beta_est
+        )
+      }) %>%
+      filter(!is.na(std_estimate)) %>%
+      ungroup()
+        
+    # safe distance calculation across param sweeps
+    if (nrow(simulated_betas_raw) > 0 && "std_estimate" %in% colnames(simulated_betas_raw)) {
+        beta_distance <- simulated_betas_raw %>%
         group_by(model_type) %>%
         summarize(
           mean_simulated_beta = mean(std_estimate, na.rm = TRUE), # added std pull to ensure comparison of standardized estimates 13/7/26
@@ -247,6 +290,7 @@ analyze_processed_run <- function(df) {
         )
     }
   }
+}
   
   # ────────────────────────────────────────────────────────────────────────────
   # 4. BEHAVIORAL EXTRACTIONS (COMPOSITION & SPEAKING MODES)
@@ -432,8 +476,10 @@ analyze_processed_run <- function(df) {
       ),
       models = list(conv = run_conv_model(df_conv_debate), 
                     ols = ols_model, # raw pooled individual model 13/7/26
-                    ols_h1 = ols_model_h1, # deduplicated H1 test
-                    ols_h2 = ols_model_h2 # integrated H2 test with perceived_norms and self_control
+                    mlm_h1a = mlm_model_h1a, # deduplicated H1a (empirical) test
+                    mlm_h1b = mlm_model_h1b, # deduplicated H1b (simualted) test
+                    mlm_h2 = mlm_model_h2, # integrated H2 test with perceived_norms and self_control
+                    mlm_h2_cent = mlm_model_h2_cent # H2 with centered values (corrects for variable inflation factors)
                    ),
       comparisons = list(
         empirical       = empirical_stat_check, # from df_empirical, computed mean and SD for each time (T0,T1,T2)
@@ -477,6 +523,12 @@ analyze_processed_run <- function(df) {
       
       empirical_col   = function() plot_empir_compar(empirical_stat_check),
       empirical_cross = function() plot_empir_cross(empirical_stat_pivot),
+
+      # OLS models viz empir and sim
+      mlm_h1a_viz = function() check_model(mlm_model_h1a, check = c("linearity", "homogeneity", "vif", "qq", "reqq", "outliers")),
+      mlm_h1b_viz = function() check_model(mlm_model_h1b, check = c("linearity", "homogeneity", "vif", "qq", "reqq", "outliers")),
+      mlm_h2_viz = function() check_model(mlm_model_h2, check = c("linearity", "homogeneity", "vif", "qq", "reqq", "outliers")),
+      mlm_h2_cent_viz = function() check_model(mlm_model_h2_cent, check = c("linearity", "homogeneity", "vif", "qq", "reqq", "outliers")),
       
       model_rank_versions           = function() plot_model_rank_versions(model_comparison_main), 
       model_performance_rank_main   = function() plot_model_performance_rank_main(model_comparison_main),

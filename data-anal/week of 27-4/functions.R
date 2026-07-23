@@ -52,7 +52,11 @@ empirical_prep <- function(path) {
           change_t0_t1 = (db_index_t1 - db_index_t0) / 6,
           change_t1_t2 = (db_index_t2 - db_index_t1) / 6,
           change_t0_t2 = (db_index_t2 - db_index_t0) / 6,
-          abs_change_t1_t2 = abs(change_t1_t2))
+          abs_change_t1_t2 = abs(change_t1_t2),
+          opinion_strength = abs(db_index_t1 - 0.5), # strength is initial opinion - neutrality point (0.5)
+          opinion_strength_cent = opinion_strength - mean(opinion_strength, na.rm = TRUE), # added for colinearity problem in h2
+          perceived_norm_cent = perceived_norms - mean(perceived_norms, na.rm = TRUE), # centered perceived norms for h2
+          self_control_cent = self_control - mean(self_control, na.rm = TRUE)) # centered self control for h2
 }
 
 # load and prepare 27/5/26 ----/
@@ -231,27 +235,29 @@ combine_df_versions <- function(dfs, version_names) {
   
   dplyr::bind_rows(dfs)
 }
-# CLEAR compute_ols_baseline ----
-compute_ols_baseline <- function(df_ag) {
-  model <- lm(final_attitude ~ initial_opinion, data = df_ag)
+
+# DEADCODE / remove once pipeline finished 22/7/26
+# # CLEAR compute_ols_baseline ----
+# compute_ols_baseline <- function(df_ag) {
+#   model <- lm(final_attitude ~ initial_opinion, data = df_ag)
   
-  # predictions
-  preds <- predict(model, newdata = df_ag)
+#   # predictions
+#   preds <- predict(model, newdata = df_ag)
   
-  # attach error
-  df_ag_ols <- df_ag %>%
-    mutate(
-      ols_pred = preds,
-      ols_error = abs(final_attitude - ols_pred)
-    )
+#   # attach error
+#   df_ag_ols <- df_ag %>%
+#     mutate(
+#       ols_pred = preds,
+#       ols_error = abs(final_attitude - ols_pred)
+#     )
   
-  # global performance metric to compare to abm
-  ols_mae_global <- mean(df_ag_ols$ols_error, na.rm = TRUE)
+#   # global performance metric to compare to abm
+#   ols_mae_global <- mean(df_ag_ols$ols_error, na.rm = TRUE)
   
-  list(model = model,
-       data = df_ag_ols,
-       ols_mae = ols_mae_global)
-}
+#   list(model = model,
+#        data = df_ag_ols,
+#        ols_mae = ols_mae_global)
+# }
 # TODO aggregae_abm_debate ----
 aggregate_abm_debate <- function(df, mae_col = "mae") {
   df %>%

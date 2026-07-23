@@ -30,6 +30,7 @@ global {
     float world_size <- 100.0; // Spatial world size for visualization
     int n_bins <- 50; // bins for gui viz and gif generaiton
     int stats_bins <- 10; // bins for logical histogram calculation
+    float logged_batch_seed; // captured base seed before mutation (avoids rnd leaks) 13/7/26
     
     
     // Simulation Control

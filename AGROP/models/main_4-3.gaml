@@ -10,6 +10,7 @@ import "Constants.gaml"
 global { 
     // initialization ONLY for orchestration
     init {
+    	logged_batch_seed <- seed; // set once before everything else to check 13/7/26
     	// call data loader with file path parameter
     	do load_csv_data("../data-dictionary/exp-dat/train_data.csv");
     	//do load_csv_data("/home/agropt/Gama_Workspace_new/thomas-social/models/data-dictionary/exp-dat/train_data.csv");
@@ -186,7 +187,7 @@ action debug_init {
 // ACTION: CREATE AGENTS FOR SPECIFIC DEBATE
 action initialize_agents_for_debate (int target_debate_id) {
 bool condition_detected <- false;
-string exp_id <- current_experiment_id; // pulls from gloal in params.gaml 
+string exp_id <- current_experiment_id; // pulls from gloal in params.gaml
 
 // guard for skipping invalid debate IDs
 if !(debate_id_list contains target_debate_id) {
@@ -265,12 +266,13 @@ loop idx from: 0 to: length(debate_id_list) - 1 {
             // modif to constrain SD to gaussian with seed + idx for debate 13/7/26
             if use_distinct_agents {
                 // bind draw to global seed + unique loop index 
-                int local_agent_seed <- int(seed + idx)
+                seed <- logged_batch_seed + idx; // idx global row index (uniquer per agent across csv)
+                //write "idx =" + idx + "agent_seed=" + seed;
 
-                agent_convergence_rate <- max([0.01, min([0.99, gauss({convergence_rate, convergence_rate_sd}, local_agent_seed)])]);
-                agent_confidence_threshold <- max([0.01, min([0.99, gauss({confidence_threshold, confidence_threshold_sd}, local_agent_seed + 1)])]);
-                agent_repulsion_strength <- max([0.01, min([0.99, gauss({repulsion_strength, repulsion_strength_sd}, local_agent_seed + 2)])]);
-                agent_repulsion_threshold <- max([0.01, min([0.99, gauss({repulsion_threshold, repulsion_threshold_sd}, local_agent_seed + 3)])]);
+                agent_convergence_rate <- max([0.01, min([0.99, gauss(convergence_rate, convergence_rate_sd)])]);
+                agent_confidence_threshold <- max([0.01, min([0.99, gauss(confidence_threshold, confidence_threshold_sd)])]);
+                agent_repulsion_strength <- max([0.01, min([0.99, gauss(repulsion_strength, repulsion_strength_sd)])]);
+                agent_repulsion_threshold <- max([0.01, min([0.99, gauss(repulsion_threshold, repulsion_threshold_sd)])]);
                 agent_repulsion_threshold <- max([agent_confidence_threshold + 0.05, agent_repulsion_threshold]);
             } else {
                 agent_convergence_rate <- convergence_rate;
@@ -295,6 +297,10 @@ loop idx from: 0 to: length(debate_id_list) - 1 {
         }
     }
 }
+
+write "looged_batch_seed=" + logged_batch_seed + "shoudl equal GUI 123.0";
+// reset seed before next debate 13/7/26
+seed <- logged_batch_seed + 1.0;
 
 //write "Debate " + target_debate_id + " condition: " + current_condition;
 }
@@ -572,7 +578,7 @@ action save_interaction_log {
 	
 	if !file_exists("outputs/interaction_log.csv") { // if file doesn't exist create headers and save
     	save "speaking_mode,model_type,current_condition,selected_debate_id," +
-    	"debate_label,current_experiment_id,use_distinct_agents,seed,cycle,sender_id,receiver_id," +
+    	"debate_label,current_experiment_id,use_distinct_agents,logged_batch_seed,cycle,sender_id,receiver_id," +
     	"sender_opinion,opinion_before,opinion_after,delta,agent_is_saturated,agent_wrong_direction, max_cycles" 
     	to: "outputs/interaction_log.csv" rewrite: false;
 	}
@@ -617,7 +623,7 @@ action save_batch_results {
     
     // Save summary statistics
     save [model_type, current_condition, selected_debate_id, debate_label, current_experiment_id, max_cycles, use_distinct_agents,
-            speaking_mode, seed, pro_count, anti_count, convergence_rate, confidence_threshold, repulsion_threshold, 
+            speaking_mode, logged_batch_seed, pro_count, anti_count, convergence_rate, confidence_threshold, repulsion_threshold, 
             repulsion_strength, convergence_rate_sd, confidence_threshold_sd, repulsion_threshold_sd, repulsion_strength_sd, 
             convergence_cycle, initial_variance, mae, opinion_variance, polarization_index, num_clusters, 
             initial_num_clusters, neutral_zone_width, mean_net_repulsion_abs]
@@ -682,7 +688,7 @@ action save_agent_results {
             max_cycles, // change max_cycles in constants when running sim 15/5/26
             use_distinct_agents,
             speaking_mode,
-            seed,
+            logged_batch_seed,
             agent_id,
             pro_reduction,
             pro_count,

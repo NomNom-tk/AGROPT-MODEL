@@ -44,6 +44,8 @@ analyze_processed_run <- function(df) {
   mlm_model_h2_cent        <- NULL # centered version to correct and decrease collinearity of variables
   
   if (!is.null(df_empirical)) {
+
+    # Summary stats and long pivot for faceted plot and ABM benchmarks
     empirical_stat_check <- empirical_stats(df_empirical)
     
     empirical_stat_pivot <- empirical_stat_check %>%
@@ -54,13 +56,16 @@ analyze_processed_run <- function(df) {
       )
     
     # Wilcoxon Rank-Sum checks on Empirical Environment
-    df_empirical %>%
+    ## significant opinion change in homogeneous groups vs zero
+    wilcox_h_zero <- df_empirical %>%
       filter(composition == "H") %>%
       pull(change_t1_t2) %>%
       wilcox.test(mu = 0)
-    
+
+    ## difference in opinion change between homogeneous and mixed experimental conditions
     df_empirical %>%
       filter(composition %in% c("H", "M")) %>%
+      mutate(composition = as.factor(composition)) %>%
       wilcox.test(change_t1_t2 ~ composition, data = .)
 
     # empirical mlm for pro_reduction effect to create standardized effects
@@ -70,16 +75,17 @@ analyze_processed_run <- function(df) {
              pro_reduction_z = as.numeric(scale(pro_reduction))
       )
 
-    # empirical model m
+    # empirical model m for beta calculation and comparison with sim data
     empir_model_m <- lmer(
         change_t1_t2_z ~ pro_reduction_z + (1 | id_group_all),
         data = df_emp_m
     )
 
-    # empir cohen with standardized coefficients
+    # Extract empir cohen with standardized coefficients
     empir_cohen <- data.frame(
       term = "pro_reduction",
-      std_estimate = fixef(empir_model_m)[["pro_reduction_z"]]
+      std_estimate = fixef(empir_model_m)[["pro_reduction_z"]],
+      row.names = NULL
     )
 
 
@@ -116,9 +122,10 @@ analyze_processed_run <- function(df) {
   if (config$run_type == "LHS") {
     sensi_lhs <- run_sensi_analysis(df_batch,
                                     param_cols_by_model = param_cols_by_model,
-                                    output_cols = output_cols)
+                                    output_cols = output_cols, num_trees = 500)
     pcc_lhs  <- sensi_lhs$pcc
     prcc_lhs <- sensi_lhs$prcc
+    rf_lhs <- sensi_lhs$rf
     
     # Version split tests: safely run only if multi-version outputs exist
     if (!is.null(lhs_versions)) {
@@ -135,14 +142,16 @@ analyze_processed_run <- function(df) {
       df_lhs_v2 <- lhs_versions %>% filter(version == config$batch$v2$version)
       
       if (nrow(df_lhs_v1) > 0 && !is.null(config$batch$v1$path)) {
-        sensi_v1 <- run_sensi_analysis(df_lhs_v1, param_cols_by_model, output_cols)
+        sensi_v1 <- run_sensi_analysis(df_lhs_v1, param_cols_by_model, output_cols, num_trees = 500)
         pcc_v1   <- sensi_v1$pcc %>% mutate(version = "v1")
         prcc_v1  <- sensi_v1$prcc %>% mutate(version = "v1")
+        rf_v1 <- sensi_v1$rf %>% mutate(version = "v1")
       }
       if (nrow(df_lhs_v2) > 0 && !is.null(config$batch$v2$path)) {
-        sensi_v2 <- run_sensi_analysis(df_lhs_v2, param_cols_by_model, output_cols)
+        sensi_v2 <- run_sensi_analysis(df_lhs_v2, param_cols_by_model, output_cols, num_trees = 500)
         pcc_v2   <- sensi_v2$pcc %>% mutate(version = "v2")
         prcc_v2  <- sensi_v2$prcc %>% mutate(version = "v2")
+        rf_v2 <- sensi_v2$rf %>% mutate(version = "v2")
       }
       
       if (exists("pcc_v1") && exists("pcc_v2"))   pcc_all  <- bind_rows(pcc_v1, pcc_v2)
@@ -164,74 +173,151 @@ analyze_processed_run <- function(df) {
   beta_distance <- NULL
   simulated_betas_raw <- NULL
   
-  if (!is.null(df_ag)) { # H1a and H1b implemented 22/7/26
-
-    # Hypothesis refit (fixing H1 pseudoreplication of df_ag duplicating rows for each agent) 13/7/26
-    # opinion in df_ag_deduped is final simulated opinion / final_attitude is T2 target / initial_opinon is T1 empirical
-    df_ag_deduped <- df_ag %>%
-      distinct(agent_id, .keep_all = TRUE)
+  if (!is.null(df_ag)) { # H1a and H1b implemented 22/7/26 / updated to robust model 24/7/26
 
     # corrected H1 test
     # Nesting individuals (ID) inside debate groups (ID_Group_all) / use with debate_label in deduped data
     # empirical h1 comparison
-    mlm_model_h1a <- lme4::lmer(final_attitude ~ initial_opinion + (1 | debate_label), 
-                     data = df_ag_deduped)
-
-    # MLM H1b test with simulated opinions for T2
-    mlm_model_h1b <- lme4::lmer(opinion ~ initial_opinion + (1 | debate_label), #removed (1 | seed)
-                  data = df_ag_deduped)
-
-    df_ag_ols <- df_ag_deduped %>%
+    ## empirical long format for mlm
+    df_empir_long <- df_ag %>%
+      distinct(agent_id, debate_label, .keep_all = TRUE) %>%
       mutate(
-        ols_pred = predict(mlm_model_h1a, newdata = ., allow.new.levels = TRUE),
-        ols_error = abs(final_attitude - ols_pred)
-      )
+        initial_opinion   = as.numeric(initial_opinion),
+        final_attitude    = as.numeric(final_attitude),
+        current_condition = as.character(current_condition),
+        agent_id          = as.character(agent_id),
+        debate_label      = as.character(debate_label)
+      ) %>%
+      filter(!is.na(initial_opinion), !is.na(final_attitude)) %>%
+      pivot_longer(
+        cols = c(initial_opinion, final_attitude),
+        names_to = "Time",
+        values_to = "Attitude"
+      ) %>%
+      mutate(
+        Time = factor(if_else(Time == "initial_opinion", "T1", "T2"), levels = c("T1", "T2")),
+        Condition = factor(current_condition)
+      ) %>%
+      filter(!is.na(Attitude), !is.na(Condition))
 
-    ols_global_mae <- mean(df_ag_ols$ols_error, na.rm = TRUE)
+    # Model H1a: Empirical trajectory
+    if (nrow(df_empir_long) > 0) {
+      has_multi_debates <- n_distinct(df_empir_long$debate_label, na.rm = TRUE) > 1
     
-    ols_mae_debate <- df_ag_ols %>%
-      group_by(selected_debate_id, debate_label) %>%
-      summarize(ols_mae = mean(ols_error, na.rm = TRUE), .groups = "drop")
-
-    # ABM simulation MAE summary
-    abm_mae_debate <- df_batch %>%
-      group_by(selected_debate_id) %>%  
-      summarize(
-        abm_mae = mean(mae, na.rm = TRUE),
-        debate_label = first(debate_label),  
-        pct_hetero = mean(use_distinct_agents == TRUE, na.rm = TRUE),
-        .groups = "drop"
-      )
-
-    # merge MAE scores for comparison
-    common_ids <- intersect(ols_mae_debate$selected_debate_id, abm_mae_debate$selected_debate_id)
-    
-    if (length(common_ids) > 0) {
-      ols_mae_debate <- ols_mae_debate %>% filter(selected_debate_id %in% common_ids) %>% mutate(selected_debate_id = as.character(selected_debate_id))
-      abm_mae_debate <- abm_mae_debate %>% filter(selected_debate_id %in% common_ids) %>% mutate(selected_debate_id = as.character(selected_debate_id))
-      
-      comparison_clean <- inner_join(abm_mae_debate, ols_mae_debate, by = "selected_debate_id") %>%
-        filter(is.finite(abm_mae), is.finite(ols_mae)) %>%
-        mutate(delta_mae = abm_mae - ols_mae, abm_better = abm_mae < ols_mae)
-      
-      if (nrow(comparison_clean) > 0) {
-        comparison_summary <- comparison_clean %>%
-          summarize(
-            mean_delta = mean(delta_mae),
-            sd_delta = sd(delta_mae),
-            se_delta = sd_delta / sqrt(n()),
-            ci_lower = mean_delta - 1.96 * se_delta,
-            ci_upper = mean_delta + 1.96 * se_delta,
-            pct_abm_better = mean(abm_better, na.rm = TRUE),
-            n = n()
-          )
-        
-        if (nrow(comparison_clean) > 2) {
-          wilcox_abm_ols <- wilcox.test(comparison_clean$abm_mae, comparison_clean$ols_mae, paired = TRUE)
-          t_test_abm_ols  <- t.test(comparison_clean$abm_mae, comparison_clean$ols_mae, paired = TRUE)
-        }
+      if (has_multi_debates) {
+        mlm_model_h1a <- lme4::lmer(
+          Attitude ~ Condition * Time + (1 | agent_id) + (1 | debate_label), 
+          data = df_empir_long
+        )
+      } else {
+        write("singular case, defaulting to basic lmer")
+        mlm_model_h1a <- lme4::lmer(
+          Attitude ~ Condition * Time + (1 | agent_id), 
+          data = df_empir_long
+        )
       }
     }
+
+    # MLM H1b test with simulated opinions for T2
+    ## H1b long data frame
+    df_sim_long <- df_ag %>%
+      mutate(
+        initial_opinion   = as.numeric(initial_opinion),
+        opinion           = as.numeric(opinion),
+        current_condition = as.character(current_condition),
+        agent_id          = as.character(agent_id),
+        debate_label      = as.character(debate_label)
+      ) %>%
+      filter(!is.na(initial_opinion), !is.na(opinion), !is.na(agent_id)) %>%
+      pivot_longer(
+        cols = c(initial_opinion, opinion),
+        names_to = "Time",
+        values_to = "Attitude"
+      ) %>%
+      mutate(
+        Time = factor(if_else(Time == "initial_opinion", "T1", "T2"), levels = c("T1", "T2")),
+        Condition = factor(current_condition)
+      ) %>%
+      filter(!is.na(Attitude), !is.na(Condition))
+
+    # Model H1b: Simulated trajectory
+    if (nrow(df_sim_long) > 0) {
+      has_multi_debates_sim <- n_distinct(df_sim_long$debate_label, na.rm = TRUE) > 1
+    
+      if (has_multi_debates_sim) {
+        mlm_model_h1b <- lme4::lmer(
+          Attitude ~ Condition * Time + (1 | agent_id) + (1 | debate_label), 
+          data = df_sim_long
+        )
+    } else {
+      write("missing columns, defaulting to basic regression")
+      mlm_model_h1b <- lme4::lmer(
+          Attitude ~ Condition * Time + (1 | agent_id), 
+          data = df_sim_long
+      )
+     }
+    }
+
+    # Error Benchmarks (MAE) only deduped here because we want one row of empirical agent data
+    df_ag_deduped <- df_ag %>%
+      distinct(agent_id, selected_debate_id, logged_batch_seed, .keep_all = TRUE)
+
+    if (!is.null(mlm_model_h1a)) {
+        df_t2_preds <- df_empir_long %>%
+          filter(Time == "T2") %>%
+          mutate(ols_pred = predict(mlm_model_h1a, newdata = ., allow.new.levels = TRUE))
+    
+        df_ag_ols <- df_ag_deduped %>%
+          left_join(df_t2_preds %>% select(agent_id, ols_pred), by = "agent_id") %>%
+          mutate(ols_error = abs(final_attitude - ols_pred))
+    
+        ols_global_mae <- mean(df_ag_ols$ols_error, na.rm = TRUE)
+        
+        ols_mae_debate <- df_ag_ols %>%
+          group_by(selected_debate_id, debate_label) %>%
+          summarize(ols_mae = mean(ols_error, na.rm = TRUE), .groups = "drop")
+    
+        # ABM simulation MAE summary
+        abm_mae_debate <- df_batch %>%
+          group_by(selected_debate_id) %>%  
+          summarize(
+            abm_mae = mean(mae, na.rm = TRUE),
+            debate_label = first(debate_label),  
+            pct_hetero = mean(use_distinct_agents == TRUE, na.rm = TRUE),
+            .groups = "drop"
+          )
+    
+        # merge MAE scores for comparison
+        common_ids <- intersect(ols_mae_debate$selected_debate_id, abm_mae_debate$selected_debate_id)
+        
+        if (length(common_ids) > 0) {
+          ols_mae_debate <- ols_mae_debate %>% filter(selected_debate_id %in% common_ids) %>% mutate(selected_debate_id = as.character(selected_debate_id))
+          abm_mae_debate <- abm_mae_debate %>% filter(selected_debate_id %in% common_ids) %>% mutate(selected_debate_id = as.character(selected_debate_id))
+          
+          comparison_clean <- inner_join(abm_mae_debate, ols_mae_debate, by = "selected_debate_id") %>%
+            filter(is.finite(abm_mae), is.finite(ols_mae)) %>%
+            mutate(delta_mae = abm_mae - ols_mae, abm_better = abm_mae < ols_mae)
+          
+          if (nrow(comparison_clean) > 0) {
+            comparison_summary <- comparison_clean %>%
+              summarize(
+                mean_delta = mean(delta_mae),
+                sd_delta = sd(delta_mae),
+                se_delta = sd_delta / sqrt(n()),
+                ci_lower = mean_delta - 1.96 * se_delta,
+                ci_upper = mean_delta + 1.96 * se_delta,
+                pct_abm_better = mean(abm_better, na.rm = TRUE),
+                n = n()
+              )
+            
+            if (nrow(comparison_clean) > 2) {
+              wilcox_abm_ols <- wilcox.test(comparison_clean$abm_mae, comparison_clean$ols_mae, paired = TRUE)
+              t_test_abm_ols  <- t.test(comparison_clean$abm_mae, comparison_clean$ols_mae, paired = TRUE)
+            }
+          }
+        }
+    }
+    
     
     # beta distance check 3/6/26 check distribution of empirical beta compared with simulations
     # comprehensive update with MLM and checks 22/7/26
@@ -240,10 +326,10 @@ analyze_processed_run <- function(df) {
       # ensure empir is treated as a single numeric value
       empirical_beta_scalar <- as.numeric(empir_cohen$std_estimate[1])
       
-      # compute simualted beta distribution per model type and seed / removed no change given that opinion_change is zero
+      # compute simualted beta distribution per model type across pooled runs / removed no change given that opinion_change is zero
       simulated_betas_raw <- df_ag_deduped %>%
         filter(model_type != "no_change") %>%
-        group_by(model_type, selected_debate_id, seed) %>%
+        group_by(model_type, selected_debate_id, logged_batch_seed) %>%
         do({
         dat_sim <- .
 
@@ -271,7 +357,7 @@ analyze_processed_run <- function(df) {
       filter(!is.na(std_estimate)) %>%
       ungroup()
         
-    # safe distance calculation across param sweeps
+    # safe distance Z score calculation across param sweeps
     if (nrow(simulated_betas_raw) > 0 && "std_estimate" %in% colnames(simulated_betas_raw)) {
         beta_distance <- simulated_betas_raw %>%
         group_by(model_type) %>%
@@ -297,7 +383,7 @@ analyze_processed_run <- function(df) {
   # ────────────────────────────────────────────────────────────────────────────
   h_vs_m <- df_batch %>%
     group_by(debate_composition, model_type, speaking_mode, use_distinct_agents) %>%
-    summarize(mae_mean = mean(mae), mae_sd = sd(mae), n = n(), .groups = "drop")
+    summarize(mae_mean = mean(mae, na.rm = TRUE), mae_sd = sd(mae, na.rm = TRUE), n = n(), .groups = "drop")
   
   speaking_compar <- df_batch %>%
     group_by(speaking_mode, debate_composition, model_type, use_distinct_agents) %>%
@@ -308,8 +394,18 @@ analyze_processed_run <- function(df) {
       n = n(),
       .groups = "drop"
     )
-  
-  speakingmode_vs_convergence_wilcox <- wilcox.test(convergence_cycle ~ speaking_mode, data = df_batch)
+
+  # safe wilcoxon evaluation
+  df_speaking_clean <- df_batch %>%
+    filter(!is.na(convergence_cycle), !is.na(speaking_mode)) %>%
+    mutate(speaking_mode = factor(speaking_mode))
+
+  if (n_distinct(df_speaking_clean$speaking_mode) == 2) {
+    speakingmode_vs_convergence_wilcox <- wilcox.test(convergence_cycle ~ speaking_mode, data = df_speaking_clean)
+  } else {
+    message("Skipping wilcox.test: speaking_mode does not have exactly 2 valid levels in complete cases.")
+    speakingmode_vs_convergence_wilcox <- NULL
+  }
   
   convergence_anal <- df_batch %>%
     group_by(model_type, speaking_mode, selected_debate_id) %>%
@@ -362,7 +458,7 @@ analyze_processed_run <- function(df) {
   }
   
   stochasticity_check_1 <- df_batch %>%
-    group_by(model_type, use_distinct_agents, selected_debate_id, seed) %>%
+    group_by(model_type, use_distinct_agents, selected_debate_id, logged_batch_seed) %>%
     summarize(mae_sd = sd(mae), n = n(), .groups = "drop")
   
   heterogeneity_check <- df_batch %>%
@@ -453,7 +549,13 @@ analyze_processed_run <- function(df) {
   if (config$run_type == "LHS") {
     lhs_regions <- param_region_extraction(df_batch, percentile = 0.25)
     gaml_ga <- generate_gaml_bounds(lhs_regions$regions)
-    writeLines(gaml_ga, "gaml_GA_bounds.txt")
+
+    # safe write guard to characters
+    if (!is.null(gaml_ga) && length(gaml_ga) > 0 {
+      writeLines(gaml_ga, "gaml_GA_bounds.txt")
+    } else {
+      message("skipping GAML bounds file export: gaml_ga is empty.")
+    }
     ga_bounds_export <- list(bounds = lhs_regions$regions, range_check = lhs_regions$range_check)
   }
   
@@ -471,8 +573,8 @@ analyze_processed_run <- function(df) {
     results = list(
       sensitivity = list(
         combined = list(pcc = pcc_lhs, prcc = prcc_lhs),
-        v1       = if(!is.null(sensi_v1)) list(pcc = sensi_v1$pcc, prcc = sensi_v1$prcc) else NULL,
-        v2       = if(!is.null(sensi_v2)) list(pcc = sensi_v2$pcc, prcc = sensi_v2$prcc) else NULL
+        v1       = if(!is.null(sensi_v1)) list(pcc = sensi_v1$pcc, prcc = sensi_v1$prcc, rf = sensi_v1$rf) else NULL,
+        v2       = if(!is.null(sensi_v2)) list(pcc = sensi_v2$pcc, prcc = sensi_v2$prcc, rf = sensi_v2$rf) else NULL
       ),
       models = list(conv = run_conv_model(df_conv_debate), 
                     ols = ols_model, # raw pooled individual model 13/7/26

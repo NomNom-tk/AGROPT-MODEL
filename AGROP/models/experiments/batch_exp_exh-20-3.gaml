@@ -12,7 +12,7 @@ import "../main_4-3.gaml" // relative path back to main
 // Consensus non-distinct
 experiment Bt_lhs_cons_ndist type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
 
-    parameter "Convergence Rate" var: convergence_rate among: [0.005, 0.01, 0.02, 0.05, 0.1];
+    parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
 
     method exploration sample: 200 sampling: "latinhypercube";
 
@@ -32,16 +32,16 @@ experiment Bt_lhs_cons_ndist type: batch repeat: 5 keep_seed: true until: (debat
 	explicit_debates_path <- "";
 	end_simulation_at_convergence <- true; // dynamic convergence - "false" is fixed cycles consideration
 	selection_mode <- "filter";
-	composition_scope <- "M";
+	composition_scope <- "ALL";
     }
 }
 
 
 experiment Bt_lhs_cons_dist type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
-    parameter "Convergence Rate" var: convergence_rate among: [0.005, 0.01, 0.02, 0.05, 0.1]; // extended range to cover slow convergence
+    parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1; // extended range to cover slow convergence
     
     // agent-level params
-    parameter "SD Convergence Rate" var: convergence_rate_sd among: [0.0, 0.005, 0.01, 0.02];
+    parameter "SD Convergence Rate" var: convergence_rate_sd min: 0.0 max: 0.02;
     
     method exploration sample: 200 sampling: "latinhypercube";
    
@@ -66,12 +66,12 @@ experiment Bt_lhs_cons_dist type: batch repeat: 5 keep_seed: true until: (debate
 	explicit_debates_path <- "";
 	end_simulation_at_convergence <- true; // dynamic convergence - "false" is fixed cycles consideration
 	selection_mode <- "filter";
-	composition_scope <- "M";
+	composition_scope <- "ALL";
     }
 }
 
 experiment Bt_lhs_cons_ndist_speak type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
-    parameter "Convergence Rate" var: convergence_rate <- 0.005 among: [0.005, 0.01, 0.02, 0.05, 0.1];
+    parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
 
     method exploration sample: 200 sampling: "latinhypercube";
    
@@ -93,15 +93,15 @@ experiment Bt_lhs_cons_ndist_speak type: batch repeat: 5 keep_seed: true until: 
 	explicit_debates_path <- "";
 	end_simulation_at_convergence <- true; // dynamic convergence - "false" is fixed cycles consideration
 	selection_mode <- "filter";
-	composition_scope <- "M";
+	composition_scope <- "ALL";
     }
 }
 
 experiment Bt_lhs_cons_dist_speak type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
-    parameter "Convergence Rate" var: convergence_rate <- 0.005 among: [0.005, 0.01, 0.02, 0.05, 0.1];
+    parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
 
     // agent-level parameters
-    parameter "SD Convergence Rate" var: convergence_rate_sd <- 0.005 among: [0.0, 0.005, 0.01, 0.02];
+    parameter "SD Convergence Rate" var: convergence_rate_sd min: 0.0 max: 0.02;
     
     method exploration sample: 200 sampling: "latinhypercube";
    
@@ -126,14 +126,14 @@ experiment Bt_lhs_cons_dist_speak type: batch repeat: 5 keep_seed: true until: (
 	explicit_debates_path <- "";
 	end_simulation_at_convergence <- true; // dynamic convergence - "false" is fixed cycles consideration
 	selection_mode <- "filter";
-	composition_scope <- "M";
+	composition_scope <- "ALL";
     }
 }
 
 // Batch Clustering (Genetic)
 experiment Bt_lhs_clst_ndist type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
-    parameter "Convergence Rate" var: convergence_rate among: [0.005, 0.01, 0.02, 0.05, 0.1];
-    parameter "Confidence Threshold" var: confidence_threshold among: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6];
+    parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
+    parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.6;
 
     method exploration sample: 200 sampling: "latinhypercube";
 
@@ -154,17 +154,17 @@ experiment Bt_lhs_clst_ndist type: batch repeat: 5 keep_seed: true until: (debat
 	explicit_debates_path <- "";
 	end_simulation_at_convergence <- true; // dynamic convergence - "false" is fixed cycles consideration
 	selection_mode <- "filter";
-	composition_scope <- "M";
+	composition_scope <- "ALL";
     }
 }
 
 experiment Bt_lhs_clst_dist type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
-    parameter "Convergence Rate" var: convergence_rate among: [0.005, 0.01, 0.02, 0.05, 0.1];
-    parameter "Confidence Threshold" var: confidence_threshold among: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6];
+    parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
+    parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.6;
         
     // agent-level parameters
-    parameter "SD Convergence Rate" var: convergence_rate_sd among: [0.0, 0.005, 0.01, 0.02];
-    parameter "SD Confidence Threshold" var: confidence_threshold_sd among: [0.0, 0.005, 0.01, 0.02];
+    parameter "SD Convergence Rate" var: convergence_rate_sd min: 0.0 max: 0.02;
+    parameter "SD Confidence Threshold" var: confidence_threshold_sd min: 0.0 max: 0.02;
 
     method exploration sample: 200 sampling: "latinhypercube";
 
@@ -187,13 +187,13 @@ experiment Bt_lhs_clst_dist type: batch repeat: 5 keep_seed: true until: (debate
 	explicit_debates_path <- "";
 	end_simulation_at_convergence <- true; // dynamic convergence - "false" is fixed cycles consideration
 	selection_mode <- "filter";
-	composition_scope <- "M";
+	composition_scope <- "ALL";
     }
 }
 
 experiment Bt_lhs_clst_ndist_speak type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
-    parameter "Convergence Rate" var: convergence_rate among: [0.005, 0.01, 0.02, 0.05, 0.1];
-    parameter "Confidence Threshold" var: confidence_threshold among: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6];  
+    parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
+    parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.6;  
 
     method exploration sample: 200 sampling: "latinhypercube";
 
@@ -214,17 +214,17 @@ experiment Bt_lhs_clst_ndist_speak type: batch repeat: 5 keep_seed: true until: 
 	explicit_debates_path <- "";
 	end_simulation_at_convergence <- true; // dynamic convergence - "false" is fixed cycles consideration
 	selection_mode <- "filter";
-	composition_scope <- "M";
+	composition_scope <- "ALL";
     }
 }
 
 experiment Bt_lhs_clst_dist_speak type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
-    parameter "Convergence Rate" var: convergence_rate among: [0.005, 0.01, 0.02, 0.05, 0.1];
-    parameter "Confidence Threshold" var: confidence_threshold among: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6];
+    parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
+    parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.6;
        
     // agent-level parameters
-    parameter "SD Convergence Rate" var: convergence_rate_sd among: [0.0, 0.005, 0.01, 0.02];
-    parameter "SD Confidence Threshold" var: confidence_threshold_sd among: [0.0, 0.005, 0.01, 0.02];
+    parameter "SD Convergence Rate" var: convergence_rate_sd min: 0.0 max: 0.02;
+    parameter "SD Confidence Threshold" var: confidence_threshold_sd min: 0.0 max: 0.02;
 
     method exploration sample: 200 sampling: "latinhypercube";
 
@@ -247,17 +247,17 @@ experiment Bt_lhs_clst_dist_speak type: batch repeat: 5 keep_seed: true until: (
 	explicit_debates_path <- "";
 	end_simulation_at_convergence <- true; // dynamic convergence - "false" is fixed cycles consideration
 	selection_mode <- "filter";
-	composition_scope <- "M";
+	composition_scope <- "ALL";
     }
 }
 
 // Batch Bipolarization
 experiment Bt_lhs_bipol_ndist type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
-    parameter "Convergence Rate" var: convergence_rate among: [0.005, 0.01, 0.02, 0.05, 0.1];
+    parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
     // ensuring that repulsion_threshold > confidence_threshold is ALWAYS TRUE
-    parameter "Confidence Threshold" var: confidence_threshold among: [0.1, 0.2, 0.3];
-    parameter "Repulsion Threshold" var: repulsion_threshold among: [0.4, 0.5, 0.6, 0.7];
-    parameter "Repulsion Strength" var: repulsion_strength among: [0.05, 0.1, 0.2];
+    parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.3;
+    parameter "Repulsion Threshold" var: repulsion_threshold min: 0.4 max: 0.7;
+    parameter "Repulsion Strength" var: repulsion_strength min: 0.05 max: 0.2;
 
     method exploration sample: 200 sampling: "latinhypercube";
    
@@ -274,7 +274,7 @@ experiment Bt_lhs_bipol_ndist type: batch repeat: 5 keep_seed: true until: (deba
 	explicit_debates_path <- "";
 	end_simulation_at_convergence <- true; // dynamic convergence - "false" is fixed cycles consideration
 	selection_mode <- "filter";
-	composition_scope <- "M";
+	composition_scope <- "ALL";
         
         if repulsion_threshold <= confidence_threshold {
             write "neutral zone is negative, skipping";
@@ -285,17 +285,17 @@ experiment Bt_lhs_bipol_ndist type: batch repeat: 5 keep_seed: true until: (deba
 }
 
 experiment Bt_lhs_bipol_dist type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
-    parameter "Convergence Rate" var: convergence_rate among: [0.005, 0.01, 0.02, 0.05, 0.1];
+    parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
     // ensuring that repulsion_threshold > confidence_threshold is ALWAYS TRUE
-    parameter "Confidence Threshold" var: confidence_threshold among: [0.1, 0.2, 0.3];
-    parameter "Repulsion Threshold" var: repulsion_threshold among: [0.4, 0.5, 0.6, 0.7];
-    parameter "Repulsion Strength" var: repulsion_strength among: [0.05, 0.1, 0.2];
+    parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.3;
+    parameter "Repulsion Threshold" var: repulsion_threshold min: 0.4 max: 0.7;
+    parameter "Repulsion Strength" var: repulsion_strength min: 0.05 max: 0.2;
     
     // agent-level parameters
-    parameter "SD Convergence Rate" var: convergence_rate_sd among: [0.0, 0.005, 0.01, 0.02];
-    parameter "SD Confidence Threshold" var: confidence_threshold_sd among: [0.0, 0.005, 0.01, 0.02];
-    parameter "SD Repulsion Threshold" var: repulsion_threshold_sd among: [0.0, 0.01, 0.02, 0.03];
-    parameter "SD Repulsion Strength" var: repulsion_strength_sd among: [0.0, 0.005, 0.01, 0.02];
+    parameter "SD Convergence Rate" var: convergence_rate_sd min: 0.0 max: 0.02;
+    parameter "SD Confidence Threshold" var: confidence_threshold_sd min: 0.0 max: 0.02;
+    parameter "SD Repulsion Threshold" var: repulsion_threshold_sd min: 0.0 max: 0.03;
+    parameter "SD Repulsion Strength" var: repulsion_strength_sd min: 0.0 max: 0.02;
 
 
     method exploration sample: 200 sampling: "latinhypercube";
@@ -313,7 +313,7 @@ experiment Bt_lhs_bipol_dist type: batch repeat: 5 keep_seed: true until: (debat
 	explicit_debates_path <- "";
 	end_simulation_at_convergence <- true; // dynamic convergence - "false" is fixed cycles consideration
 	selection_mode <- "filter";
-	composition_scope <- "M";
+	composition_scope <- "ALL";
         
         if repulsion_threshold <= confidence_threshold {
             write "neutral zone is negative, skipping";
@@ -324,11 +324,11 @@ experiment Bt_lhs_bipol_dist type: batch repeat: 5 keep_seed: true until: (debat
 }
 
 experiment Bt_lhs_bipol_ndist_speak type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
-    parameter "Convergence Rate" var: convergence_rate among: [0.005, 0.01, 0.02, 0.05, 0.1];
-    // ensuring that repulsion_threshold > confidence_threshold is ALWAYS TRUE (constraint is set so that confi threshold is never greater than repulsion
-    parameter "Confidence Threshold" var: confidence_threshold among: [0.1, 0.2, 0.3];
-    parameter "Repulsion Threshold" var: repulsion_threshold among: [0.4, 0.5, 0.6, 0.7];
-    parameter "Repulsion Strength" var: repulsion_strength among: [0.05, 0.1, 0.2];
+    parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
+    // ensuring that repulsion_threshold > confidence_threshold is ALWAYS TRUE (constraint is set so that confi threshold is never greater than repulsion)
+    parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.3;
+    parameter "Repulsion Threshold" var: repulsion_threshold min: 0.4 max: 0.7;
+    parameter "Repulsion Strength" var: repulsion_strength min: 0.05 max: 0.2;
     
 
     method exploration sample: 200 sampling: "latinhypercube";
@@ -346,7 +346,7 @@ experiment Bt_lhs_bipol_ndist_speak type: batch repeat: 5 keep_seed: true until:
 	explicit_debates_path <- "";
 	end_simulation_at_convergence <- true; // dynamic convergence - "false" is fixed cycles consideration
 	selection_mode <- "filter";
-	composition_scope <- "M";
+	composition_scope <- "ALL";
 	
 	if repulsion_threshold <= confidence_threshold {
             write "neutral zone is negative, skipping";
@@ -357,17 +357,17 @@ experiment Bt_lhs_bipol_ndist_speak type: batch repeat: 5 keep_seed: true until:
 }
 
 experiment Bt_lhs_bipol_dist_speak type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
-    parameter "Convergence Rate" var: convergence_rate among: [0.005, 0.01, 0.02, 0.05, 0.1];
+    parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
     // ensuring that repulsion_threshold > confidence_threshold is ALWAYS TRUE
-    parameter "Confidence Threshold" var: confidence_threshold among: [0.1, 0.2, 0.3];
-    parameter "Repulsion Threshold" var: repulsion_threshold among: [0.4, 0.5, 0.6, 0.7];
-    parameter "Repulsion Strength" var: repulsion_strength among: [0.05, 0.1, 0.2];
+    parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.3;
+    parameter "Repulsion Threshold" var: repulsion_threshold min: 0.4 max: 0.7;
+    parameter "Repulsion Strength" var: repulsion_strength min: 0.05 max: 0.2;
     
     // agent-level parameters
-    parameter "SD Convergence Rate" var: convergence_rate_sd among: [0.0, 0.005, 0.01, 0.02];
-    parameter "SD Confidence Threshold" var: confidence_threshold_sd among: [0.0, 0.005, 0.01, 0.02];
-    parameter "SD Repulsion Threshold" var: repulsion_threshold_sd among: [0.0, 0.01, 0.02, 0.03];
-    parameter "SD Repulsion Strength" var: repulsion_strength_sd among: [0.0, 0.005, 0.01, 0.02];
+    parameter "SD Convergence Rate" var: convergence_rate_sd min: 0.0 max: 0.02;
+    parameter "SD Confidence Threshold" var: confidence_threshold_sd min: 0.0 max: 0.02;
+    parameter "SD Repulsion Threshold" var: repulsion_threshold_sd min: 0.0 max: 0.03;
+    parameter "SD Repulsion Strength" var: repulsion_strength_sd min: 0.0 max: 0.02;
 
     method exploration sample: 200 sampling: "latinhypercube";
    
@@ -384,7 +384,7 @@ experiment Bt_lhs_bipol_dist_speak type: batch repeat: 5 keep_seed: true until: 
 	explicit_debates_path <- "";
 	end_simulation_at_convergence <- true; // dynamic convergence - "false" is fixed cycles consideration
 	selection_mode <- "filter";
-	composition_scope <- "M";
+	composition_scope <- "ALL";
 	
 	if repulsion_threshold <= confidence_threshold {
             write "neutral zone is negative, skipping";
@@ -397,7 +397,7 @@ experiment Bt_lhs_bipol_dist_speak type: batch repeat: 5 keep_seed: true until: 
 // NO CHANGE EXP
 experiment Bt_lhs_no_change type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
 	
-	method exploration sample: 200 sampling: "latinhypercube";
+	method exploration;
 	
 	init {
 		mode_batch <- true;
@@ -412,7 +412,7 @@ experiment Bt_lhs_no_change type: batch repeat: 5 keep_seed: true until: (debate
 		explicit_debates_path <- "";
 		end_simulation_at_convergence <- true; // dynamic convergence - "false" is fixed cycles consideration
 		selection_mode <- "filter";
-		composition_scope <- "M";
+		composition_scope <- "ALL";
 		
 	}
 }

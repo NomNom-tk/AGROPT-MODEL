@@ -13,7 +13,7 @@ import "../Constants.gaml"
          * - list<string> group_type_list
          * - list<float> initial_attitude_list
          * - list<float> final_attitude_list
-         * - list<int> pro_reduction_list
+         * - list<int> pro_reduction_list (1) Yes - (0) No
          * - list<list<float>> subfactors_t1
          * - list<list<float>> subfactors_t2
          */
@@ -217,7 +217,7 @@ import "../Constants.gaml"
         		list<string> map_keys <- stable_group_map.keys;
         		loop label over: map_keys {   			
     			// guard to skip the all label and add all debates 22/5/26
-    			if composition_scope = "all" {
+    			if composition_scope = "ALL" {
     				m_debate_list << stable_group_map[label];
     			} else {
     				if first(label) = composition_scope {

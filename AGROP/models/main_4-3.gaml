@@ -576,16 +576,23 @@ action save_interaction_log {
 		write "Saving interaction log for debate: " + selected_debate_id + ", size: " + length(interaction_log); 
 	}
 	
-	if !file_exists("outputs/interaction_log.csv") { // if file doesn't exist create headers and save
-    	save "speaking_mode,model_type,current_condition,selected_debate_id," +
-    	"debate_label,current_experiment_id,use_distinct_agents,logged_batch_seed,cycle,sender_id,receiver_id," +
-    	"sender_opinion,opinion_before,opinion_after,delta,agent_is_saturated,agent_wrong_direction, max_cycles" 
-    	to: "outputs/interaction_log.csv" rewrite: false;
-	}
+	// Only save if there is actually data to save
+    if (!empty(interaction_log)) {
+	write("we here interaction log triggers");
+		if !file_exists("outputs/interaction_log.csv") { // if file doesn't exist create headers and save
+		write("file does not exist");
+	    	save "speaking_mode,model_type,current_condition,selected_debate_id," +
+	    	"debate_label,current_experiment_id,use_distinct_agents,logged_batch_seed,cycle,sender_id,receiver_id," +
+	    	"sender_opinion,opinion_before,opinion_after,delta,agent_is_saturated,agent_wrong_direction,max_cycles" 
+	    	to: "outputs/interaction_log.csv" rewrite: false;
+		}
+		write("appending log");
+	    
+	    loop row over: interaction_log {
+	        save row to: "outputs/interaction_log.csv" rewrite: false;
+	    }
     
-    loop row over: interaction_log {
-        save row to: "outputs/interaction_log.csv" rewrite: false;
-    }
+	}
     
     // trial before header insertion problem
     /*list<string> log_with_header <- [header] + interaction_log;
@@ -627,7 +634,7 @@ action save_batch_results {
             repulsion_strength, convergence_rate_sd, confidence_threshold_sd, repulsion_threshold_sd, repulsion_strength_sd, 
             convergence_cycle, initial_variance, mae, opinion_variance, polarization_index, num_clusters, 
             initial_num_clusters, neutral_zone_width, mean_net_repulsion_abs]
-    to: "outputs/batch_summary.csv" rewrite: false;
+    to: "outputs/batch_summary.csv" rewrite: false header: true format: "csv";
     
     if debug_mode = true {
         write "=== Saving Results ===";
@@ -741,7 +748,7 @@ action save_agent_results {
             repulsion_strength,
             convergence_cycle 
         ]
-        to: "outputs/agent_level_results.csv" rewrite: false;
+        to: "outputs/agent_level_results.csv" rewrite: false header: true format: "csv";
     }
     
     if debug_mode = false {

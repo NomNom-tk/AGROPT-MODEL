@@ -184,21 +184,72 @@ anchor_baseline_facets <- function(df, condition_col = "speaking_mode", baseline
   return(df)
 }
 
-# CLEAR prepare_interactions for df_interactions ----
+# # CLEAR prepare_interactions for df_interactions ----
+# prepare_interactions <- function(path) {
+#   read_csv(path, skip = 1) %>% # temp fix using skip lines and no read_clean 7/5/26
+#     mutate(
+#       selected_debate_id = as.character(selected_debate_id),
+#       seed = as.character(seed),
+#       use_distinct_agents = case_when(
+#         use_distinct_agents == "true" ~ TRUE,
+#         use_distinct_agents == "false" ~ FALSE,
+#       ),
+#       agent_is_saturated = as.logical(agent_is_saturated),
+#       agent_wrong_direction = as.logical(agent_wrong_direction)
+#     ) %>%
+#     filter(speaking_mode == TRUE)
+# }
+
+#' Prepare and Clean Interaction Logs updated on 23/7/26
+#' 
+#' Reads interaction-level output CSV files from GAMA simulations, enforces standard
+#' schema types, and filters for active speaking events. Automatically handles 
+#' empty logs (e.g., non-speaking model runs) and missing headers without crashing.
+#' 
+#' @param path String. File path to the interaction log CSV file.
+#' 
+#' @details 
+#' The function performs early-exit checks if the CSV file contains zero data rows 
+#' (common when evaluating models without speech/dialogue mechanics). It coerces 
+#' \code{selected_debate_id} and \code{seed} to character vectors, standardizes 
+#' boolean flags, and conditionally filters for \code{speaking_mode == TRUE} if 
+#' the column is present.
+#' 
+#' @return A cleaned \code{tbl_df} (tibble) with validated column types and 
+#'   filtered interaction records. Returns an empty (0-row) data frame with its 
+#'   original structure if no interactions are present in the input file.
+#' 
+#' @export
 prepare_interactions <- function(path) {
-  read_csv(path, skip = 1) %>% # temp fix using skip lines and no read_clean 7/5/26
+  
+  df <- read_csv(path, show_col_types = FALSE) # removed path due to deletion of first commented header 24/7/26
+  
+  # Guard: Return early if file is empty (e.g., non-speaking model run)
+  if (nrow(df) == 0) {
+    message("Notice: Interaction log at '", path, "' contains 0 rows. Skipping.")
+    return(df)
+  }
+  
+  df <- df %>%
     mutate(
-      selected_debate_id = as.character(selected_debate_id),
-      seed = as.character(seed),
-      use_distinct_agents = case_when(
+      selected_debate_id    = as.character(selected_debate_id),
+      seed                  = as.character(logged_batch_seed),
+      use_distinct_agents   = case_when(
         use_distinct_agents == "true" ~ TRUE,
         use_distinct_agents == "false" ~ FALSE,
       ),
-      agent_is_saturated = as.logical(agent_is_saturated),
-      agent_wrong_direction = as.logical(agent_wrong_direction)
+      agent_is_saturated    = as.logical(as.character(agent_is_saturated)),
+      agent_wrong_direction = as.logical(as.character(agent_wrong_direction))
     ) %>%
     filter(speaking_mode == TRUE)
+  
+  if ("speaking_mode" %in% colnames(df)) {
+    df <- df %>% filter(as.logical(as.character(speaking_mode)) == TRUE)
+  }
+  
+  return(df)
 }
+
 # TODO compute_influence_scores 27/4/26 ----
 compute_influence_scores <- function(df) { # use with df_interactions, establish broadcasts and influence
   df %>%
@@ -209,8 +260,32 @@ compute_influence_scores <- function(df) { # use with df_interactions, establish
       .groups = "drop"
     )
 }
-# TODO compute_susceptibility_scores 27/4/26 ----
+
+#' Compute Receiver Susceptibility Scores 27/4/26 (updated 23/7/26 to include guard for the first row)
+#' 
+#' Aggregates interaction-level dialogue data to compute mean susceptibility 
+#' metrics per agent across debate conditions. Calculates total exposure counts, 
+#' average shift magnitudes (\code{delta}), and saturation rates.
+#' 
+#' @param df Data frame or tibble. The cleaned interaction data log (typically 
+#'   produced by \code{prepare_interactions}).
+#' 
+#' @details 
+#' Includes an early-exit check for empty data sets (\code{nrow(df) == 0}) to prevent 
+#' non-numeric evaluation errors on \code{abs(delta)} when processing baseline 
+#' or non-speaking model runs.
+#' 
+#' @return A summarized \code{tbl_df} with receiver-level susceptibility metrics, 
+#'   or \code{NULL} if the input data frame contains zero observations.
+#' 
+#' @export
 compute_susceptibility_scores <- function(df) { # use with df_interactions
+  # return early if dataframe is empty
+  if (is.null(df) || nrow(df) == 0) {
+    message("Notice: Empty dataset passed to compute_susceptibility_scores() Returning NULL.")
+    return(NULL)
+  }
+    
   df %>%
     group_by(model_type, current_condition, selected_debate_id, receiver_id, pro_reduction) %>%
     summarize(
@@ -357,8 +432,8 @@ apply_batch_mutations <- function(df) {
   if ("selected_debate_id" %in% colnames(df)) {
     df <- df %>% mutate(selected_debate_id = as.character(selected_debate_id))
   }
-  if ("seed" %in% colnames(df)) {
-    df <- df %>% mutate(seed = as.character(seed))
+  if ("logged_batch_seed" %in% colnames(df)) {
+    df <- df %>% mutate(seed = as.character(logged_batch_seed))
   }
   if ("agent_wrong_direction" %in% colnames(df)) {
     df <- df %>%
@@ -392,10 +467,10 @@ apply_batch_mutations <- function(df) {
   
 }
 
-#' Compute PCC and PRCC Sensitivity Indices per Model/Agent-Type Combination
+#' Compute PCC/PRCC/RF Sensitivity Indices per Model/Agent-Type Combination
 #'
 #' Runs Partial Correlation Coefficient (PCC) and Partial Rank Correlation
-#' Coefficient (PRCC) sensitivity analysis (via \code{sensitivity::pcc()})
+#' Coefficient (PRCC) and Random Forest (RF) sensitivity analysis (via \code{sensitivity::pcc()})
 #' separately for each combination of \code{model_type} and
 #' \code{use_distinct_agents}, against each output variable in
 #' \code{output_cols}. Excludes \code{model_type == "no_change"}.
@@ -409,12 +484,17 @@ apply_batch_mutations <- function(df) {
 #'   model/agent-type combination.
 #' @param output_cols Character vector of output variable column names to
 #'   test sensitivity against (e.g. \code{c("mae", "convergence_cycle")}).
+#' @param num_trees Integer. the number of decision trees to grow in each ensemble before averaging their predictions
+#'   higher number: yields more stable and reproducible feature importance scores,
+#'   and Rsquared estimates but increases computation time linearly
+#'   lower number: faster execution for rapid testing but importance rankings have more noise
 #'
-#' @return A named list with two elements:
+#' @return A named list with three elements:
 #'   \describe{
-#'     \item{pcc}{Dataframe with columns \code{key}, \code{model_type},
+#'     \item{pcc}{Linear sensitivity results. Dataframe with columns \code{key}, \code{model_type},
 #'       \code{use_distinct_agents}, \code{output}, \code{parameter}, \code{PCC}.}
-#'     \item{prcc}{Same structure with \code{PRCC} instead of \code{PCC}.}
+#'     \item{prcc}{Monotonic Sensitivity results (spearman rank). Same structure with \code{PRCC} instead of \code{PCC}.}
+#'     \item{rf}{Non-Linear/interaction importance scores and out-of-bag Rsquared values}
 #'   }
 #'
 #' @details
@@ -430,6 +510,15 @@ apply_batch_mutations <- function(df) {
 #'   outputs missing from \code{df_piece}; outputs with zero variance
 #'   (constant values), since PCC requires variance in both X and Y.
 #'
+#'   Random forest permutation importance is computed across single and multi-parameter cases
+#'   using \code{ranger::ranger()}, returns out-of-bag feature importance and overall
+#'   variance explained (\eqn{R^2}).
+#'
+#'   Skips (via \code{next}: keys not found in \code{param_cols_by_model};
+#'   param sets that don't intersect with \code{df_piece} columns;
+#'   outputs missing from \code{df_piece}; outputs with zero variance (constant value)
+#'   since correlation requires variance in both X and Y.
+#'
 #' @section Side effects:
 #'   Prints debug output to console: current key, available
 #'   \code{param_cols_by_model} names, selected \code{param_cols}, and
@@ -438,7 +527,7 @@ apply_batch_mutations <- function(df) {
 #' @seealso \code{plot_pcc_heatmap()}, \code{plot_prcc_heatmap()} for
 #'   visualizing the returned dataframes. \code{PCC} column name confirmed
 #'   here as \code{"original"} extracted from \code{sensitivity::pcc()}.
-run_sensi_analysis <- function(df, param_cols_by_model, output_cols) {
+run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees = 500) {
   
   sensi_split <- df %>%
     filter(model_type != "no_change") %>%
@@ -448,6 +537,7 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols) {
   # Initialize storage
   pcc_results <- list()  # store results per key-output combination
   prcc_results <- list() # storage for prcc (pcc with rank)
+  rf_results <- list() # storage of rf results
   
   # Loop over each piece in the sensi_split
   for (df_piece in sensi_split) {
@@ -465,6 +555,7 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols) {
     param_cols <- param_cols_by_model[[key]]       # lookup mapping
     if (is.null(param_cols)) next                 # skip if key not found
     param_cols <- intersect(param_cols, colnames(df_piece))  # restrict param_cols to only columns existing in this df_piece
+    
     # guard againts mismatches between lookup list and actual data columns
     # sensi split comes from df_batch (should have all columns, but just to be safe add the guard)
     if (length(param_cols) == 0) next             # skip if no valid columns remain
@@ -492,12 +583,16 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols) {
       # skip outputs with constant values (PCC won't work) - requires variance in both X and Y
       ## zero variance causes division by zero in correlation calc
       if (length(unique(y)) < 2) next
+
+      # RF Combined data frame creation
+      rf_data <- cbind(X, target_y = y)
+      rf_data <- rf_data[complete.cases(rf_data), , drop = FALSE]
       
-      # PCC Handle single-parameter case
+      # Handle single-parameter case
       if (ncol(X) == 1) { # if the number of columns in input X is equal to 1
         # PCC reduces to simple correlation
-        pcc_values <- cor(X[[1]], y)
-        prcc_values <- cor(X[[1]], y)
+        pcc_values <- cor(X[[1]], y, use = "complete.obs") # linear Pearson
+        prcc_values <- cor(X[[1]], y, use = "complete.obs", method = "spearman") # Spearman (rank/monotonic)
         
         pcc_results[[paste(key, output, sep="_")]] <- data.frame( # modified data frame output to match multi param case
           key = key,
@@ -516,9 +611,8 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols) {
           parameter = colnames(X),
           PRCC = prcc_values
         )
-        next
         
-      }
+      } else {
       
       # Compute PCC for multiple parameters partial pearson
       pcc_res <- pcc(X, y) # Partial Pearson correlation coefficients using X (param cols input), and y column names converted to numeric
@@ -553,18 +647,46 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols) {
         PCC = pcc_values
       )
       
-    }  # end output loop
-  }
+    }  # end PCC/PRCC if/else
+
+  # RF implementation
+  if (nrow(rf_data) >= 10) {
+
+    rf_fit <- ranger::ranger(
+      formula = target_y ~ .,
+      data = rf_data,
+      importance = "permutation",
+      num.trees = num_trees,
+      seed = 42
+    )
+
+    imp_scores <- rf_fit$variable.importance
+
+    rf_results[[paste(key, output, sep = "_")]] <- data.frame(
+      key = rep(key, length(imp_scores)),
+      model_type = rep(model_type_val, length(imp_scores)),
+      use_distinct_agents = rep(distinct_val, length(imp_scores)),
+      output = rep(output, length(imp_scores)),
+      parameter = names(imp_scores),
+      importance = as.numeric(imp_scores),
+      r_squared = rep(rf_fit$r.squared, length(imp_scores))
+    )  
+   }    
+  } # end output loop
+ } # end df_piece loop
   
   # results bind
   
   prcc_results_df <- bind_rows(prcc_results)
   pcc_results_df <- bind_rows(pcc_results)
+  rf_results_df <- bind_rows(rf_results)
 
   #return list
   return(list(
     pcc = pcc_results_df,
-    prcc = prcc_results_df))
+    prcc = prcc_results_df,
+    rf = rf_results_df
+    ))
 }
 
 
@@ -612,7 +734,7 @@ fit_lm <- function(df, param_cols, output_cols, standardize = FALSE) {
   return(lm_results_df)
 }
                   
-#' Generate GAML Parameter Bound Declarations from Top-Performing Configs
+#' Generate GAML Parameter Bound Declarations from Top-Performing Configs 24/7/26 (update to incorporate guards and initialize as characters)
 #'
 #' Translates a dataframe of best-performing parameter ranges (one row per
 #' model_type / use_distinct_agents combination) into GAML \code{parameter}
@@ -655,6 +777,12 @@ fit_lm <- function(df, param_cols, output_cols, standardize = FALSE) {
 #'   for the upstream construction of \code{df} and downstream usage of
 #'   the returned GAML lines.
 generate_gaml_bounds <- function(df, buffer = 0.05) {
+
+  # guard agianst null/empty dataframe
+  if (is.null(df) || nrow(df) == 0) {
+    warning("Input df to generate_gaml_bounds is empty. Returning empty comment line.")
+    return("// WARNING: No valid parameter regions found in upstream LHS evaluation.")
+  }
   
   # Helper function: expands zero-width ranges
   expand_range <- function(min_val, max_val, buffer) {
@@ -667,7 +795,7 @@ generate_gaml_bounds <- function(df, buffer = 0.05) {
     return(c(min_val, max_val))
   }
   
-  output_lines <- c()
+  output_lines <- character(0) # explicit character type initialization
   
   for (i in seq_len(nrow(df))) {
     row <- df[i, ]
@@ -836,9 +964,15 @@ param_region_extraction <- function(df, percentile = 0.25,
   
   # remove model_type problem row and bipol)constraints
   df <- df %>%
-    filter(model_type != "model_type",
-               !(model_type == "bipolarization" & neutral_zone_width < 0),
-           model_type != "no_change")
+    filter(
+      # exclude missing or bad header rows 24/7/26
+      !is.na(model_type( && model_type != "model_type" & model_type != "no_change",
+
+      # handle bipolarization constraints safely
+      # keeps non bipol models intact and enforces positive width for bipolarization in case it is not the case
+      ifelse(model_type == "bipolarization",
+             !is.na(neutral_zone_width) & neutral_zone_width >= 0,
+             TRUE)
   
   # group specific threhsold and filter
   df <- df %>%
@@ -1005,53 +1139,69 @@ summarize_directional <- function(df) {
     )
 }
 
-#' Summarize Direcitonal Accuracy, Valence split 1/7/26
+#' Summarize Direcitonal Accuracy, Valence split 
+#' Summarize Directional Accuracy by Valence Split 1/7/26
 #' 
-#' Extension of summarize_directional() with pro_reduction split
-#' produces per-debate, per-model, per-condition, per-valence directional accuracy and signed error metrics
+#' Extension of summarize_directional() with a pro_reduction split./ update 23/7 to take into account homogeneous debates where all agents are pro_reduciton == 0
+#' removes pro_signed error as it is irrelevant
+#' Computes per-debate, per-model, per-condition, and per-valence directional
+#' accuracy and signed error metrics across both heterogeneous and homogeneous debates.
 #' 
-#' @param df Agent-level dataframe (df_directional_agents) containing
-#' model_type, current_condition, selected_debate_id, pro_reduction, correct_dir, agent_wrong_direction, opinion,
-#' final_attitude, initial_opinion
+#' @param df Agent-level dataframe (e.g., df_directional_agents) containing:
+#'   \code{model_type}, \code{current_condition}, \code{selected_debate_id},
+#'   \code{pro_reduction}, \code{correct_dir}, \code{agent_wrong_direction},
+#'   \code{opinion}, \code{final_attitude}, and \code{initial_opinion}.
 #'
-#' @return one row per model x current_condition x selected_debate_id x pro_reduction
-#' with pct_correct_dir, pct_wrong_dir, mean_signed_error, mean_mae, mean_baseline_mae, n.
+#' @return A summarized data frame in long format with one row per 
+#'   \code{model_type} x \code{current_condition} x \code{selected_debate_id} x \code{pro_reduction}.
+#'   Columns include \code{pct_correct_dir}, \code{pct_wrong_dir}, 
+#'   \code{mean_signed_error}, \code{mean_mae}, \code{mean_baseline_mae}, and \code{n}.
 summarize_directional_valence <- function(df) {
-    df %>%
-      group_by(model_type, current_condition, selected_debate_id, pro_reduction) %>%
-      summarize(
-          pct_correct_dir = mean(correct_dir), # pct of agents who's simulated change is in the same direction as empirical (accuracy of directional change prediction)
-          pct_wrong_dir = mean(agent_wrong_direction),
-          mean_signed_error = mean(opinion - final_attitude),
-          pro_signed_error = mean(opinion[pro_reduction==1] - final_attitude[pro_reduction==1]), # avg signed bias (over or under-prediction)
-          mean_mae = mean(abs(opinion - final_attitude)),
-          mean_baseline_mae = mean(abs(initial_opinion - final_attitude)),
-          n = n(),
-          .groups = "drop"
-      )
+  df %>%
+    mutate(pro_reduction = as.integer(as.character(pro_reduction))) %>% 
+    group_by(model_type, current_condition, selected_debate_id, pro_reduction) %>%
+    summarize(
+      pct_correct_dir   = mean(correct_dir, na.rm = TRUE), 
+      pct_wrong_dir     = mean(agent_wrong_direction, na.rm = TRUE),
+      mean_signed_error = mean(opinion - final_attitude, na.rm = TRUE),
+      mean_mae          = mean(abs(opinion - final_attitude), na.rm = TRUE),
+      mean_baseline_mae = mean(abs(initial_opinion - final_attitude), na.rm = TRUE),
+      n                 = n(),
+      .groups           = "drop"
+    )
 }
 
-#' Compute Valence Asymmetry 1/7/26
+#' Compute Valence Asymmetry Across Debates 1/7/26 (update 23/7/26 to be comprehensive for homogeneous debates as well)
 #' 
-#' Takes output of summarize_directional_valence() and pivots wide for computation of accuracy and error asymmetry
-#' i.e. the 
+#' Takes the output of \code{summarize_directional_valence()} and pivots it wide 
+#' to compute accuracy and error asymmetry between pro (1) and anti (0) groups.
+#' Accommodates both heterogeneous and homogeneous debates; single-valence 
+#' (homogeneous) debates produce \code{NA} for asymmetry metrics.
 #' 
-#' @param df Aggregated agent-level dataframe (df_directional_valence) with:
-#' model_type, current_condition, selected_debate_id, pro_reduction, 
-#' pct_correct_dir, pct_wrong_dir, mean_signed_error, mean_mae, mean_baseline_mae, n
+#' @param df Aggregated agent-level dataframe from \code{summarize_directional_valence()} 
+#'   containing: \code{model_type}, \code{current_condition}, \code{selected_debate_id}, 
+#'   \code{pro_reduction}, \code{pct_correct_dir}, \code{pct_wrong_dir}, 
+#'   \code{mean_signed_error}, \code{mean_mae}, \code{mean_baseline_mae}, and \code{n}.
 #' 
-#' @return a dataframe in wide format with one row per debate x model x pro_reduction
-#' separate columns for TRUE/FALSE
+#' @return A dataframe in wide format with one row per debate x model x condition. 
+#'   Contains separate columns for pro (\code{_1}) and anti (\code{_0}) metrics, 
+#'   alongside derived asymmetry columns (\code{accuracy_asymmetry}, \code{error_asymmetry}).
 compute_valence_asymmetry <- function(df) {
-    df %>%
+  if (is.null(df) || nrow(df) == 0) return(NULL)
+    
+  df %>%
+    mutate(pro_reduction = factor(as.character(pro_reduction), levels = c("0", "1"))) %>%
     select(model_type, current_condition, selected_debate_id, pro_reduction,
-          pct_correct_dir, mean_signed_error, mean_mae) %>%
+           pct_correct_dir, mean_signed_error, mean_mae) %>%
     pivot_wider(
-        names_from = pro_reduction,
-        values_from = c(pct_correct_dir, mean_signed_error, mean_mae)) %>%
+      names_from   = pro_reduction,
+      values_from  = c(pct_correct_dir, mean_signed_error, mean_mae),
+      names_expand = TRUE
+    ) %>%
     mutate(
-        accuracy_asymmetry = pct_correct_dir_1 - pct_correct_dir_0, # 1 (TRUE), 0 (FALSE)
-        error_asymmetry = mean_signed_error_1 - mean_signed_error_0)
+      accuracy_asymmetry = pct_correct_dir_1 - pct_correct_dir_0, 
+      error_asymmetry    = mean_signed_error_1 - mean_signed_error_0
+    )
 }
         
 
@@ -1117,8 +1267,17 @@ compute_valence_asymmetry <- function(df) {
 #' @seealso \code{enrich_graph_vertices()}, \code{filter_top_nodes()},
 #'   \code{filter_edges()} for post-processing the returned \code{graphs}.
 build_influence_network <- function(df, df_attributes) { # use with lhs_interactions
+  if (is.null(df) || nrow(df) == 0) {
+    message("INput dataframe df is empty or NULL. Skipping Network build")
+    return(NULL)
+  }
+    
   # prepare edge list
   edges <- df %>%
+    mutate(sender_id = as.character(sender_id),
+           receiver_id = as.character(receiver_id),
+           delta = as.numeric(as.character(delta))) %>%
+    filter(!is.na(sender_id), !is.na(receiver_id), !is.na(delta)) %>%
     group_by(sender_id, receiver_id, selected_debate_id, model_type) %>%
     summarize(
       edge_weight = mean(abs(delta)),
@@ -1164,6 +1323,10 @@ build_influence_network <- function(df, df_attributes) { # use with lhs_interact
   
   # aggregate networks per condition
   debate_edges <- df %>%
+    mutate(sender_id = as.character(sender_id),
+           receiver_id = as.character(receiver_id),
+           delta = as.numeric(as.character(delta))) %>%
+    filter(!is.na(sender_id), !is.na(receiver_id), !is.na(delta)) %>%
     mutate(sender_id = paste(selected_debate_id, sender_id, sep = "_"),
            receiver_id = paste(selected_debate_id, receiver_id, sep = "_")) %>%
     group_by(sender_id, receiver_id, current_condition, model_type, selected_debate_id) %>%

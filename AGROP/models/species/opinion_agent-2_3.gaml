@@ -242,7 +242,7 @@ species no_change_agent parent: opinion_agent {
         interaction_log << string(speaking_mode) + "," + string(model_type) + "," + 
             string(current_condition) + "," + string(debate_id) + "," + 
             string(debate_label) + "," + string(current_experiment_id) + "," + 
-            string(use_distinct_agents) + "," + string(seed) + "," +
+            string(use_distinct_agents) + "," + string(logged_batch_seed) + "," +
             string(cycle) + "," + string(sender.agent_id) + "," + string(agent_id) + "," +
             string(speaker_opinion) + "," + string(opinion_before) + "," +
             string(opinion) + "," + string(opinion - opinion_before) + "," +
@@ -297,7 +297,7 @@ species consensus_agent parent: opinion_agent {
             interaction_log << string(speaking_mode) + "," + string(model_type) + "," + 
                 string(current_condition) + "," + string(debate_id) + "," + 
                 string(debate_label) + "," + string(current_experiment_id) + "," + 
-                string(use_distinct_agents) + "," + string(seed) + "," +
+                string(use_distinct_agents) + "," + string(logged_batch_seed) + "," +
                 string(cycle) + "," + string(sender.agent_id) + "," + string(agent_id) + "," +
                 string(speaker_opinion) + "," + string(opinion_before) + "," +
                 string(opinion) + "," + string(opinion - opinion_before) + "," +
@@ -355,7 +355,7 @@ species clustering_agent parent: opinion_agent {
                 interaction_log << string(speaking_mode) + "," + string(model_type) + "," + 
                     string(current_condition) + "," + string(debate_id) + "," + 
                     string(debate_label) + "," + string(current_experiment_id) + "," + 
-                    string(use_distinct_agents) + "," + string(seed) + "," +
+                    string(use_distinct_agents) + "," + string(logged_batch_seed) + "," +
                     string(cycle) + "," + string(sender.agent_id) + "," + string(agent_id) + "," +
                     string(speaker_opinion) + "," + string(opinion_before) + "," +
                     string(opinion) + "," + string(opinion - opinion_before) + "," +
@@ -476,7 +476,7 @@ species bipolarization_agent parent: opinion_agent {
             interaction_log << string(speaking_mode) + "," + string(model_type) + "," + 
                 string(current_condition) + "," + string(debate_id) + "," + 
                 string(debate_label) + "," + string(current_experiment_id) + "," + 
-                string(use_distinct_agents) + "," + string(seed) + "," +
+                string(use_distinct_agents) + "," + string(logged_batch_seed) + "," +
                 string(cycle) + "," + string(sender.agent_id) + "," + string(agent_id) + "," +
                 string(speaker_opinion) + "," + string(opinion_before) + "," +
                 string(opinion) + "," + string(opinion - opinion_before) + "," +

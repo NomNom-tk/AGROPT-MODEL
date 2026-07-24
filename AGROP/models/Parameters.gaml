@@ -73,7 +73,7 @@ global {
     bool final_stats_computed <- false;     // Guard for final statistics
     string current_experiment_id <- "";		// type of experiment for each batch 
     string selection_mode <- "filter" among: ["filter", "explicit"]; // run debates based on xml or composition_scope 21/5/26
-    string composition_scope <- "M" among: ["H", "M", "ALL"]; // filtering debate mapping, hetero, homo or all debates 21/5/26
+    string composition_scope <- "ALL" among: ["H", "M", "ALL"]; // filtering debate mapping, hetero, homo or all debates 21/5/26
     string explicit_debates_path <- ""; // empty path to be populated in experiments for external debates list 21/5/26
     int debate_counter <- 0; // incremental counter for debates and repeated init 22/5/26
 

@@ -4,7 +4,6 @@
 source("./functions.R")
 
 # package imports
-library(tidyverse)
 library(rvg)
 library(broom)
 library(officer)
@@ -22,6 +21,8 @@ library(ComplexUpset)
 library(lme4)
 library(lmerTest)
 library(performance)
+library(ranger)
+library(tidyverse)
 
 # run config declarations
 ## TODO 1/6/26, consider refactoring to different layers, makes run_type agnostic of the rest
@@ -34,7 +35,7 @@ ga <- list()
 # 2. BUILD THE LHS CONFIGURATION
 # ==========================================
 lhs$run_type          <- "LHS"
-lhs$composition_scope <- "M"
+lhs$composition_scope <- "ALL"
 lhs$version_scope     <- "v1"
 
 lhs$batch$v1$path     <- "./data/lhs_batch_summary.csv"
@@ -214,6 +215,7 @@ process_run <- function(config) {
   if (config$version_scope == "v2" && !is.null(config$interaction$v2$path)) {
     target_int_path = config$interaction$v2$path
   } else {
+    message("INTREACTION NOTICE: path exists and we testing interaciton loading")
     target_int_path = config$interaction$v1$path
   }
   
@@ -225,23 +227,29 @@ process_run <- function(config) {
   # guard to execute if file exists
   if (!is.null(target_int_path) && file.exists(target_int_path)) {
     df_interactions <- prepare_interactions(target_int_path)
-    
-    if (!is.null(df_ag)) {
-      
-      # 1. standardize RHS join table columns
-      df_ag_clean <- df_ag %>%
-        select(agent_id, pro_reduction) %>%
-        distinct() %>%
-        mutate(agent_id = as.character(agent_id))
-      
-      # 2. standardize LHS join table and execute safe merge
-      df_interactions <- df_interactions %>%
-        mutate(receiver_id = as.character(receiver_id)) %>%
-        left_join(df_ag_clean, by = c("receiver_id" = "agent_id")) %>%
-        filter(!is.na(pro_reduction)) # 11/6/26 filter out rows where pro_reduc is not matched by receiver_id
-    }
-    df_susceptibility = compute_susceptibility_scores(df_interactions)
-    df_influence = compute_influence_scores(df_interactions)
+
+      # guard 2 execute join and summary metric only if data rows exist
+      if (!is.null(df_interactions) && nrow(df_interactions) > 0) {
+          
+            if (!is.null(df_ag)) {
+              
+              # 1. standardize RHS join table columns
+              df_ag_clean <- df_ag %>%
+                select(agent_id, pro_reduction) %>%
+                distinct() %>%
+                mutate(agent_id = as.character(agent_id))
+              
+              # 2. standardize LHS join table and execute safe merge
+              df_interactions <- df_interactions %>%
+                mutate(receiver_id = as.character(receiver_id)) %>%
+                left_join(df_ag_clean, by = c("receiver_id" = "agent_id")) %>%
+                filter(!is.na(pro_reduction)) # 11/6/26 filter out rows where pro_reduc is not matched by receiver_id
+            }
+            df_susceptibility = compute_susceptibility_scores(df_interactions)
+            df_influence = compute_influence_scores(df_interactions)
+      } else {
+        message("Notice: Interaction file exists but contains 0 data rows. Skipping susceptibility and influence metrics.")
+      }
   }
 
   # # EMPIRICAL
@@ -278,19 +286,42 @@ process_run <- function(config) {
 
   if (!is.null(df_sum_directional_valence)) {
   df_upset <- df_sum_directional_valence %>% # added 6/7/26 for upset plots
-        group_by(selected_debate_id, model_type) %>%
-        summarize(pct_correct_dir = mean(pct_correct_dir), .groups = "drop") %>%
-        pivot_wider(names_from = model_type, values_from = pct_correct_dir) %>%
-        mutate(
-            bipol_correct = bipolarization > 0.5,
-            clust_correct = clustering > 0.5,
-            cons_correct = consensus > 0.5) %>%
-        left_join(
-            df_valence %>% select(selected_debate_id, accuracy_asymmetry, error_asymmetry),
-            by = "selected_debate_id") %>%
-        mutate(
-            pro_biased = accuracy_asymmetry > 0,
-            anti_biased = accuracy_asymmetry < 0)
+      group_by(selected_debate_id, model_type) %>%
+      summarize(pct_correct_dir = mean(pct_correct_dir), .groups = "drop") %>%
+      pivot_wider(names_from = model_type, values_from = pct_correct_dir)
+
+  # guard ensuring expected target columns exist as numeric vectors if missing from df
+  for (col in c("bipolarization", "consensus", "clustering")) {
+    if (!col %in% colnames(df_upset)) {
+      df_upset[[col]] <- NA_real_
+    }
+  }
+     
+  df_upset <- df_upset %>%
+    mutate(
+        bipol_correct = bipolarization > 0.5,
+        clust_correct = clustering > 0.5,
+        cons_correct = consensus > 0.5) 
+      
+  #guard to safely join df_valence only if it exists and is non empty
+  if (!is.null(df_valence) && nrow(df_valence) > 0) {
+    df_upset <- df_upset %>%
+    left_join(
+        df_valence %>% select(selected_debate_id, accuracy_asymmetry, error_asymmetry),
+        by = "selected_debate_id") 
+  } else {
+    df_upset <- df_upset %>%
+      mutate(
+        accuracy_asymmetry = NA_real_,
+        error_asymmetry = NA_real_
+      )
+  }
+
+  # compute bias flags safely
+  df_upset <- df_upset %>%
+    mutate(
+        pro_biased = accuracy_asymmetry > 0,
+        anti_biased = accuracy_asymmetry < 0)
   }
     
   # RETURN LIST with consistent slot names regardless of run_type

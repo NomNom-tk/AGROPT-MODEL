@@ -2,12 +2,34 @@
 # TO INCLUDE: prepare_sensitivity_data / add_to_ppt / pivot_params
 
 
-# CLEAR read_clean to clean colnames before all else 7/5/26 ----
+# CLEAR read_clean to clean colnames before all else 7/5/26 (update 27/7/26 strip stray chars from headers) ----
 read_clean <- function(path) {
-  read_csv(path) %>% clean_names() %>%
+
+  # generate equivalent parquet path
+  parquet_path <- sub("\\.csv$", ".parquet", path)
+
+  # check if parquet path exists and if not slow path read clean
+  if (file.exists(parquet_path) && grepl("\\.csv$", path, ignore.case = TRUE)) {
+    return(read_parquet(parquet_path))
+  }
+    
+  df <- read_csv(path, show_col_types = FALSE) 
+    
+  # strip stray quotes, parentehses, and spaces from column headers  
+  names(df) <- gsub("['() ]", "", names(df)) 
+    
+  df <- df %>% 
+    clean_names() %>%
     mutate(across(where(~ all(grepl("^-?[0-9,\\.]+([Ee][+-]?[0-9]+)?$", 
                                     na.omit(as.character(.))))), 
                   ~ as.numeric(gsub(",", ".", trimws(.)))))
+  
+  # cache clean dataframe as parquet for future runs
+  if (grepl("\\.csv$", path, ignore.case = TRUE)) {
+    write_parquet(df, parquet_path, compression = "snappy")
+  }
+    
+  return(df)
 }
 # TODO and CHECK append_metadata 28/5/26 ----
 ## purpose: provenance travels with dfs, provides objects to call in analysis files and in rmd
@@ -23,7 +45,7 @@ append_metadata <- function(df, config, version = NA) {
 ## purpose: centralizes filtering logic, removes duplicate code
 ## update 2/6/26, dynamic column detection and stop condition
 apply_composition_filter <- function(df, config) {
-  if (is.null(config$composition_scope) || config$composition_scope == "all") {
+  if (is.null(df) || nrow(df) == 0 || is.null(config$composition_scope) || tolower(trimws(config$composition_scope)) == "all") {
     return(df)
   }
   
@@ -40,11 +62,11 @@ apply_composition_filter <- function(df, config) {
   }
   
   df <- df %>%
-    filter(str_starts(.data[[target_col]], config$composition_scope))
+    filter(str_starts(tolower(trimws(.data[[target_col]])), tolower(trimws(config$composition_scope))))
   
   return(df)
 }
-# TODO empirical_prep ----
+# TODO empirical_prep 27/7/26 (checked var names to match read_clean formatting) ----
 empirical_prep <- function(path) {
   read_clean(path) %>%
     mutate(index_t0_check = ((db_factor1t0 + db_factor2t0) / 2) - ((db_factor3t0 + db_factor4t0 + db_factor5t0) / 3),
@@ -85,7 +107,7 @@ load_and_prepare <- function(path, config, version = NA) {
 # TODO empirical_stats ----
 empirical_stats <- function(df) {
   df <- df %>%
-    group_by(condition) %>%
+    group_by(Condition) %>%
     summarize(
       mean_change_t0_t1 = mean(change_t0_t1, na.rm = TRUE),
       sd_change_t0_t1 = sd(change_t0_t1, na.rm = TRUE),
@@ -122,13 +144,14 @@ prepare_sensitivity_data <- function(df, param_cols, output_cols) {
            across(all_of(output_cols), ~ (. - mean(., na.rm = TRUE)) / sd(., na.rm = TRUE)))
 }
 
-# CLEAR data loading prepare_data ----
-prepare_data <- function(path, version) {
-  read_clean(path) %>%
-    apply_batch_mutations() %>%
-    bipol_constraint_filter() %>%
-    mutate(version = version)
-}
+# # CLEAR data loading prepare_data ----
+# prepare_data <- function(path, version) {
+#   read_clean(path) %>%
+#     apply_batch_mutations() %>%
+#     bipol_constraint_filter() %>%
+#     mutate(version = version)
+# }
+
 # TODO-test saving logic add_to_ppt ####
 add_to_ppt <- function(ppt, content, title, type = "table") {
   ppt <- add_slide(ppt, lyaout = "Title and Content", master = "Office Theme")
@@ -165,24 +188,24 @@ add_to_ppt <- function(ppt, content, title, type = "table") {
 ## save once
 # print(ppt, target = "relative path")
 
-# TODO 12/6/26 no_change_anchor duplicates no_change across TRUE/FALSE for speaking_mode ----
-anchor_baseline_facets <- function(df, condition_col = "speaking_mode", baseline_val = "no_change") {
+# # TODO 12/6/26 no_change_anchor duplicates no_change across TRUE/FALSE for speaking_mode ----
+# anchor_baseline_facets <- function(df, condition_col = "speaking_mode", baseline_val = "no_change") {
 
-  # check if baseline model_type exists in df
-  baseline_rows <- df %>%
-    filter(model_type == baseline_val)
+#   # check if baseline model_type exists in df
+#   baseline_rows <- df %>%
+#     filter(model_type == baseline_val)
 
-  if (nrow(baseline_rows) > 0) {
-    # dynamically create explicit TRUE and FALSE data structures
-    nc_true <- baseline_rows %>% mutate(!!sym(condition_col) := TRUE)
-    nc_false <- baseline_rows %>% mutate(!!sym(condition_col) := FALSE)
+#   if (nrow(baseline_rows) > 0) {
+#     # dynamically create explicit TRUE and FALSE data structures
+#     nc_true <- baseline_rows %>% mutate(!!sym(condition_col) := TRUE)
+#     nc_false <- baseline_rows %>% mutate(!!sym(condition_col) := FALSE)
 
-    # Strip original unassigned baseline and bind explicit mirrored copies
-    df_clean <- df %>% filter(model_type != baseline_val)
-    df <- bind_rows(df_clean, nc_true, nc_false) %>% distinct()
-    }
-  return(df)
-}
+#     # Strip original unassigned baseline and bind explicit mirrored copies
+#     df_clean <- df %>% filter(model_type != baseline_val)
+#     df <- bind_rows(df_clean, nc_true, nc_false) %>% distinct()
+#     }
+#   return(df)
+# }
 
 # # CLEAR prepare_interactions for df_interactions ----
 # prepare_interactions <- function(path) {
@@ -211,8 +234,9 @@ anchor_baseline_facets <- function(df, condition_col = "speaking_mode", baseline
 #' @details 
 #' The function performs early-exit checks if the CSV file contains zero data rows 
 #' (common when evaluating models without speech/dialogue mechanics). It coerces 
-#' \code{selected_debate_id} and \code{seed} to character vectors, standardizes 
-#' boolean flags, and conditionally filters for \code{speaking_mode == TRUE} if 
+#' \code{selected_debate_id} and \code{seed} to character vectors, converts logical 
+#' flags, ensures \code{delta}, \code{initial_opinion}, \code{opinion}, \code{final_attitude} are numerical 
+#' and conditionally filters for \code{speaking_mode == TRUE} if 
 #' the column is present.
 #' 
 #' @return A cleaned \code{tbl_df} (tibble) with validated column types and 
@@ -222,7 +246,7 @@ anchor_baseline_facets <- function(df, condition_col = "speaking_mode", baseline
 #' @export
 prepare_interactions <- function(path) {
   
-  df <- read_csv(path, show_col_types = FALSE) # removed path due to deletion of first commented header 24/7/26
+  df <- read_clean(path) # removed path due to deletion of first commented header 24/7/26
   
   # Guard: Return early if file is empty (e.g., non-speaking model run)
   if (nrow(df) == 0) {
@@ -234,24 +258,26 @@ prepare_interactions <- function(path) {
     mutate(
       selected_debate_id    = as.character(selected_debate_id),
       seed                  = as.character(logged_batch_seed),
-      use_distinct_agents   = case_when(
-        use_distinct_agents == "true" ~ TRUE,
-        use_distinct_agents == "false" ~ FALSE,
-      ),
-      agent_is_saturated    = as.logical(as.character(agent_is_saturated)),
-      agent_wrong_direction = as.logical(as.character(agent_wrong_direction))
+
+      # ensure delta and opinion are numeric cols
+      across(any_of(c("delta", "initial_opinion", "opinion", "final_attitude")), as.numeric),
+
+      # convert logical flags  
+      across(any_of(c("speaking_mode", "use_distinct_agents", "agent_is_saturated", "agent_wrong_direction")), as.logical)
     ) %>%
-    filter(speaking_mode == TRUE)
-  
-  if ("speaking_mode" %in% colnames(df)) {
-    df <- df %>% filter(as.logical(as.character(speaking_mode)) == TRUE)
-  }
+    filter(speaking_mode %in% TRUE)
   
   return(df)
 }
 
-# TODO compute_influence_scores 27/4/26 ----
+# TODO compute_influence_scores 27/4/26 (update 27/7/26 empty df and row guard) ----
 compute_influence_scores <- function(df) { # use with df_interactions, establish broadcasts and influence
+  # guard for empyt data set and warning
+  if (is.null(df) || nrow(df) == 0) {
+    message("Notice: Empty dataset passed to compute_influence_scores(). Returning NULL.")
+    return(NULL)
+  }
+    
   df %>%
     group_by(model_type, current_condition, selected_debate_id, sender_id) %>%
     summarize(
@@ -391,7 +417,7 @@ apply_batch_mutations <- function(df) {
   # columns to mutate to numeric
   conv_cols <- c("convergence_rate", "confidence_threshold", "repulsion_strength", "repulsion_threshold",
                  "convergence_rate_sd", "confidence_threshold_sd", "repulsion_strength_sd", "repulsion_threshold_sd",
-                 "mae", "initial_variance", "opinion_variance", "seed", "polarization_index", "neutral_zone_width", "mean_net_repulsion_abs",
+                 "mae", "initial_variance", "opinion_variance", "logged_batch_seed", "polarization_index", "neutral_zone_width", "mean_net_repulsion_abs",
                  "convergence_cycle", "pro_count", "anti_count")
   
   # guard to convert only columns that exist in the df
@@ -467,7 +493,7 @@ apply_batch_mutations <- function(df) {
   
 }
 
-#' Compute PCC/PRCC/RF Sensitivity Indices per Model/Agent-Type Combination
+#' Compute PCC/PRCC/RF Sensitivity Indices per Model/Agent-Type Combination (updated on 24/7/26)
 #'
 #' Runs Partial Correlation Coefficient (PCC) and Partial Rank Correlation
 #' Coefficient (PRCC) and Random Forest (RF) sensitivity analysis (via \code{sensitivity::pcc()})
@@ -966,13 +992,13 @@ param_region_extraction <- function(df, percentile = 0.25,
   df <- df %>%
     filter(
       # exclude missing or bad header rows 24/7/26
-      !is.na(model_type( && model_type != "model_type" & model_type != "no_change",
+      !is.na(model_type) & model_type != "model_type" & model_type != "no_change",
 
       # handle bipolarization constraints safely
       # keeps non bipol models intact and enforces positive width for bipolarization in case it is not the case
       ifelse(model_type == "bipolarization",
              !is.na(neutral_zone_width) & neutral_zone_width >= 0,
-             TRUE)
+             TRUE))
   
   # group specific threhsold and filter
   df <- df %>%
@@ -981,7 +1007,7 @@ param_region_extraction <- function(df, percentile = 0.25,
     filter(mae <= mae_threshold) %>%
     ungroup()
   
-  # summarise per group of vars
+  # summarise per group of vars / added neutral zone width checks 27/7/26
   df <- df %>% 
     group_by(model_type, use_distinct_agents) %>%
     summarize(
@@ -1001,6 +1027,8 @@ param_region_extraction <- function(df, percentile = 0.25,
       rt_max = max(repulsion_threshold, na.rm = TRUE),
       rt_min_sd = min(repulsion_threshold_sd, na.rm = TRUE),
       rt_max_sd = max(repulsion_threshold_sd, na.rm = TRUE),
+      nzw_min = min(neutral_zone_width, na.rm = TRUE),
+      nzw_max = max(neutral_zone_width, na.rm = TRUE),
       best_mae = min(mae),
       mae_threshold_used = first(mae_threshold), # for reference
       n = n(),
@@ -1024,7 +1052,8 @@ param_region_extraction <- function(df, percentile = 0.25,
     c("rs_min", "rs_max"),
     c("rs_min_sd", "rs_max_sd"),
     c("rt_min", "rt_max"),
-    c("rt_min_sd", "rt_max_sd")
+    c("rt_min_sd", "rt_max_sd"),
+    c("nzw_min", "nzw_max") # added neutral zone width 27/7/26
   )
   
   for (pair in param_pairs) {
@@ -1041,7 +1070,7 @@ param_region_extraction <- function(df, percentile = 0.25,
   # Define the columns that need min/max clamping
   min_max_cols <- c(
     "cr_min", "cr_max", "ct_min", "ct_max",
-    "rs_min", "rs_max", "rt_min", "rt_max",
+    "rs_min", "rs_max", "rt_min", "rt_max", "nzw_min", "nzw_max",
     "cr_min_sd", "cr_max_sd", "ct_min_sd", "ct_max_sd",
     "rs_min_sd", "rs_max_sd", "rt_min_sd", "rt_max_sd"
   )
@@ -1057,13 +1086,13 @@ param_region_extraction <- function(df, percentile = 0.25,
   df <- df %>%
     mutate(
       cr_range_ok = (cr_max - cr_min) >= min_range,
-      ct_range_ok = (ct_max - ct_min) >= min_range,
-      rs_range_ok = (rs_max - rs_min) >= min_range,
-      rt_range_ok = (rt_max - rt_min) >= min_range,
-      cr_sd_range_ok = (cr_max_sd - cr_min_sd) >= min_range,
-      ct_sd_range_ok = (ct_max_sd - ct_min_sd) >= min_range,
-      rs_sd_range_ok = (rs_max_sd - rs_min_sd) >= min_range,
-      rt_sd_range_ok = (rt_max_sd - rt_min_sd) >= min_range,
+      ct_range_ok = is.na(ct_max) | (ct_max - ct_min) >= min_range,
+      rs_range_ok = is.na(rs_max) | (rs_max - rs_min) >= min_range,
+      rt_range_ok = is.na(rt_max) | (rt_max - rt_min) >= min_range,
+      cr_sd_range_ok = is.na(cr_max_sd) | (cr_max_sd - cr_min_sd) >= min_range,
+      ct_sd_range_ok = is.na(ct_max_sd) | (ct_max_sd - ct_min_sd) >= min_range,
+      rs_sd_range_ok = is.na(rs_max_sd) | (rs_max_sd - rs_min_sd) >= min_range,
+      rt_sd_range_ok = is.na(rt_max_sd) | (rt_max_sd - rt_min_sd) >= min_range,
     ) 
   #%>% select(model_type, use_distinct_agents, ends_with("_range_ok"))
   
@@ -1089,8 +1118,8 @@ param_region_extraction <- function(df, percentile = 0.25,
   # bipolarization constraint check
   bipol_check <- regions %>%
     filter(model_type == "bipolarization") %>%
-    mutate(constraint_ok = ct_max < rt_min,
-           gap = rt_min - ct_max) %>%
+    mutate(constraint_ok = is.na(ct_max) | is.na(rt_max) | (ct_max < rt_min),
+           gap = ifelse(!is.na(ct_max) & !is.na(rt_min) | rt_min - ct_max, NA)) %>%
     select(model_type, use_distinct_agents, ct_max, rt_min, gap, constraint_ok)
   
   if (any(!bipol_check$constraint_ok)) {
@@ -1390,7 +1419,7 @@ build_influence_network <- function(df, df_attributes) { # use with lhs_interact
     )
 
   # join with df_ag on agent_id
-  combined <- left_join(node_metrics %>% mutate(agent_id = as.numeric(agent_id)), 
+  combined <- left_join(node_metrics %>% mutate(agent_id = as.character(agent_id)), # test to check coercion
                         agent_static_attributes,
                         by = c("agent_id", "selected_debate_id"))
   print(colnames(combined))
@@ -1409,7 +1438,7 @@ build_influence_network <- function(df, df_attributes) { # use with lhs_interact
   # table summary for aggregate by condition
   per_condition_summary <- aggregate_metrics %>%
     ungroup() %>%
-    mutate(agent_id = as.numeric(str_extract(agent_id, "\\d+$"))) %>% # added to extract only numeric part from prefixed ID
+    mutate(agent_id = str_extract(agent_id, "\\d+$")) %>% # added to extract only numeric part from prefixed ID
     left_join(macro_attributes, by = c("agent_id", "current_condition")) %>%
     group_by(agent_id, current_condition, model_type, pro_reduction) %>%
     reframe( # reframe allows multiple rows per group return

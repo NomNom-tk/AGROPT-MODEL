@@ -22,6 +22,7 @@ library(lme4)
 library(lmerTest)
 library(performance)
 library(ranger)
+library(arrow) # write parquet files to circumvent data sizes 27/7/26
 library(tidyverse)
 
 # run config declarations

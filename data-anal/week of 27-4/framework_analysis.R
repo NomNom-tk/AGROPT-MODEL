@@ -72,12 +72,12 @@ analyze_processed_run <- function(df) {
     df_emp_m <- df_empirical %>%
       filter(composition == "M") %>%
       mutate(change_t1_t2_z = as.numeric(scale(change_t1_t2)),
-             pro_reduction_z = as.numeric(scale(pro_reduction))
+             pro_reduction_z = as.numeric(scale(Pro_reduction))
       )
 
     # empirical model m for beta calculation and comparison with sim data
     empir_model_m <- lmer(
-        change_t1_t2_z ~ pro_reduction_z + (1 | id_group_all),
+        change_t1_t2_z ~ pro_reduction_z + (1 | ID_Group_all),
         data = df_emp_m
     )
 
@@ -92,9 +92,9 @@ analyze_processed_run <- function(df) {
     # H2 test set up
     if (all(c("abs_change_t1_t2", "perceived_norms", "self_control") %in% colnames(df_empirical))) {
         # Uncentered H2 model and diagnostics
-        mlm_model_h2 <- lmer(abs_change_t1_t2 ~ (perceived_norms + self_control) * opinion_strength + (1 | id_group_all), data = df_empirical)
+        mlm_model_h2 <- lmer(abs_change_t1_t2 ~ (perceived_norms + self_control) * opinion_strength + (1 | ID_Group_all), data = df_empirical)
     if (all(c("perceived_norm_cent", "self_control_cent", "opinion_strength_cent") %in% colnames(df_empirical))) {
-        mlm_model_h2_cent <- lmer(abs_change_t1_t2 ~ (perceived_norm_cent + self_control_cent) * opinion_strength_cent + (1 | id_group_all), data = df_empirical)
+        mlm_model_h2_cent <- lmer(abs_change_t1_t2 ~ (perceived_norm_cent + self_control_cent) * opinion_strength_cent + (1 | ID_Group_all), data = df_empirical)
     }
 }
 
@@ -175,19 +175,39 @@ analyze_processed_run <- function(df) {
   
   if (!is.null(df_ag)) { # H1a and H1b implemented 22/7/26 / updated to robust model 24/7/26
 
+  df_ag <- df_ag %>% # update on 27/7/26 coerced vars prior ot any further processing (ensuring agent_id is a char)
+    mutate(
+        initial_opinion   = as.numeric(initial_opinion),
+        final_attitude    = as.numeric(final_attitude),
+        current_condition = as.character(current_condition),
+        agent_id          = as.character(agent_id),
+        debate_label      = as.character(debate_label)
+      )
+
+  # --- DIAGNOSTIC CHECK ---
+message("\n[DIAGNOSTIC] Starting empirical MLM pipeline...")
+message(sprintf(" -> Initial df_ag rows: %d", nrow(df_ag)))
+
+if ("current_condition" %in% names(df_ag)) {
+  cond_levels <- unique(df_ag$current_condition)
+  message(sprintf(" -> Unique 'current_condition' levels (%d): %s", 
+                  length(cond_levels), paste(cond_levels, collapse = ", ")))
+} else {
+  warning(" -> 'current_condition' column missing from df_ag!")
+}
+
+if ("debate_label" %in% names(df_ag)) {
+  debate_levels <- unique(df_ag$debate_label)
+  message(sprintf(" -> Unique 'debate_label' count: %d", length(debate_levels)))
+}
+# ------------------------
+
     # corrected H1 test
     # Nesting individuals (ID) inside debate groups (ID_Group_all) / use with debate_label in deduped data
     # empirical h1 comparison
     ## empirical long format for mlm
     df_empir_long <- df_ag %>%
       distinct(agent_id, debate_label, .keep_all = TRUE) %>%
-      mutate(
-        initial_opinion   = as.numeric(initial_opinion),
-        final_attitude    = as.numeric(final_attitude),
-        current_condition = as.character(current_condition),
-        agent_id          = as.character(agent_id),
-        debate_label      = as.character(debate_label)
-      ) %>%
       filter(!is.na(initial_opinion), !is.na(final_attitude)) %>%
       pivot_longer(
         cols = c(initial_opinion, final_attitude),
@@ -207,8 +227,12 @@ analyze_processed_run <- function(df) {
       if (has_multi_debates) {
         mlm_model_h1a <- lme4::lmer(
           Attitude ~ Condition * Time + (1 | agent_id) + (1 | debate_label), 
-          data = df_empir_long
-        )
+          data = df_empir_long,
+          control = lmerControl(
+            optimizer = "nlminbwrap",
+            optCtrl = list(maxfun = 10000)
+          )
+        )    
       } else {
         write("singular case, defaulting to basic lmer")
         mlm_model_h1a <- lme4::lmer(
@@ -221,13 +245,6 @@ analyze_processed_run <- function(df) {
     # MLM H1b test with simulated opinions for T2
     ## H1b long data frame
     df_sim_long <- df_ag %>%
-      mutate(
-        initial_opinion   = as.numeric(initial_opinion),
-        opinion           = as.numeric(opinion),
-        current_condition = as.character(current_condition),
-        agent_id          = as.character(agent_id),
-        debate_label      = as.character(debate_label)
-      ) %>%
       filter(!is.na(initial_opinion), !is.na(opinion), !is.na(agent_id)) %>%
       pivot_longer(
         cols = c(initial_opinion, opinion),
@@ -247,13 +264,21 @@ analyze_processed_run <- function(df) {
       if (has_multi_debates_sim) {
         mlm_model_h1b <- lme4::lmer(
           Attitude ~ Condition * Time + (1 | agent_id) + (1 | debate_label), 
-          data = df_sim_long
+          data = df_sim_long,
+            control = lmerControl(
+            optimizer = "nlminbwrap",
+            optCtrl = list(maxfun = 10000)
+          )
         )
     } else {
       write("missing columns, defaulting to basic regression")
       mlm_model_h1b <- lme4::lmer(
           Attitude ~ Condition * Time + (1 | agent_id), 
-          data = df_sim_long
+          data = df_sim_long,
+          control = lmerControl(
+            optimizer = "nlminbwrap",
+            optCtrl = list(maxfun = 10000)
+          )
       )
      }
     }
@@ -426,7 +451,9 @@ analyze_processed_run <- function(df) {
       sd_conv = sd(convergence_cycle),
       sd_mae = sd(mae),
       .groups = "drop"
-    )
+    ) %>%
+    { message("DEBUG - df_conv_debate speaking_mode table:"); print(table(.$speaking_mode, useNA = "always")); . } %>%
+    { message("DEBUG - complete cases count:"); print(nrow(na.omit(.))); . }
   
   run_conv_model <- function(df_nodes) {
     lm(mean_mae ~ mean_conv * speaking_mode + model_type, data = df_nodes)
@@ -551,7 +578,7 @@ analyze_processed_run <- function(df) {
     gaml_ga <- generate_gaml_bounds(lhs_regions$regions)
 
     # safe write guard to characters
-    if (!is.null(gaml_ga) && length(gaml_ga) > 0 {
+    if (!is.null(gaml_ga) && length(gaml_ga) > 0) {
       writeLines(gaml_ga, "gaml_GA_bounds.txt")
     } else {
       message("skipping GAML bounds file export: gaml_ga is empty.")

@@ -2,35 +2,64 @@
 # TO INCLUDE: prepare_sensitivity_data / add_to_ppt / pivot_params
 
 
-# CLEAR read_clean to clean colnames before all else 7/5/26 (update 27/7/26 strip stray chars from headers) ----
+# CLEAR read_clean to clean colnames before all else 7/5/26 (update 27/7/26 strip stray chars from headers)
+#' update 28/7/26 adjusted parquet syntax----
 read_clean <- function(path) {
 
-  # generate equivalent parquet path
-  parquet_path <- sub("\\.csv$", ".parquet", path)
-
-  # check if parquet path exists and if not slow path read clean
-  if (file.exists(parquet_path) && grepl("\\.csv$", path, ignore.case = TRUE)) {
-    return(read_parquet(parquet_path))
+  # if input is parquet then read parquet
+  if (grepl("\\.parquet$", path, ignore.case  = TRUE)) {
+    return(read_parquet_duckdb(path, prudence = "lavish") |> clean_stray_headers())
   }
     
-  df <- read_csv(path, show_col_types = FALSE) 
+  # otherwise assume csv and check for clean parquet cached version
+  parquet_path <- sub("\\.csv$", ".parquet", path, ignore.case = TRUE)
+
+  # check if parquet path exists and if not slow path read clean
+  if (file.exists(parquet_path)) {
+    return(read_parquet_duckdb(parquet_path, prudence = "lavish") |> clean_stray_headers())
+  }
+    
+  # memory safe fallback for csv read using arrow to avoid duckdb c++ crashes
+  cat(sprintf("Generating Parquet Cache: %s\n", basename(parquet_path)))
+  arrow_stream <- read_csv_arrow(path, as_data_frame = FALSE)
+  write_parquet(arrow_stream, parquet_path)
+  rm(arrow_stream)
+  gc()
+
+  # duckdb csv read post parquet file generation
+  df <- read_parquet_duckdb(parquet_path, prudence = "lavish")
     
   # strip stray quotes, parentehses, and spaces from column headers  
   names(df) <- gsub("['() ]", "", names(df)) 
     
   df <- df %>% 
     clean_names() %>%
-    mutate(across(where(~ all(grepl("^-?[0-9,\\.]+([Ee][+-]?[0-9]+)?$", 
-                                    na.omit(as.character(.))))), 
-                  ~ as.numeric(gsub(",", ".", trimws(.)))))
-  
-  # cache clean dataframe as parquet for future runs
-  if (grepl("\\.csv$", path, ignore.case = TRUE)) {
-    write_parquet(df, parquet_path, compression = "snappy")
-  }
+    clean_stray_headers()
     
   return(df)
 }
+
+# TODO and CHECK clean_stray_headers 29/7/26
+clean_stray_headers <- function(df) {
+  if (!inherits(df, "duckplyr_df") && !is.data.frame(df)) return(df)
+
+  # identify anchor/first column if its null or na return base df
+  first_column <- names(df)[1]
+  if (is.null(first_column) | is.na(first_column)) return(df)
+
+  # clean the names for the first col in file
+  clean_col_name <- gsub("[^a-zA-Z0-9_]", "", first_column)
+
+  # ensure lazy duckdb evaluation without copying rows into R RAM
+  df <- df |>
+    dplyr::filter(
+        is.na(.data[[first_column]]) |
+        gsub("[^a-zA-Z0-9_]", "", as.character(.data[[first_column]])) != clean_col_name
+    )
+
+  return(df)
+}
+
 # TODO and CHECK append_metadata 28/5/26 ----
 ## purpose: provenance travels with dfs, provides objects to call in analysis files and in rmd
 append_metadata <- function(df, config, version = NA) {
@@ -245,11 +274,14 @@ add_to_ppt <- function(ppt, content, title, type = "table") {
 #' 
 #' @export
 prepare_interactions <- function(path) {
-  
+
   df <- read_clean(path) # removed path due to deletion of first commented header 24/7/26
+
+  # nrow guard fix for lazy count 29/7/26
+  n_rows <- df %>% summarise(n = n()) %>% pull(n)
   
   # Guard: Return early if file is empty (e.g., non-speaking model run)
-  if (nrow(df) == 0) {
+  if (n_rows == 0) {
     message("Notice: Interaction log at '", path, "' contains 0 rows. Skipping.")
     return(df)
   }
@@ -273,8 +305,17 @@ prepare_interactions <- function(path) {
 # TODO compute_influence_scores 27/4/26 (update 27/7/26 empty df and row guard) ----
 compute_influence_scores <- function(df) { # use with df_interactions, establish broadcasts and influence
   # guard for empyt data set and warning
-  if (is.null(df) || nrow(df) == 0) {
-    message("Notice: Empty dataset passed to compute_influence_scores(). Returning NULL.")
+
+  if (is.null(df)) {
+    message("Notice: Passed NULL to compute_influence_scores(). Returning NULL.")
+    return(NULL)
+  }
+    
+  # nrows extra lazy guard before eval 29/7/26
+  n_rows <- df %>% summarise(n = n()) %>% pull(n)
+    
+  if (n_rows == 0) {
+    message("Notice: Dataset passed to compute_influence_scores is empty. Returning NULL.")
     return(NULL)
   }
     
@@ -306,9 +347,18 @@ compute_influence_scores <- function(df) { # use with df_interactions, establish
 #' 
 #' @export
 compute_susceptibility_scores <- function(df) { # use with df_interactions
-  # return early if dataframe is empty
-  if (is.null(df) || nrow(df) == 0) {
-    message("Notice: Empty dataset passed to compute_susceptibility_scores() Returning NULL.")
+  # guard for empyt data set and warning
+
+  if (is.null(df)) {
+    message("Notice: Passed NULL to compute_susceptibility_scores(). Returning NULL.")
+    return(NULL)
+  }
+    
+  # nrows extra lazy guard before eval 29/7/26
+  n_rows <- df %>% summarise(n = n()) %>% pull(n)
+    
+  if (n_rows == 0) {
+    message("Notice: Dataset passed to compute_susceptibility_scores is empty. Returning NULL.")
     return(NULL)
   }
     
@@ -417,8 +467,7 @@ apply_batch_mutations <- function(df) {
   # columns to mutate to numeric
   conv_cols <- c("convergence_rate", "confidence_threshold", "repulsion_strength", "repulsion_threshold",
                  "convergence_rate_sd", "confidence_threshold_sd", "repulsion_strength_sd", "repulsion_threshold_sd",
-                 "mae", "initial_variance", "opinion_variance", "logged_batch_seed", "polarization_index", "neutral_zone_width", "mean_net_repulsion_abs",
-                 "convergence_cycle", "pro_count", "anti_count")
+                 "mae", "initial_variance", "opinion_variance", "logged_batch_seed", "polarization_index", "neutral_zone_width", "mean_net_repulsion_abs", "convergence_cycle", "pro_count", "anti_count")
   
   # guard to convert only columns that exist in the df
   existing_conv_cols <- intersect(conv_cols, colnames(df))
@@ -468,6 +517,10 @@ apply_batch_mutations <- function(df) {
         agent_is_saturated = as.logical(agent_is_saturated)
       )
   }
+
+  # collect once to materialize into local RAM before diagnostics
+  df <- collect(df)
+  message("lazy data frame collected and pulled into R memory, starting NA diagnostics")
   
   # count NAs // recheck logic
   na_check <- colSums(is.na(df))

@@ -22,6 +22,9 @@ library(lme4)
 library(lmerTest)
 library(performance)
 library(ranger)
+library(duckplyr)
+library(duckdb)
+library(arrow) # write parquet files to circumvent data sizes 27/7/26
 library(tidyverse)
 
 # run config declarations
@@ -228,8 +231,11 @@ process_run <- function(config) {
   if (!is.null(target_int_path) && file.exists(target_int_path)) {
     df_interactions <- prepare_interactions(target_int_path)
 
+      # lazy check for rows in df_interactions, to avoid full loading into RAM
+      has_rows <- df_interactions |> head(2) |> collect() |> nrow() > 0
+      
       # guard 2 execute join and summary metric only if data rows exist
-      if (!is.null(df_interactions) && nrow(df_interactions) > 0) {
+      if (!is.null(df_interactions) && has_rows) {
           
             if (!is.null(df_ag)) {
               
@@ -247,6 +253,7 @@ process_run <- function(config) {
             }
             df_susceptibility = compute_susceptibility_scores(df_interactions)
             df_influence = compute_influence_scores(df_interactions)
+            message("Notice: interactions succeeded, moving on to empirical")
       } else {
         message("Notice: Interaction file exists but contains 0 data rows. Skipping susceptibility and influence metrics.")
       }

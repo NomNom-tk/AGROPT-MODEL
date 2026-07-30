@@ -23,7 +23,6 @@ library(lmerTest)
 library(performance)
 library(ranger)
 library(duckplyr)
-library(duckdb)
 library(arrow) # write parquet files to circumvent data sizes 27/7/26
 library(tidyverse)
 

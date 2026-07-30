@@ -32,7 +32,7 @@ clean_headers <- function(df) {
   names(df) <- gsub("['() ]", "", names(df))
 
   df <- df |>
-    clean_names() |>
+    janitor::clean_names() |>
     clean_stray_headers()
 
   return(df)
@@ -198,33 +198,33 @@ prepare_sensitivity_data <- function(df, param_cols, output_cols) {
 #     mutate(version = version)
 # }
 
-# TODO-test saving logic add_to_ppt ####
-add_to_ppt <- function(ppt, content, title, type = "table") {
-  ppt <- add_slide(ppt, lyaout = "Title and Content", master = "Office Theme")
-  ppt <- ph_with(ppt, value = tile, location = ph_location_type(type = "title"))
+# # TODO-test saving logic add_to_ppt ####
+# add_to_ppt <- function(ppt, content, title, type = "table") {
+#   ppt <- add_slide(ppt, lyaout = "Title and Content", master = "Office Theme")
+#   ppt <- ph_with(ppt, value = tile, location = ph_location_type(type = "title"))
   
-  if (type == "table") {
-    # data frame or tidy regression output
-    ft <- flextable(content) %>%
-      theme_vanilla() %>%
-      autofit()
-    ppt <- ph_with(ppt, value = ft, location = ph_location_type(type = "body"))
-  } else if (type == "regression") {
-    ft <- tidy(content, conf.int = TRUE) %>%
-      mutate(across(where(is.numeric), ~round(., 3))) %>%
-      flextable() %>%
-      theme_vanilla() %>%
-      autofit()
-    ppt <- ph_with(ppt, value = ft, location = ph_location_type(type = "body"))
-  } else if (type == "plot") {
-    ## ggplot object
-    ppt <- ph_with(ppt,
-                   value = dml(ggobj = content),
-                   location = ph_location(width = 8, height = 5,
-                                          left = 1, top = 1.5))
-  }
-  return(ppt)
-}
+#   if (type == "table") {
+#     # data frame or tidy regression output
+#     ft <- flextable(content) %>%
+#       theme_vanilla() %>%
+#       autofit()
+#     ppt <- ph_with(ppt, value = ft, location = ph_location_type(type = "body"))
+#   } else if (type == "regression") {
+#     ft <- tidy(content, conf.int = TRUE) %>%
+#       mutate(across(where(is.numeric), ~round(., 3))) %>%
+#       flextable() %>%
+#       theme_vanilla() %>%
+#       autofit()
+#     ppt <- ph_with(ppt, value = ft, location = ph_location_type(type = "body"))
+#   } else if (type == "plot") {
+#     ## ggplot object
+#     ppt <- ph_with(ppt,
+#                    value = dml(ggobj = content),
+#                    location = ph_location(width = 8, height = 5,
+#                                           left = 1, top = 1.5))
+#   }
+#   return(ppt)
+# }
 
 ## use
 ## ppt <- read_pptx()
@@ -711,8 +711,8 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees =
       } else {
       
       # Compute PCC for multiple parameters partial pearson
-      pcc_res <- pcc(X, y) # Partial Pearson correlation coefficients using X (param cols input), and y column names converted to numeric
-      prcc_res <- pcc(X, y, rank = TRUE) # PRCC
+      pcc_res <- sensitivity::pcc(X, y) # Partial Pearson correlation coefficients using X (param cols input), and y column names converted to numeric
+      prcc_res <- sensitivity::pcc(X, y, rank = TRUE) # PRCC
       #print(str(prcc_res))
       #print(head(prcc_res$PCC))
       

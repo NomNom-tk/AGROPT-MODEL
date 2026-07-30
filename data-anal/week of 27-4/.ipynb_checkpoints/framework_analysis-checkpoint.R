@@ -556,67 +556,68 @@ if ("debate_label" %in% names(df_ag)) {
       group_by(model_type, selected_debate_id) %>%
       summarize(mean_cluster_change = mean(cluster_change), .groups = "drop")
   }
-  
-  # ────────────────────────────────────────────────────────────────────────────
-  # 7. NETWORK PIPELINE (SAFETY GUARDED)
-  # ────────────────────────────────────────────────────────────────────────────
-  network_data_package        <- NULL
-  graphs_edge_filter          <- NULL
-  homogeneous_plots_combined  <- NULL
-  heterogeneous_plots_combined <- NULL
-  network_plot_combined       <- NULL
-  
-  if (!is.null(df_interactions) && !is.null(df_ag)) {
-    network_outputs <- build_influence_network(df_interactions, df_ag)
-    network_outputs$graphs <- map(network_outputs$graphs, enrich_graph_vertices, network_outputs$aggregate)
-    
-    graphs_top_nodes <- map(network_outputs$graphs, filter_top_nodes, top_n = 10)
-    
-    graphs_edge_filter <- map(network_outputs$graphs, function(g) { 
-      threshold <- quantile(E(g)$edge_weight, 0.75, na.rm = TRUE)
-      filter_edges(g, threshold)
-    })
-    
-    edge_plots <- imap(graphs_edge_filter, function(g, name) build_network_graph(g) + labs(title = name))
-    
-    homo_keys  <- intersect(names(graphs_edge_filter), c("homogeneous_consensus", "homogeneous_clustering", "homogeneous_bipolarization"))
-    hetero_keys <- intersect(names(graphs_edge_filter), c("heterogeneous_consensus", "heterogeneous_clustering", "heterogeneous_bipolarization"))
-    
-    if (length(homo_keys) == 3) {
-      homogeneous_plots <- imap(graphs_edge_filter[homo_keys], function(g, name) build_network_graph(g) + labs(title = name))
-      homogeneous_plots_combined <- wrap_plots(homogeneous_plots, ncol = 3)
-    }
-    if (length(hetero_keys) == 3) {
-      heterogeneous_plots <- imap(graphs_edge_filter[hetero_keys], function(g, name) build_network_graph(g) + labs(title = name))
-      heterogeneous_plots_combined <- wrap_plots(heterogeneous_plots, ncol = 3)
-    }
-    network_plot_combined <- wrap_plots(edge_plots, ncol = 1)
-    
-    network_data_package <- list(
-      per_debate = network_outputs$per_debate,
-      aggregate  = network_outputs$aggregate,
-      graphs     = network_outputs$graphs
-    )
-  }
-  
-  # ────────────────────────────────────────────────────────────────────────────
-  # 8. GA BOUNDS EXTRACTION (ONLY RUN ON LHS SWEEPS)
-  # ────────────────────────────────────────────────────────────────────────────
-  ga_bounds_export <- NULL
-  if (config$run_type == "LHS") {
-    message("Notice: GAML GA bounds extraction started")
-    lhs_regions <- param_region_extraction(df_batch, percentile = 0.25)
-    gaml_ga <- generate_gaml_bounds(lhs_regions$regions)
-    print(head(gaml_ga))
 
-    # safe write guard to characters
-    if (!is.null(gaml_ga) && length(gaml_ga) > 0) {
-      writeLines(gaml_ga, "gaml_GA_bounds.txt")
-    } else {
-      message("skipping GAML bounds file export: gaml_ga is empty.")
-    }
-    ga_bounds_export <- list(bounds = lhs_regions$regions, range_check = lhs_regions$range_check)
-  }
+# TODO Request GLPK package for RcppParallel for Network analysis
+  # # ────────────────────────────────────────────────────────────────────────────
+  # # 7. NETWORK PIPELINE (SAFETY GUARDED)
+  # # ────────────────────────────────────────────────────────────────────────────
+  # network_data_package        <- NULL
+  # graphs_edge_filter          <- NULL
+  # homogeneous_plots_combined  <- NULL
+  # heterogeneous_plots_combined <- NULL
+  # network_plot_combined       <- NULL
+  
+  # if (!is.null(df_interactions) && !is.null(df_ag)) {
+  #   network_outputs <- build_influence_network(df_interactions, df_ag)
+  #   network_outputs$graphs <- map(network_outputs$graphs, enrich_graph_vertices, network_outputs$aggregate)
+    
+  #   graphs_top_nodes <- map(network_outputs$graphs, filter_top_nodes, top_n = 10)
+    
+  #   graphs_edge_filter <- map(network_outputs$graphs, function(g) { 
+  #     threshold <- quantile(E(g)$edge_weight, 0.75, na.rm = TRUE)
+  #     filter_edges(g, threshold)
+  #   })
+    
+  #   edge_plots <- imap(graphs_edge_filter, function(g, name) build_network_graph(g) + labs(title = name))
+    
+  #   homo_keys  <- intersect(names(graphs_edge_filter), c("homogeneous_consensus", "homogeneous_clustering", "homogeneous_bipolarization"))
+  #   hetero_keys <- intersect(names(graphs_edge_filter), c("heterogeneous_consensus", "heterogeneous_clustering", "heterogeneous_bipolarization"))
+    
+  #   if (length(homo_keys) == 3) {
+  #     homogeneous_plots <- imap(graphs_edge_filter[homo_keys], function(g, name) build_network_graph(g) + labs(title = name))
+  #     homogeneous_plots_combined <- wrap_plots(homogeneous_plots, ncol = 3)
+  #   }
+  #   if (length(hetero_keys) == 3) {
+  #     heterogeneous_plots <- imap(graphs_edge_filter[hetero_keys], function(g, name) build_network_graph(g) + labs(title = name))
+  #     heterogeneous_plots_combined <- wrap_plots(heterogeneous_plots, ncol = 3)
+  #   }
+  #   network_plot_combined <- wrap_plots(edge_plots, ncol = 1)
+    
+  #   network_data_package <- list(
+  #     per_debate = network_outputs$per_debate,
+  #     aggregate  = network_outputs$aggregate,
+  #     graphs     = network_outputs$graphs
+  #   )
+  # }
+  
+  # # ────────────────────────────────────────────────────────────────────────────
+  # # 8. GA BOUNDS EXTRACTION (ONLY RUN ON LHS SWEEPS)
+  # # ────────────────────────────────────────────────────────────────────────────
+  # ga_bounds_export <- NULL
+  # if (config$run_type == "LHS") {
+  #   message("Notice: GAML GA bounds extraction started")
+  #   lhs_regions <- param_region_extraction(df_batch, percentile = 0.25)
+  #   gaml_ga <- generate_gaml_bounds(lhs_regions$regions)
+  #   print(head(gaml_ga))
+
+  #   # safe write guard to characters
+  #   if (!is.null(gaml_ga) && length(gaml_ga) > 0) {
+  #     writeLines(gaml_ga, "gaml_GA_bounds.txt")
+  #   } else {
+  #     message("skipping GAML bounds file export: gaml_ga is empty.")
+  #   }
+  #   ga_bounds_export <- list(bounds = lhs_regions$regions, range_check = lhs_regions$range_check)
+  # }
   
   # ────────────────────────────────────────────────────────────────────────────
   # 9. STANDARDIZED ANALYSIS OBJECT PACKAGING

@@ -4,27 +4,26 @@
 source("./functions.R")
 
 # package imports
-library(rvg)
-library(broom)
-library(officer)
-library(flextable)
-library(sensitivity)
-library(lm.beta)
-library(igraph)
-library(ggraph)
-library(janitor)
-library(tidygraph)
-library(patchwork)
-library(plotly)
-library(DT)
-library(ComplexUpset)
+#library(rvg)
+#library(officer)
+#library(flextable)
+#library(tidygraph)
+#library(igraph)
+#library(ggraph)
+#library(DT)
 library(lme4)
 library(lmerTest)
-library(performance)
-library(ranger)
-library(duckplyr)
+library(janitor)
+library(patchwork)
+library(plotly)
+library(ComplexUpset)
 library(arrow) # write parquet files to circumvent data sizes 27/7/26
 library(tidyverse)
+library(duckplyr)
+
+# to namespace
+library(broom)
+#library(lm.beta)
 
 # run config declarations
 ## TODO 1/6/26, consider refactoring to different layers, makes run_type agnostic of the rest

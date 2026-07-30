@@ -8,34 +8,33 @@ read_clean <- function(path) {
 
   # if input is parquet then read parquet
   if (grepl("\\.parquet$", path, ignore.case  = TRUE)) {
-    return(read_parquet_duckdb(path, prudence = "lavish") |> clean_stray_headers())
-  }
-    
-  # otherwise assume csv and check for clean parquet cached version
-  parquet_path <- sub("\\.csv$", ".parquet", path, ignore.case = TRUE)
+      df <- read_parquet_duckdb(path, prudence = "lavish")
+  } else { 
+    # otherwise assume csv and check for clean parquet cached version
+    parquet_path <- sub("\\.csv$", ".parquet", path, ignore.case = TRUE)
 
-  # check if parquet path exists and if not slow path read clean
-  if (file.exists(parquet_path)) {
-    return(read_parquet_duckdb(parquet_path, prudence = "lavish") |> clean_stray_headers())
-  }
-    
-  # memory safe fallback for csv read using arrow to avoid duckdb c++ crashes
-  cat(sprintf("Generating Parquet Cache: %s\n", basename(parquet_path)))
-  arrow_stream <- read_csv_arrow(path, as_data_frame = FALSE)
-  write_parquet(arrow_stream, parquet_path)
-  rm(arrow_stream)
-  gc()
+    # check if parquet path exists and if not slow path read clean
+    if (!file.exists(parquet_path)) {
+      parquet_path <- generate_parquet_cache(path)
+    }
 
-  # duckdb csv read post parquet file generation
-  df <- read_parquet_duckdb(parquet_path, prudence = "lavish")
+    df <- read_parquet_duckdb(parquet_path, prudence = "lavish")
+  } 
     
+  return(clean_headers(df))
+}
+
+# CHECK clean_headers blanket gsub clean 30/7/26
+#' meant to blanket clean headers and ensure that header conversion is standard
+#' wraps the clean_stray headers inside it before being called in read_clean
+clean_headers <- function(df) {
   # strip stray quotes, parentehses, and spaces from column headers  
-  names(df) <- gsub("['() ]", "", names(df)) 
-    
-  df <- df %>% 
-    clean_names() %>%
+  names(df) <- gsub("['() ]", "", names(df))
+
+  df <- df |>
+    clean_names() |>
     clean_stray_headers()
-    
+
   return(df)
 }
 
@@ -58,6 +57,24 @@ clean_stray_headers <- function(df) {
     )
 
   return(df)
+}
+
+#' Generate Parquet Cache (RUN ONCE) 30/7/26
+#'
+#' meant to check whether parquet caches for data files exist and read parquet if they do
+#' if they don't then generate the parquet files to pass to read_clean
+generate_parquet_cache <- function(path) {
+  parquet_path <- sub("\\.csv$", ".parquet", path, ignore.case = TRUE)
+
+  # paste progress
+  cat(sprintf("Generating Parquet Cache: %s\n", basename(parquet_path)))
+
+  csv_stream <- read_csv_arrow(path, as_data_frame = FALSE)
+  write_parquet(csv_stream, parquet_path)
+  rm(csv_stream)
+  gc()
+
+  return(parquet_path)
 }
 
 # TODO and CHECK append_metadata 28/5/26 ----
@@ -136,7 +153,7 @@ load_and_prepare <- function(path, config, version = NA) {
 # TODO empirical_stats ----
 empirical_stats <- function(df) {
   df <- df %>%
-    group_by(Condition) %>%
+    group_by(condition) %>%
     summarize(
       mean_change_t0_t1 = mean(change_t0_t1, na.rm = TRUE),
       sd_change_t0_t1 = sd(change_t0_t1, na.rm = TRUE),

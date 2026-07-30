@@ -72,12 +72,12 @@ analyze_processed_run <- function(df) {
     df_emp_m <- df_empirical %>%
       filter(composition == "M") %>%
       mutate(change_t1_t2_z = as.numeric(scale(change_t1_t2)),
-             pro_reduction_z = as.numeric(scale(Pro_reduction))
+             pro_reduction_z = as.numeric(scale(pro_reduction))
       )
 
     # empirical model m for beta calculation and comparison with sim data
     empir_model_m <- lmer(
-        change_t1_t2_z ~ pro_reduction_z + (1 | ID_Group_all),
+        change_t1_t2_z ~ pro_reduction_z + (1 | id_group_all),
         data = df_emp_m
     )
 
@@ -92,9 +92,9 @@ analyze_processed_run <- function(df) {
     # H2 test set up
     if (all(c("abs_change_t1_t2", "perceived_norms", "self_control") %in% colnames(df_empirical))) {
         # Uncentered H2 model and diagnostics
-        mlm_model_h2 <- lmer(abs_change_t1_t2 ~ (perceived_norms + self_control) * opinion_strength + (1 | ID_Group_all), data = df_empirical)
+        mlm_model_h2 <- lmer(abs_change_t1_t2 ~ (perceived_norms + self_control) * opinion_strength + (1 | id_group_all), data = df_empirical)
     if (all(c("perceived_norm_cent", "self_control_cent", "opinion_strength_cent") %in% colnames(df_empirical))) {
-        mlm_model_h2_cent <- lmer(abs_change_t1_t2 ~ (perceived_norm_cent + self_control_cent) * opinion_strength_cent + (1 | ID_Group_all), data = df_empirical)
+        mlm_model_h2_cent <- lmer(abs_change_t1_t2 ~ (perceived_norm_cent + self_control_cent) * opinion_strength_cent + (1 | id_group_all), data = df_empirical)
     }
 }
 
@@ -120,7 +120,8 @@ analyze_processed_run <- function(df) {
   sensi_v2 <- NULL
   
   if (config$run_type == "LHS") {
-    sensi_lhs <- run_sensi_analysis(df_batch,
+    df_batch_sensi <- df_batch |> collect()
+    sensi_lhs <- run_sensi_analysis(df_batch_sensi,
                                     param_cols_by_model = param_cols_by_model,
                                     output_cols = output_cols, num_trees = 500)
     pcc_lhs  <- sensi_lhs$pcc
@@ -175,7 +176,7 @@ analyze_processed_run <- function(df) {
   
   if (!is.null(df_ag)) { # H1a and H1b implemented 22/7/26 / updated to robust model 24/7/26
 
-  df_ag <- df_ag %>% # update on 27/7/26 coerced vars prior ot any further processing (ensuring agent_id is a char)
+  df_ag <- df_ag %>% # update on 27/7/26 coerced vars prior to further processing and collect (ensuring agent_id is a char)
     mutate(
         initial_opinion   = as.numeric(initial_opinion),
         final_attitude    = as.numeric(final_attitude),
@@ -202,12 +203,33 @@ if ("debate_label" %in% names(df_ag)) {
 }
 # ------------------------
 
+
+    # df_ag_raw_slice base set up to collect prior to H1a/h1b and df_ag_deduped 30/7/26
+    df_ag_raw_slice <- df_ag |>
+      select(agent_id, debate_label, selected_debate_id, logged_batch_seed, model_type,
+             current_condition, initial_opinion, final_attitude, opinion, pro_reduction, opinion_change) |>
+      filter(!is.na(agent_id)) |>
+      collect()
+
+    # Branch A: empirical trajectory (H1a)
+    df_ag_base <- df_ag_raw_slice |>
+      distinct(agent_id, debate_label, .keep_all = TRUE) # one real T1->T2 per agent/debate
+
+    # Branch B: simulated trajectory (H1b)
+    df_sim_base <- df_ag_raw_slice |>
+      group_by(agent_id, debate_label, model_type, current_condition) |>
+      summarize(
+        initial_opinion = first(initial_opinion),
+        opinion = mean(opinion, na.rm = TRUE), # collapse across seed
+        sd_opinion_seeds = sd(opinion, na.rm = TRUE), # keep and report separately
+        .groups = "drop"
+      )
+
     # corrected H1 test
     # Nesting individuals (ID) inside debate groups (ID_Group_all) / use with debate_label in deduped data
     # empirical h1 comparison
     ## empirical long format for mlm
-    df_empir_long <- df_ag %>%
-      distinct(agent_id, debate_label, .keep_all = TRUE) %>%
+    df_empir_long <- df_ag_base %>%
       filter(!is.na(initial_opinion), !is.na(final_attitude)) %>%
       pivot_longer(
         cols = c(initial_opinion, final_attitude),
@@ -224,8 +246,8 @@ if ("debate_label" %in% names(df_ag)) {
     if (nrow(df_empir_long) > 0) {
       has_multi_debates <- n_distinct(df_empir_long$debate_label, na.rm = TRUE) > 1
     
-      if (has_multi_debates) {
-        mlm_model_h1a <- lme4::lmer(
+      mlm_model_h1a <- if (has_multi_debates) {
+        lme4::lmer(
           Attitude ~ Condition * Time + (1 | agent_id) + (1 | debate_label), 
           data = df_empir_long,
           control = lmerControl(
@@ -235,7 +257,7 @@ if ("debate_label" %in% names(df_ag)) {
         )    
       } else {
         write("singular case, defaulting to basic lmer")
-        mlm_model_h1a <- lme4::lmer(
+        lme4::lmer(
           Attitude ~ Condition * Time + (1 | agent_id), 
           data = df_empir_long
         )
@@ -244,8 +266,11 @@ if ("debate_label" %in% names(df_ag)) {
 
     # MLM H1b test with simulated opinions for T2
     ## H1b long data frame
-    df_sim_long <- df_ag %>%
-      filter(!is.na(initial_opinion), !is.na(opinion), !is.na(agent_id)) %>%
+    mlm_model_h1b_list <- list()
+    for (mt in unique(df_sim_base$model_type)) {
+      
+    df_sim_long <- df_sim_base %>%
+      filter(model_type == mt, !is.na(initial_opinion), !is.na(opinion), !is.na(agent_id)) %>%
       pivot_longer(
         cols = c(initial_opinion, opinion),
         names_to = "Time",
@@ -261,8 +286,8 @@ if ("debate_label" %in% names(df_ag)) {
     if (nrow(df_sim_long) > 0) {
       has_multi_debates_sim <- n_distinct(df_sim_long$debate_label, na.rm = TRUE) > 1
     
-      if (has_multi_debates_sim) {
-        mlm_model_h1b <- lme4::lmer(
+      mlm_model_h1b_list[[mt]] <- if (has_multi_debates_sim) {
+        lme4::lmer(
           Attitude ~ Condition * Time + (1 | agent_id) + (1 | debate_label), 
           data = df_sim_long,
             control = lmerControl(
@@ -270,22 +295,25 @@ if ("debate_label" %in% names(df_ag)) {
             optCtrl = list(maxfun = 10000)
           )
         )
-    } else {
-      write("missing columns, defaulting to basic regression")
-      mlm_model_h1b <- lme4::lmer(
+      } else {
+        write(paste("model_type", mt, ": single debate, defaulting to basic regression"))
+        mlm_model_h1b_list[[mt]] <- lme4::lmer(
           Attitude ~ Condition * Time + (1 | agent_id), 
           data = df_sim_long,
           control = lmerControl(
             optimizer = "nlminbwrap",
             optCtrl = list(maxfun = 10000)
           )
-      )
-     }
+        )
+        }
+      }
     }
 
     # Error Benchmarks (MAE) only deduped here because we want one row of empirical agent data
-    df_ag_deduped <- df_ag %>%
-      distinct(agent_id, selected_debate_id, logged_batch_seed, .keep_all = TRUE)
+
+    # Branch C: MAE / OLS/ABM Comparison  
+    df_ag_deduped <- df_ag_raw_slice %>%
+      distinct(agent_id, selected_debate_id, logged_batch_seed, model_type, .keep_all = TRUE)
 
     if (!is.null(mlm_model_h1a)) {
         df_t2_preds <- df_empir_long %>%
@@ -304,13 +332,15 @@ if ("debate_label" %in% names(df_ag)) {
     
         # ABM simulation MAE summary
         abm_mae_debate <- df_batch %>%
+          select(selected_debate_id, mae, debate_label, use_distinct_agents) |>
           group_by(selected_debate_id) %>%  
           summarize(
             abm_mae = mean(mae, na.rm = TRUE),
             debate_label = first(debate_label),  
             pct_hetero = mean(use_distinct_agents == TRUE, na.rm = TRUE),
             .groups = "drop"
-          )
+          ) |>
+          collect()
     
         # merge MAE scores for comparison
         common_ids <- intersect(ols_mae_debate$selected_debate_id, abm_mae_debate$selected_debate_id)
@@ -574,8 +604,10 @@ if ("debate_label" %in% names(df_ag)) {
   # ────────────────────────────────────────────────────────────────────────────
   ga_bounds_export <- NULL
   if (config$run_type == "LHS") {
+    message("Notice: GAML GA bounds extraction started")
     lhs_regions <- param_region_extraction(df_batch, percentile = 0.25)
     gaml_ga <- generate_gaml_bounds(lhs_regions$regions)
+    print(head(gaml_ga))
 
     # safe write guard to characters
     if (!is.null(gaml_ga) && length(gaml_ga) > 0) {

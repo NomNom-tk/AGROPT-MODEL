@@ -213,12 +213,12 @@ process_run <- function(config) {
   # prepare_interactions + left_join pro_reduction from df_ag
   # derive df_influence and df_susceptibility
   # canonical output: df_interactions, df_influence, df_susceptibility
-  if (config$version_scope == "v2" && !is.null(config$interaction$v2$path)) {
-    target_int_path = config$interaction$v2$path
-  } else {
-    message("INTREACTION NOTICE: path exists and we testing interaciton loading")
-    target_int_path = config$interaction$v1$path
-  }
+  # if (config$version_scope == "v2" && !is.null(config$interaction$v2$path)) {
+  #   target_int_path = config$interaction$v2$path
+  # } else {
+  #   message("INTREACTION NOTICE: path exists and we testing interaciton loading")
+  #   target_int_path = config$interaction$v1$path
+  # }
   
   # declare nulls before guard
   df_interactions <- NULL
@@ -226,39 +226,39 @@ process_run <- function(config) {
   df_susceptibility <- NULL
   
   # guard to execute if file exists
-  if (!is.null(target_int_path) && file.exists(target_int_path)) {
-    df_interactions <- prepare_interactions(target_int_path)
+  # if (!is.null(target_int_path) && file.exists(target_int_path)) {
+  #   df_interactions <- prepare_interactions(target_int_path)
 
-      # lazy check for rows in df_interactions, to avoid full loading into RAM
-      has_rows <- df_interactions |> head(2) |> collect() |> nrow() > 0
+  #     # lazy check for rows in df_interactions, to avoid full loading into RAM
+  #     has_rows <- df_interactions |> head(2) |> collect() |> nrow() > 0
       
-      # guard 2 execute join and summary metric only if data rows exist
-      if (!is.null(df_interactions) && has_rows) {
+  #     # guard 2 execute join and summary metric only if data rows exist
+  #     if (!is.null(df_interactions) && has_rows) {
           
-            if (!is.null(df_ag)) {
+  #           if (!is.null(df_ag)) {
               
-              # 1. standardize RHS join table columns
-              # join key must be 1 row per agent (pro_reduction is a fixed empirical trait, not run-varying)
-              # — prevents join fan-out on receiver_id; assumes no data-quality dupes via count(agent_id) %>% filter(n>1)
-              df_ag_clean <- df_ag %>%
-                select(agent_id, pro_reduction) %>%
-                group_by(agent_id) %>% 
-                summarize(pro_reduction = first(pro_reduction), .groups = "drop") %>% # guarantees 1 row/agent, prevents join fan-out
-                mutate(agent_id = as.character(agent_id))
+  #             # 1. standardize RHS join table columns
+  #             # join key must be 1 row per agent (pro_reduction is a fixed empirical trait, not run-varying)
+  #             # — prevents join fan-out on receiver_id; assumes no data-quality dupes via count(agent_id) %>% filter(n>1)
+  #             df_ag_clean <- df_ag %>%
+  #               select(agent_id, pro_reduction) %>%
+  #               group_by(agent_id) %>% 
+  #               summarize(pro_reduction = first(pro_reduction), .groups = "drop") %>% # guarantees 1 row/agent, prevents join fan-out
+  #               mutate(agent_id = as.character(agent_id))
               
-              # 2. standardize LHS join table and execute safe merge
-              df_interactions <- df_interactions %>%
-                mutate(receiver_id = as.character(receiver_id)) %>%
-                left_join(df_ag_clean, by = c("receiver_id" = "agent_id")) %>%
-                filter(!is.na(pro_reduction)) # 11/6/26 filter out rows where pro_reduc is not matched by receiver_id
-            }
-            df_susceptibility = compute_susceptibility_scores(df_interactions) %>% collect()
-            df_influence = compute_influence_scores(df_interactions) %>% collect()
-            message("Notice: interactions succeeded, moving on to empirical")
-      } else {
-        message("Notice: Interaction file exists but contains 0 data rows. Skipping susceptibility and influence metrics.")
-      }
-  }
+  #             # 2. standardize LHS join table and execute safe merge
+  #             df_interactions <- df_interactions %>%
+  #               mutate(receiver_id = as.character(receiver_id)) %>%
+  #               left_join(df_ag_clean, by = c("receiver_id" = "agent_id")) %>%
+  #               filter(!is.na(pro_reduction)) # 11/6/26 filter out rows where pro_reduc is not matched by receiver_id
+  #           }
+  #           df_susceptibility = compute_susceptibility_scores(df_interactions) %>% collect()
+  #           df_influence = compute_influence_scores(df_interactions) %>% collect()
+  #           message("Notice: interactions succeeded, moving on to empirical")
+  #     } else {
+  #       message("Notice: Interaction file exists but contains 0 data rows. Skipping susceptibility and influence metrics.")
+  #     }
+  # }
 
   # # EMPIRICAL
   # empirical_prep — same path regardless of run_type

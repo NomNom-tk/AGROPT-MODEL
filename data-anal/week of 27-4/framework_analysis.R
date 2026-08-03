@@ -76,10 +76,12 @@ analyze_processed_run <- function(df) {
       )
 
     # empirical model m for beta calculation and comparison with sim data
+    log_step("Starting Empirical model MLM for beta calculations...")
     empir_model_m <- lmer(
         change_t1_t2_z ~ pro_reduction_z + (1 | id_group_all),
         data = df_emp_m
     )
+    log_step("Finished empirical MLM") 
 
     # Extract empir cohen with standardized coefficients
     empir_cohen <- data.frame(
@@ -92,9 +94,13 @@ analyze_processed_run <- function(df) {
     # H2 test set up
     if (all(c("abs_change_t1_t2", "perceived_norms", "self_control") %in% colnames(df_empirical))) {
         # Uncentered H2 model and diagnostics
+        log_step("Starting H2 uncentered model...")
         mlm_model_h2 <- lmer(abs_change_t1_t2 ~ (perceived_norms + self_control) * opinion_strength + (1 | id_group_all), data = df_empirical)
+        log_step("Finished H2 uncentered model...")
     if (all(c("perceived_norm_cent", "self_control_cent", "opinion_strength_cent") %in% colnames(df_empirical))) {
+        log_step("Starting H2 centered model...")
         mlm_model_h2_cent <- lmer(abs_change_t1_t2 ~ (perceived_norm_cent + self_control_cent) * opinion_strength_cent + (1 | id_group_all), data = df_empirical)
+        log_step("Finished H2 centered model...")   
     }
 }
 
@@ -175,33 +181,36 @@ analyze_processed_run <- function(df) {
   simulated_betas_raw <- NULL
   
   if (!is.null(df_ag)) { # H1a and H1b implemented 22/7/26 / updated to robust model 24/7/26
+    log_step("DEBUG: sucessfully entered df_ag mutation block before lmer calculations")
 
-  df_ag <- df_ag %>% # update on 27/7/26 coerced vars prior to further processing and collect (ensuring agent_id is a char)
-    mutate(
-        initial_opinion   = as.numeric(initial_opinion),
-        final_attitude    = as.numeric(final_attitude),
-        current_condition = as.character(current_condition),
-        agent_id          = as.character(agent_id),
-        debate_label      = as.character(debate_label)
-      )
+    df_ag <- df_ag %>% # update on 27/7/26 coerced vars prior to further processing and collect (ensuring agent_id is a char)
+      mutate(
+          initial_opinion   = as.numeric(initial_opinion),
+          final_attitude    = as.numeric(final_attitude),
+          current_condition = as.character(current_condition),
+          agent_id          = as.character(agent_id),
+          debate_label      = as.character(debate_label)
+    )
+    log_step("OLS vs ABM comparison initial mutation complete, starting df_ag slicing")
 
-  # --- DIAGNOSTIC CHECK ---
-message("\n[DIAGNOSTIC] Starting empirical MLM pipeline...")
-message(sprintf(" -> Initial df_ag rows: %d", nrow(df_ag)))
+    # --- DIAGNOSTIC CHECK ---
+    message("\n[DIAGNOSTIC] Starting empirical MLM pipeline...")
+    message(sprintf(" -> Initial df_ag rows: %d", nrow(df_ag)))
 
-if ("current_condition" %in% names(df_ag)) {
-  cond_levels <- unique(df_ag$current_condition)
-  message(sprintf(" -> Unique 'current_condition' levels (%d): %s", 
+    if ("current_condition" %in% names(df_ag)) {
+      cond_levels <- unique(df_ag$current_condition)
+      message(sprintf(" -> Unique 'current_condition' levels (%d): %s", 
                   length(cond_levels), paste(cond_levels, collapse = ", ")))
-} else {
-  warning(" -> 'current_condition' column missing from df_ag!")
-}
+    } else {
+      warning(" -> 'current_condition' column missing from df_ag!")
+    }
 
-if ("debate_label" %in% names(df_ag)) {
-  debate_levels <- unique(df_ag$debate_label)
-  message(sprintf(" -> Unique 'debate_label' count: %d", length(debate_levels)))
-}
-# ------------------------
+    if ("debate_label" %in% names(df_ag)) {
+      debate_levels <- unique(df_ag$debate_label)
+      message(sprintf(" -> Unique 'debate_label' count: %d", length(debate_levels)))
+    }
+    # ------------------------
+  }
 
 
     # df_ag_raw_slice base set up to collect prior to H1a/h1b and df_ag_deduped 30/7/26
@@ -229,6 +238,7 @@ if ("debate_label" %in% names(df_ag)) {
     # Nesting individuals (ID) inside debate groups (ID_Group_all) / use with debate_label in deduped data
     # empirical h1 comparison
     ## empirical long format for mlm
+    log_step("starting H1a df creation")
     df_empir_long <- df_ag_base %>%
       filter(!is.na(initial_opinion), !is.na(final_attitude)) %>%
       pivot_longer(
@@ -244,6 +254,7 @@ if ("debate_label" %in% names(df_ag)) {
 
     # Model H1a: Empirical trajectory
     if (nrow(df_empir_long) > 0) {
+      log_step("Finished df creation, now starting H1a mlm...")
       has_multi_debates <- n_distinct(df_empir_long$debate_label, na.rm = TRUE) > 1
     
       mlm_model_h1a <- if (has_multi_debates) {
@@ -268,7 +279,7 @@ if ("debate_label" %in% names(df_ag)) {
     ## H1b long data frame
     mlm_model_h1b_list <- list()
     for (mt in unique(df_sim_base$model_type)) {
-      
+    log_step("H1b df setup starting...") 
     df_sim_long <- df_sim_base %>%
       filter(model_type == mt, !is.na(initial_opinion), !is.na(opinion), !is.na(agent_id)) %>%
       pivot_longer(
@@ -284,6 +295,7 @@ if ("debate_label" %in% names(df_ag)) {
 
     # Model H1b: Simulated trajectory
     if (nrow(df_sim_long) > 0) {
+      log_step("Finished H1b df setup, starting mlm...")
       has_multi_debates_sim <- n_distinct(df_sim_long$debate_label, na.rm = TRUE) > 1
     
       mlm_model_h1b_list[[mt]] <- if (has_multi_debates_sim) {
@@ -311,7 +323,8 @@ if ("debate_label" %in% names(df_ag)) {
 
     # Error Benchmarks (MAE) only deduped here because we want one row of empirical agent data
 
-    # Branch C: MAE / OLS/ABM Comparison  
+    # Branch C: MAE / OLS/ABM Comparison 
+    log_step("Starting branch C df setups, ols vs abm...")
     df_ag_deduped <- df_ag_raw_slice %>%
       distinct(agent_id, selected_debate_id, logged_batch_seed, model_type, .keep_all = TRUE)
 
@@ -377,6 +390,7 @@ if ("debate_label" %in% names(df_ag)) {
     # beta distance check 3/6/26 check distribution of empirical beta compared with simulations
     # comprehensive update with MLM and checks 22/7/26
     if (!is.null(empir_cohen)) {
+      log_step("finished ols vs abm delta_mae calculations, starting empirical and simulated betas...")
       
       # ensure empir is treated as a single numeric value
       empirical_beta_scalar <- as.numeric(empir_cohen$std_estimate[1])

@@ -207,6 +207,8 @@ process_run <- function(config) {
   } else {
     target_agent_path = config$agent$v1$path
   }
+
+  log_step("Starting Agent Loading Block")
   df_ag = load_and_prepare(target_agent_path, config)
   
   # INTERACTION LEVEL
@@ -276,7 +278,9 @@ process_run <- function(config) {
   df_directional <- NULL
   
   if (!is.null(df_ag)) {
+    log_step("Starting Directional dfs, unsummarized")
     df_directional_agents <- prepare_directional(df_ag) # unsummarized directional
+    log_step("Starting summarized Directional df")
     df_directional <- summarize_directional(df_directional_agents) # summarized version
   }
 
@@ -288,12 +292,14 @@ process_run <- function(config) {
   df_valence <- NULL
   df_upset <- NULL
   if (!is.null(df_directional_agents)) {
+      log_step("Starting Valence Analysis Chunk: summarized valence for models first")
       df_sum_directional_valence <- summarize_directional_valence(df_directional_agents) # summarize directional valence for models
       df_valence <- compute_valence_asymmetry(df_sum_directional_valence) # valence df with additional valence metrics
   }
 
   if (!is.null(df_sum_directional_valence)) {
-  df_upset <- df_sum_directional_valence %>% # added 6/7/26 for upset plots
+    log_step("Upset df calculation starting...")
+    df_upset <- df_sum_directional_valence %>% # added 6/7/26 for upset plots
       group_by(selected_debate_id, model_type) %>%
       summarize(pct_correct_dir = mean(pct_correct_dir), .groups = "drop") %>%
       pivot_wider(names_from = model_type, values_from = pct_correct_dir)
@@ -326,7 +332,8 @@ process_run <- function(config) {
   }
 
   # compute bias flags safely
-  df_upset <- df_upset %>%
+  log_step("Bias flag computation for df_valence starting")
+    df_upset <- df_upset %>%
     mutate(
         pro_biased = accuracy_asymmetry > 0,
         anti_biased = accuracy_asymmetry < 0)

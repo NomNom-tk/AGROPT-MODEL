@@ -24,6 +24,15 @@ read_clean <- function(path) {
   return(clean_headers(df))
 }
 
+#' Timestamp and progress updates 3/8/26
+#'
+#' Used to check execution time for a specific function/chunk
+#' 
+#' 
+log_step <- function(msg) {
+  cat(sprintf("[%s] %s\n", format(Sys.time(), "%H:%M:%S"), msg))
+}
+
 # CHECK clean_headers blanket gsub clean 30/7/26
 #' meant to blanket clean headers and ensure that header conversion is standard
 #' wraps the clean_stray headers inside it before being called in read_clean

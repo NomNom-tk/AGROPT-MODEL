@@ -153,12 +153,14 @@ analyze_processed_run <- function(df) {
         pcc_v1   <- sensi_v1$pcc %>% mutate(version = "v1")
         prcc_v1  <- sensi_v1$prcc %>% mutate(version = "v1")
         rf_v1 <- sensi_v1$rf %>% mutate(version = "v1")
+        sensi_v1$rf_mod_list <- sensi_v1$rf_mod_lis
       }
       if (nrow(df_lhs_v2) > 0 && !is.null(config$batch$v2$path)) {
         sensi_v2 <- run_sensi_analysis(df_lhs_v2, param_cols_by_model, output_cols, num_trees = 500)
         pcc_v2   <- sensi_v2$pcc %>% mutate(version = "v2")
         prcc_v2  <- sensi_v2$prcc %>% mutate(version = "v2")
         rf_v2 <- sensi_v2$rf %>% mutate(version = "v2")
+        sensi_v2$rf_mod_list <- sensi_v2$rf_mod_list
       }
       
       if (exists("pcc_v1") && exists("pcc_v2"))   pcc_all  <- bind_rows(pcc_v1, pcc_v2)
@@ -649,9 +651,9 @@ analyze_processed_run <- function(df) {
     ),
     results = list(
       sensitivity = list(
-        combined = list(pcc = pcc_lhs, prcc = prcc_lhs),
-        v1       = if(!is.null(sensi_v1)) list(pcc = sensi_v1$pcc, prcc = sensi_v1$prcc, rf = sensi_v1$rf) else NULL,
-        v2       = if(!is.null(sensi_v2)) list(pcc = sensi_v2$pcc, prcc = sensi_v2$prcc, rf = sensi_v2$rf) else NULL
+        combined = list(pcc = pcc_lhs, prcc = prcc_lhs, rf = rf, rf_models = sensi_lhs$rf_mod_list),
+        v1       = if(!is.null(sensi_v1)) list(pcc = sensi_v1$pcc, prcc = sensi_v1$prcc, rf = sensi_v1$rf, rf_models = sensi_v1$rf_mod_list) else NULL,
+        v2       = if(!is.null(sensi_v2)) list(pcc = sensi_v2$pcc, prcc = sensi_v2$prcc, rf = sensi_v2$rf, rf_models = sensi_v2$rf_mod_list) else NULL
       ),
       models = list(conv = run_conv_model(df_conv_debate), 
                     ols = ols_model, # raw pooled individual model 13/7/26
@@ -733,9 +735,13 @@ analyze_processed_run <- function(df) {
       valence_accuracy = function() plot_valence_accuracy(df_valence_processed),
         
       beta_distance_vs_empir = function() plot_beta_distance(simulated_betas_raw, empirical_beta_val),
+
+      # RF visualizations
+      rf_importance_model_types = function() plot_rf_importance(rf_lhs),
+      pdp_v1 = function() plot_model_pdp(sensi_lhs$rf_mod_list, "bipolarization_FALSE", "repulsion_threshold")
       
-      homogeneous_network_plots   = homogeneous_plots_combined,
-      heterogeneous_network_plots = heterogeneous_plots_combined
+      #homogeneous_network_plots   = homogeneous_plots_combined, TODO commented out because interactions too long 8/3/26
+      #heterogeneous_network_plots = heterogeneous_plots_combined
     )
   )
   

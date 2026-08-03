@@ -716,3 +716,44 @@ plot_model_comparison_uncertainty <- function(df) {
   }
   return(p)
 }
+
+#' RF Importance Across Model Types
+#' 
+#' Takes the RF output from \code{run_sensi_analysis} and plots the individual variable
+#' importance for each model_type
+#'
+#'
+plot_rf_importance <- function(df) {
+  ggplot(df, aes(x= reorder(parameter, importance), y = importance, fill = model_type)) +
+  geom_col(position = "dodge") +
+  coord_flip() +
+  facet_wrap(~output, scales = "free") +
+  theme_minimal() +
+  labs(title = "Random Forest Variable Importance", x = "Parameter", y = "Importance Score")
+}
+
+#' Streamlined PDP Plotter
+#' 
+#' @param sensi_output_vX A specific version list (e.g., results$sensitivity$v1) containing models
+#' @param model_key The model key string (e.g., "bipolarization_FALSE")
+#' @param feature_name The parameter to plot
+plot_model_pdp <- function(sensi_output_vX, model_key, feature_name) {
+  
+  # 1. Pull the pre-fitted model from the version object
+  fitted_model <- sensi_output_vX$models[[model_key]]
+  if (is.null(fitted_model)) stop("Model not found in this version object.")
+  
+  # 2. Extract data slice using the version's internal data or global raw reference
+  parts <- strsplit(model_key, "_")[[1]]
+  sub_data <- df_batch %>% dplyr::filter(model_type == parts[1], use_distinct_agents == as.logical(parts[2]))
+  
+  X_sub <- sub_data[, param_cols_by_model[[model_key]], drop = FALSE]
+  X_sub[] <- lapply(X_sub, function(col) as.numeric(col))
+  y_sub <- as.numeric(sub_data$mae)
+  
+  # 3. Generate IML predictor and PDP
+  predictor <- iml::Predictor$new(model = fitted_model, data = X_sub, y = y_sub)
+  effect <- iml::FeatureEffect$new(predictor, feature = feature_name, method = "pdp")
+  
+  plot(effect) + ggplot2::theme_minimal()
+}

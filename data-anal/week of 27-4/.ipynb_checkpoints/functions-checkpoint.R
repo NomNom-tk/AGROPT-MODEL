@@ -643,6 +643,7 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees =
   pcc_results <- list()  # store results per key-output combination
   prcc_results <- list() # storage for prcc (pcc with rank)
   rf_results <- list() # storage of rf results
+  rf_models_list <- list() # storage of rf data for each model_type 
   
   # Loop over each piece in the sensi_split
   for (df_piece in sensi_split) {
@@ -767,6 +768,9 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees =
 
     imp_scores <- rf_fit$variable.importance
 
+    # Save the model object directly using the exact same lookup key + output combination
+    rf_models_list[[paste(key, output, sep = "_")]] <- rf_fit
+
     rf_results[[paste(key, output, sep = "_")]] <- data.frame(
       key = rep(key, length(imp_scores)),
       model_type = rep(model_type_val, length(imp_scores)),
@@ -790,7 +794,8 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees =
   return(list(
     pcc = pcc_results_df,
     prcc = prcc_results_df,
-    rf = rf_results_df
+    rf = rf_results_df,
+    rf_mod_list = rf_models_list
     ))
 }
 
@@ -1650,3 +1655,5 @@ build_network_graph <- function(g) {
     theme(legend.position = "bottom") +
     theme_graph()
 }
+
+

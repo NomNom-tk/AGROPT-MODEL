@@ -210,12 +210,11 @@ analyze_processed_run <- function(df) {
       message(sprintf(" -> Unique 'debate_label' count: %d", length(debate_levels)))
     }
     # ------------------------
-  }
 
 
     # df_ag_raw_slice base set up to collect prior to H1a/h1b and df_ag_deduped 30/7/26
     df_ag_raw_slice <- df_ag |>
-      select(agent_id, debate_label, selected_debate_id, logged_batch_seed, model_type,
+      select(agent_id, debate_label, selected_debate_id, seed, model_type,
              current_condition, initial_opinion, final_attitude, opinion, pro_reduction, opinion_change) |>
       filter(!is.na(agent_id)) |>
       collect()
@@ -326,7 +325,7 @@ analyze_processed_run <- function(df) {
     # Branch C: MAE / OLS/ABM Comparison 
     log_step("Starting branch C df setups, ols vs abm...")
     df_ag_deduped <- df_ag_raw_slice %>%
-      distinct(agent_id, selected_debate_id, logged_batch_seed, model_type, .keep_all = TRUE)
+      distinct(agent_id, selected_debate_id, seed, model_type, .keep_all = TRUE)
 
     if (!is.null(mlm_model_h1a)) {
         df_t2_preds <- df_empir_long %>%
@@ -398,7 +397,7 @@ analyze_processed_run <- function(df) {
       # compute simualted beta distribution per model type across pooled runs / removed no change given that opinion_change is zero
       simulated_betas_raw <- df_ag_deduped %>%
         filter(model_type != "no_change") %>%
-        group_by(model_type, selected_debate_id, logged_batch_seed) %>%
+        group_by(model_type, selected_debate_id, seed) %>% # TODO check whether removed logged_batch for testing
         do({
         dat_sim <- .
 
@@ -529,7 +528,7 @@ analyze_processed_run <- function(df) {
   }
   
   stochasticity_check_1 <- df_batch %>%
-    group_by(model_type, use_distinct_agents, selected_debate_id, logged_batch_seed) %>%
+    group_by(model_type, use_distinct_agents, selected_debate_id, seed) %>%
     summarize(mae_sd = sd(mae), n = n(), .groups = "drop")
   
   heterogeneity_check <- df_batch %>%
@@ -564,12 +563,16 @@ analyze_processed_run <- function(df) {
     summarize(mean_convergence = mean(convergence_rate), pct_hetero = mean(use_distinct_agents == TRUE) * 100, n_total = n(), .groups = "drop")
   
   clusters <- NULL
-  if ("num_clusters" %in% colnames(df_batch)) {
     clusters <- df_batch %>%
-      mutate(cluster_change = num_clusters - initial_num_clusters) %>%
+      mutate(
+          num_clusters = if ("num_clusters" %in% names(.)) as.numeric(num_clusters) else NA_real_,
+          initial_num_clusters = if ("initial_num_clusters" %in% names(.)) as.numeric(initial_num_clusters) else NA_real_,
+          cluster_change = case_when(
+      model_type == "consensus" ~ 0,
+      is.na(num_clusters) | is.na(initial_num_clusters) ~ 0,
+      TRUE ~ num_clusters - initial_num_clusters)) %>%
       group_by(model_type, selected_debate_id) %>%
       summarize(mean_cluster_change = mean(cluster_change), .groups = "drop")
-  }
 
 # TODO Request GLPK package for RcppParallel for Network analysis
   # # ────────────────────────────────────────────────────────────────────────────
@@ -614,24 +617,24 @@ analyze_processed_run <- function(df) {
   #   )
   # }
   
-  # # ────────────────────────────────────────────────────────────────────────────
-  # # 8. GA BOUNDS EXTRACTION (ONLY RUN ON LHS SWEEPS)
-  # # ────────────────────────────────────────────────────────────────────────────
-  # ga_bounds_export <- NULL
-  # if (config$run_type == "LHS") {
-  #   message("Notice: GAML GA bounds extraction started")
-  #   lhs_regions <- param_region_extraction(df_batch, percentile = 0.25)
-  #   gaml_ga <- generate_gaml_bounds(lhs_regions$regions)
-  #   print(head(gaml_ga))
+  # ────────────────────────────────────────────────────────────────────────────
+  # 8. GA BOUNDS EXTRACTION (ONLY RUN ON LHS SWEEPS)
+  # ────────────────────────────────────────────────────────────────────────────
+  ga_bounds_export <- NULL
+  if (config$run_type == "LHS") {
+    message("Notice: GAML GA bounds extraction started")
+    lhs_regions <- param_region_extraction(df_batch, percentile = 0.25)
+    gaml_ga <- generate_gaml_bounds(lhs_regions$regions)
+    print(head(gaml_ga))
 
-  #   # safe write guard to characters
-  #   if (!is.null(gaml_ga) && length(gaml_ga) > 0) {
-  #     writeLines(gaml_ga, "gaml_GA_bounds.txt")
-  #   } else {
-  #     message("skipping GAML bounds file export: gaml_ga is empty.")
-  #   }
-  #   ga_bounds_export <- list(bounds = lhs_regions$regions, range_check = lhs_regions$range_check)
-  # }
+    # safe write guard to characters
+    if (!is.null(gaml_ga) && length(gaml_ga) > 0) {
+      writeLines(gaml_ga, "gaml_GA_bounds.txt")
+    } else {
+      message("skipping GAML bounds file export: gaml_ga is empty.")
+    }
+    ga_bounds_export <- list(bounds = lhs_regions$regions, range_check = lhs_regions$range_check)
+  }
   
   # ────────────────────────────────────────────────────────────────────────────
   # 9. STANDARDIZED ANALYSIS OBJECT PACKAGING
@@ -687,8 +690,8 @@ analyze_processed_run <- function(df) {
         failures    = failures_comp, # pulls from df_batch, mutates failure = mae > 0.18, grouped (model_type, failures), summarizes mean convergence, pct_hetero in debate composition)
         clusters    = clusters # pulls from df_batch, mutates cluster change (from beginning to end), grouped (model_type, selected_debate_id), summarizes mean_cluster_change
       ),
-      regions  = ga_bounds_export,
-      networks = network_data_package
+      regions  = ga_bounds_export
+      #networks = network_data_package TODO commented out because interactions took too long to compile 3/8/26
     ),
     plots = list(
       pcc        = function() plot_pcc_heatmap(pcc_lhs),

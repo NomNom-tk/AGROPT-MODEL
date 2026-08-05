@@ -22,7 +22,7 @@ global {
     // v1: mae_convergence_threshold = 0.001 (too tight, early stopping)
     // v2: mae_convergence_threshold = 0.01 (order of magnitude relaxing)
     // v3: fixed_cycles = N (no convergence check, fixed duration)
-    string data_path <- "../data-dictionary/exp-dat/train_dataa.csv"; // TODO 5/8/26 change when running test or validation data
+    string data_path <- "../data-dictionary/exp-dat/train_data.csv"; // TODO 5/8/26 change when running test or validation data
     
     // =====
     // Environment

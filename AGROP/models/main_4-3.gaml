@@ -12,7 +12,7 @@ global {
     init {
     	logged_batch_seed <- seed; // set once before everything else to check 13/7/26
     	// call data loader with file path parameter CHANGE WHEN RUNNING TEST OR TRAINING DATA 5/8/26
-    	do load_csv_data("data_path");
+    	do load_csv_data(data_path);
     	//do load_csv_data("/home/agropt/Gama_Workspace_new/thomas-social/models/data-dictionary/exp-dat/train_data.csv");
     	
         // debate mapping from data loader

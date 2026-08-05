@@ -11,8 +11,8 @@ global {
     // initialization ONLY for orchestration
     init {
     	logged_batch_seed <- seed; // set once before everything else to check 13/7/26
-    	// call data loader with file path parameter
-    	do load_csv_data("../data-dictionary/exp-dat/train_data.csv");
+    	// call data loader with file path parameter CHANGE WHEN RUNNING TEST OR TRAINING DATA 5/8/26
+    	do load_csv_data("data_path");
     	//do load_csv_data("/home/agropt/Gama_Workspace_new/thomas-social/models/data-dictionary/exp-dat/train_data.csv");
     	
         // debate mapping from data loader
@@ -102,6 +102,7 @@ action reset_debate_globals { // reset of globals for each debate 21/5/26
     polarization_index <- 0.0;        // Measure of opinion polarization
     initial_num_clusters <- 0;          // Opinion clusters at start
     convergence_cycle <- -1;            // Cycle when convergence achieved
+    converged <- false;					// reset to false when debates reset 5/8/26
 
     // PRO/ANTI REDUCTION METRICS
     num_pro_agents <- 0;                // Count of pro-reduction agents
@@ -269,10 +270,10 @@ loop idx from: 0 to: length(debate_id_list) - 1 {
                 seed <- logged_batch_seed + idx; // idx global row index (uniquer per agent across csv)
                 //write "idx =" + idx + "agent_seed=" + seed;
 
-                agent_convergence_rate <- max([0.01, min([0.99, gauss(convergence_rate, convergence_rate_sd)])]);
-                agent_confidence_threshold <- max([0.01, min([0.99, gauss(confidence_threshold, confidence_threshold_sd)])]);
-                agent_repulsion_strength <- max([0.01, min([0.99, gauss(repulsion_strength, repulsion_strength_sd)])]);
-                agent_repulsion_threshold <- max([0.01, min([0.99, gauss(repulsion_threshold, repulsion_threshold_sd)])]);
+                agent_convergence_rate <- max([0.001, min([0.99, gauss(convergence_rate, convergence_rate_sd)])]);
+                agent_confidence_threshold <- max([0.001, min([0.99, gauss(confidence_threshold, confidence_threshold_sd)])]);
+                agent_repulsion_strength <- max([0.001, min([0.99, gauss(repulsion_strength, repulsion_strength_sd)])]);
+                agent_repulsion_threshold <- max([0.001, min([0.99, gauss(repulsion_threshold, repulsion_threshold_sd)])]);
                 agent_repulsion_threshold <- max([agent_confidence_threshold + 0.05, agent_repulsion_threshold]);
             } else {
                 agent_convergence_rate <- convergence_rate;
@@ -300,7 +301,7 @@ loop idx from: 0 to: length(debate_id_list) - 1 {
 
 write "looged_batch_seed=" + logged_batch_seed + "shoudl equal GUI 123.0";
 // reset seed before next debate 13/7/26
-seed <- logged_batch_seed + 1.0;
+seed <- logged_batch_seed + debate_counter + 1.0;
 
 //write "Debate " + target_debate_id + " condition: " + current_condition;
 }
@@ -357,12 +358,12 @@ reflex compute_pro_anti_stats when: ((cycle - debate_start_cycle) mod 10 = 0) an
     }
 }
 
-// REFLEX: COMPUTE STATISTICS (every 10 cycles)
-reflex compute_statistics when: ((cycle - debate_start_cycle) mod 10 = 0) { // 22/5/26 change to debate_start_cycle, mod -- cycle divisible by 10
-    list<float> opinions <- opinion_agents collect each.opinion;
+action compute_opinion_stats {
+	list<float> opinions <- opinion_agents collect each.opinion;
     if length(opinions) > 0 {
         float mean_opinion <- mean(opinions);
         opinion_variance <- variance(opinions);
+        write("opinion variance check" + opinion_variance);
 
         // Count opinion clusters using histogram
         int num_bins <- 10;
@@ -376,10 +377,16 @@ reflex compute_statistics when: ((cycle - debate_start_cycle) mod 10 = 0) { // 2
         // Compute polarization index (variance of pairwise distances)
         do compute_pairwise_polarization;
     }
+	
+}
+
+// REFLEX: COMPUTE STATISTICS (every 10 cycles)
+reflex compute_statistics when: ((cycle - debate_start_cycle) mod 10 = 0) { // 22/5/26 change to debate_start_cycle, mod -- cycle divisible by 10
+    do compute_opinion_stats;
 }
 
 // REFLEX: CHECK FOR CONVERGENCE (every 5 cycles after cycle 10)
-reflex check_convergence when: end_simulation_at_convergence and ((cycle - debate_start_cycle) > 10) and ((cycle - debate_start_cycle) mod 5 = 0) and !end_simulation { // 22/5/526 change to debate_start_cycle
+reflex check_convergence when: end_simulation_at_convergence and ((cycle - debate_start_cycle) > 10) and !end_simulation { // 22/5/526 change to debate_start_cycle
     list<float> opinion_changes <- [];
     ask opinion_agents {
         opinion_changes << abs(opinion - previous_opinion);
@@ -395,6 +402,7 @@ reflex check_convergence when: end_simulation_at_convergence and ((cycle - debat
         // Check if converged
         if max_change < mae_convergence_threshold {
             convergence_cycle <- cycle - debate_start_cycle;
+            converged <- true; // change flag to true if change is less than threshold 5/8/26
             if debug_mode = true {
                 write "Converged at cycle " + convergence_cycle;
             } 
@@ -445,6 +453,7 @@ reflex update_prev_opinion {
 // REFLEX: FALLBACK - STOP AT MAX_CYCLES
 reflex max_cycles_reached when: (cycle - debate_start_cycle) >= max_cycles and !end_simulation {
     convergence_cycle <- cycle - debate_start_cycle; // record actual convergence cycle regardless of termination 4/5/26
+    converged <- false; // change flag to false if we reach max cycles
     write "Reached max_cycles without convergence";
     end_simulation <- true;
     
@@ -554,11 +563,8 @@ action compute_final_statistics {
         return;
     }
     
-    do compute_pairwise_polarization;
-    final_stats_computed <- true;
-    
-    list<float> opinions <- opinion_agents collect each.opinion;
-    
+    do compute_opinion_stats;
+    final_stats_computed <- true;  
 }
 
 // resets the globals for each debate when cycling between debates 21/5/26
@@ -607,6 +613,15 @@ action save_batch_results {
     do compute_pro_anti_counts;
     string debate_label <- first(opinion_agents).debate_label;
     
+    if !file_exists("outputs/batch_summary.csv") {
+    save "model_type, current_condition, selected_debate_id, debate_label, current_experiment_id, max_cycles, converged, use_distinct_agents,
+            speaking_mode, logged_batch_seed, pro_count, anti_count, convergence_rate, confidence_threshold, repulsion_threshold, 
+            repulsion_strength, convergence_rate_sd, confidence_threshold_sd, repulsion_threshold_sd, repulsion_strength_sd, 
+            convergence_cycle, initial_variance, mae, opinion_variance, polarization_index, num_clusters, 
+            initial_num_clusters, neutral_zone_width, mean_net_repulsion_abs"
+    to: "outputs/batch_summary.csv" rewrite: false;
+    }
+    
     if model_type = "bipolarization" {
         neutral_zone_width <- repulsion_threshold - confidence_threshold;
         
@@ -629,7 +644,7 @@ action save_batch_results {
     }
     
     // Save summary statistics
-    save [model_type, current_condition, selected_debate_id, debate_label, current_experiment_id, max_cycles, use_distinct_agents,
+    save [model_type, current_condition, selected_debate_id, debate_label, current_experiment_id, max_cycles, converged, use_distinct_agents,
             speaking_mode, logged_batch_seed, pro_count, anti_count, convergence_rate, confidence_threshold, repulsion_threshold, 
             repulsion_strength, convergence_rate_sd, confidence_threshold_sd, repulsion_threshold_sd, repulsion_strength_sd, 
             convergence_cycle, initial_variance, mae, opinion_variance, polarization_index, num_clusters, 
@@ -655,6 +670,18 @@ action save_batch_results {
 action save_agent_results {
     do compute_pro_anti_counts;
     
+    if !file_exists("outputs/agent_level_results.csv") {
+    save "model_type,current_condition,selected_debate_id,debate_label,current_experiment_id,
+		  max_cycles,use_distinct_agents,speaking_mode,logged_batch_seed,agent_id,pro_reduction,pro_count,anti_count,
+		  subfactor_1_t1,subfactor_2_t1,subfactor_3_t1,subfactor_4_t1,subfactor_5_t1,initial_opinion,initial_variance,
+		  opinion,subfactor_1_t2,subfactor_2_t2,subfactor_3_t2,subfactor_4_t2,subfactor_5_t2,final_attitude,mean_t2_subfactors,
+		  opinion_change,individual_error,error_sub1,error_sub2,error_sub3,error_sub4,error_sub5,agent_convergence_rate,
+		  agent_confidence_threshold,agent_repulsion_threshold,agent_repulsion_strength,total_influences_received,
+		  retention_discount,cumulative_opinion_change,agent_net_change,agent_wrong_direction,agent_is_saturated,
+		  convergence_rate,confidence_threshold,repulsion_threshold,repulsion_strength,convergence_cycle,converged"
+    to: "outputs/agent_level_results.csv" rewrite: false;
+	}
+    
     // could the error be due to subfactors not being declard in opinion_agent
     ask opinion_agents {
         float individual_error <- abs(opinion - final_attitude);
@@ -662,8 +689,8 @@ action save_agent_results {
         
         // derived opinion values 20/4/26
         agent_net_change <- opinion - initial_opinion_snapshot;
-        agent_wrong_direction <- (pro_reduction = 1 and agent_net_change < 0)
-                                    or (pro_reduction = 0 and agent_net_change > 0);
+        agent_wrong_direction <- (final_attitude > initial_opinion_snapshot and agent_net_change < 0)
+                                    or (final_attitude < initial_opinion_snapshot and agent_net_change > 0); // 5/8/26 updated to reflect direction wrt empirical stance
         agent_is_saturated <- retention_discount < 0.2;
 
         
@@ -746,7 +773,8 @@ action save_agent_results {
             confidence_threshold,
             repulsion_threshold,
             repulsion_strength,
-            convergence_cycle 
+            convergence_cycle,
+            converged 
         ]
         to: "outputs/agent_level_results.csv" rewrite: false header: true format: "csv";
     }

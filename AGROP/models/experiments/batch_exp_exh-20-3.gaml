@@ -10,7 +10,7 @@ import "../main_4-3.gaml" // relative path back to main
 // force dmax 44 cycles given 44 debates in training data
 
 // Consensus non-distinct
-experiment Bt_lhs_cons_ndist type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
+experiment Bt_lhs_cons_ndist type: batch repeat: 1 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
 
     parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
 
@@ -131,7 +131,7 @@ experiment Bt_lhs_cons_dist_speak type: batch repeat: 5 keep_seed: true until: (
 }
 
 // Batch Clustering (Genetic)
-experiment Bt_lhs_clst_ndist type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
+experiment Bt_lhs_clst_ndist type: batch repeat: 1 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
     parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
     parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.6;
 
@@ -252,7 +252,7 @@ experiment Bt_lhs_clst_dist_speak type: batch repeat: 5 keep_seed: true until: (
 }
 
 // Batch Bipolarization
-experiment Bt_lhs_bipol_ndist type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
+experiment Bt_lhs_bipol_ndist type: batch repeat: 1 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
     parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
     // ensuring that repulsion_threshold > confidence_threshold is ALWAYS TRUE
     parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.3;
@@ -395,7 +395,7 @@ experiment Bt_lhs_bipol_dist_speak type: batch repeat: 5 keep_seed: true until: 
 }
 
 // NO CHANGE EXP
-experiment Bt_lhs_no_change type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
+experiment Bt_lhs_no_change type: batch repeat: 1 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
 	
 	method exploration;
 	

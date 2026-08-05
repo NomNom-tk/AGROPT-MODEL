@@ -22,6 +22,7 @@ global {
     // v1: mae_convergence_threshold = 0.001 (too tight, early stopping)
     // v2: mae_convergence_threshold = 0.01 (order of magnitude relaxing)
     // v3: fixed_cycles = N (no convergence check, fixed duration)
+    string data_path <- "../data-dictionary/exp-dat/data_complete.csv"; // TODO 5/8/26 change when running test or validation data
     
     // =====
     // Environment
@@ -56,6 +57,7 @@ global {
     float confidence_threshold_sd <- 0.1 min: 0.0 max: 0.3;
     float repulsion_threshold_sd <- 0.1 min: 0.0 max: 0.3;
     float repulsion_strength_sd <- 0.05 min: 0.0 max: 0.2;
+    
 
     // argumentation parameters
     int argument_pool_size <- 30;
@@ -98,6 +100,7 @@ global {
     // Model Fit
     float mae <- 0.0;                       // Mean Absolute Error (global)
     map<int, float> mae_per_debate <- map<int, float>(map([]));
+    bool converged <- false; 				// states whether debate converged or not with threshold 5/8/26
 
     // Opinion Stats
     float opinion_variance <- 0.0;          // Variance of opinions

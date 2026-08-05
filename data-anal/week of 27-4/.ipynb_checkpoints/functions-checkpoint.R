@@ -96,9 +96,45 @@ append_metadata <- function(df, config, version = NA) {
       version = version
     )
 }
-# TODO and CHECK composition_filter 27/5/26 ----
-## purpose: centralizes filtering logic, removes duplicate code
-## update 2/6/26, dynamic column detection and stop condition
+
+#' Apply Debate Composition Filter Dynamically (created 27/5/26) 
+#' update 2/6/26 (dynamic column detection and stop condition)
+#'
+#' Filters a data frame by debate composition or debate identifier based on 
+#' a scope string specified in the configuration. Dynamically identifies 
+#' which column represents debate composition across varying data frame structures.
+#'
+#' @param df A data frame or tibble containing simulation or empirical debate data.
+#' @param config A named list or configuration object containing \code{composition_scope} 
+#'   (e.g., \code{"H"}, \code{"M"}, or \code{"all"}).
+#'
+#' @return The filtered data frame. Returns the original \code{df} unmodified if 
+#'   \code{df} is empty/NULL or if \code{config$composition_scope} is missing or set to \code{"all"}.
+#'
+#' @details
+#' The function performs early returns for edge cases:
+#' \itemize{
+#'   \item Returns \code{df} as-is if \code{df} is \code{NULL} or has 0 rows.
+#'   \item Returns \code{df} as-is if \code{config$composition_scope} is \code{NULL} 
+#'         or equals \code{"all"} (case-insensitive, whitespace-trimmed).
+#' }
+#' 
+#' If filtering is required, it dynamically checks for column presence in the 
+#' following priority order:
+#' \enumerate{
+#'   \item \code{"debate_composition"}
+#'   \item \code{"selected_debate_id"}
+#'   \item \code{"debate_label"}
+#' }
+#' 
+#' Rows are retained where the target column's value starts with the character 
+#' prefix specified in \code{config$composition_scope} (e.g., matching debate IDs or 
+#' labels starting with "H" for Homogeneous or "M" for Mixed).
+#'
+#' @note
+#' If no recognizable column is found, \code{target_col} evaluates to \code{NA_character_}. 
+#' Ensure the downstream guard evaluates \code{is.na(target_col)} rather than \code{is.null(target_col)} 
+#' to catch the missing identifier condition properly.
 apply_composition_filter <- function(df, config) {
   if (is.null(df) || nrow(df) == 0 || is.null(config$composition_scope) || tolower(trimws(config$composition_scope)) == "all") {
     return(df)
@@ -112,7 +148,7 @@ apply_composition_filter <- function(df, config) {
     TRUE ~ NA_character_ # 2/6/26 updated guard to NA_char (case_when will populate NA character as other columsn to check are chars)
   )
   
-  if (is.null(target_col)) {
+  if (is.na(target_col)) {
     stop("Composition filter failed: df contains no recognizable debate identifiers")
   }
   
@@ -244,23 +280,23 @@ prepare_sensitivity_data <- function(df, param_cols, output_cols) {
 # print(ppt, target = "relative path")
 
 # # TODO 12/6/26 no_change_anchor duplicates no_change across TRUE/FALSE for speaking_mode ----
-# anchor_baseline_facets <- function(df, condition_col = "speaking_mode", baseline_val = "no_change") {
+anchor_baseline_facets <- function(df, condition_col = "speaking_mode", baseline_val = "no_change") {
 
-#   # check if baseline model_type exists in df
-#   baseline_rows <- df %>%
-#     filter(model_type == baseline_val)
+  # check if baseline model_type exists in df
+  baseline_rows <- df %>%
+    filter(model_type == baseline_val)
 
-#   if (nrow(baseline_rows) > 0) {
-#     # dynamically create explicit TRUE and FALSE data structures
-#     nc_true <- baseline_rows %>% mutate(!!sym(condition_col) := TRUE)
-#     nc_false <- baseline_rows %>% mutate(!!sym(condition_col) := FALSE)
+  if (nrow(baseline_rows) > 0) {
+    # dynamically create explicit TRUE and FALSE data structures
+    nc_true <- baseline_rows %>% mutate(!!sym(condition_col) := TRUE)
+    nc_false <- baseline_rows %>% mutate(!!sym(condition_col) := FALSE)
 
-#     # Strip original unassigned baseline and bind explicit mirrored copies
-#     df_clean <- df %>% filter(model_type != baseline_val)
-#     df <- bind_rows(df_clean, nc_true, nc_false) %>% distinct()
-#     }
-#   return(df)
-# }
+    # Strip original unassigned baseline and bind explicit mirrored copies
+    df_clean <- df %>% filter(model_type != baseline_val)
+    df <- bind_rows(df_clean, nc_true, nc_false) %>% distinct()
+    }
+  return(df)
+}
 
 # # CLEAR prepare_interactions for df_interactions ----
 # prepare_interactions <- function(path) {
@@ -632,7 +668,7 @@ apply_batch_mutations <- function(df) {
 #' @seealso \code{plot_pcc_heatmap()}, \code{plot_prcc_heatmap()} for
 #'   visualizing the returned dataframes. \code{PCC} column name confirmed
 #'   here as \code{"original"} extracted from \code{sensitivity::pcc()}.
-run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees = 500) {
+run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees = 500, min_rows = 2) {
   
   sensi_split <- df %>%
     filter(model_type != "no_change") %>%
@@ -649,10 +685,12 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees =
   for (df_piece in sensi_split) {
     
     # Generate key for lookup
+    cat("piece rows:", nrow(df_piece), "\n")
     model_type_val <- as.character(unique(df_piece$model_type)) # key value for results list - unique model type -converted into char
     distinct_val   <- ifelse(unique(df_piece$use_distinct_agents), "TRUE", "FALSE") # value pair for results - distinct agents as chars
     key <- paste(model_type_val, distinct_val, sep="_") # key creation [model, val] separated by _
-    
+    cat("key:", key, "| in param_cols_by_model:", key %in% names(param_cols_by_model))
+      
     # key debug
     #print(paste("key:", key))
     #print(names(param_cols_by_model))
@@ -693,6 +731,7 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees =
       # RF Combined data frame creation
       rf_data <- cbind(X, target_y = y)
       rf_data <- rf_data[complete.cases(rf_data), , drop = FALSE]
+      cat("rf_data rows for", key, output, ":", nrow(rf_data), "\n")
       
       # Handle single-parameter case
       if (ncol(X) == 1) { # if the number of columns in input X is equal to 1
@@ -756,7 +795,7 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees =
     }  # end PCC/PRCC if/else
 
   # RF implementation
-  if (nrow(rf_data) >= 10) {
+  if (nrow(rf_data) >= min_rows) {
 
     rf_fit <- ranger::ranger(
       formula = target_y ~ .,
@@ -1225,26 +1264,86 @@ param_region_extraction <- function(df, percentile = 0.25,
   
 }
 
-# CLEAR prepare_direcitonal_df 29/4/26 ----
+#' Prepare Directional Opinion Alignment Data (Agent-Level) (created 29/4/26)
+#' updated 5/8/26 include \code{direction_class} and \code{agent_against_stance}.
+#'
+#' Processes agent-level aggregated data (`df_ag`) to compute direction-of-change 
+#' vectors and evaluate whether simulated opinion movements match empirical movements. 
+#' Filters strictly for speaking runs where empirical opinion shift occurred.
+#'
+#' @param df A data frame or tibble (typically \code{df_ag}) containing paired empirical 
+#'   and simulated trajectory variables (\code{speaking_mode}, \code{initial_opinion}, 
+#'   \code{final_attitude}, \code{opinion}).
+#'
+#' @return A transformed tibble (\code{df_directional_agents}) retained at the 
+#'   individual agent level with added direction indicators:
+#'   \describe{
+#'     \item{empirical_dir}{Numeric (-1, 0, 1). Sign of empirical shift (\code{final_attitude - initial_opinion}).}
+#'     \item{simulated_dir}{Numeric (-1, 0, 1). Sign of simulated shift (\code{opinion - initial_opinion}).}
+#'     \item{correct_dir}{Logical. \code{TRUE} if simulated movement sign matches empirical movement sign.}
+#'     \item{empirical_moved}{Logical. \code{TRUE} if empirical opinion actually changed (\code{empirical_dir != 0}).}
+#'     \item{agent_against_stance}{Logical. \code{TRUE} if the agent is pro_reduction and their opinion_change < 0. \code{FALSE} anti reduction with positive change}
+#'     \item{direction_class}{Factor. "stationary" if \code{simulated_dir} = 0, "correct" if \code{correct_dir} evals to TRUE, "wrong" if \code{direction_class} evals to TRUE}
+#'   }
+#'
+#' @details
+#' Operates as the first stage in the directional processing pipeline:
+#' \enumerate{
+#'   \item Restricts scope strictly to active dialogue conditions (\code{speaking_mode == TRUE}).
+#'   \item Uses \code{sign()} to reduce continuous changes to direction vectors.
+#'   \item Drops agents whose empirical baseline opinion did not move (\code{empirical_moved == FALSE}) 
+#'         to eliminate zero-division or undefined directional alignment states.
+#' }
+#'
+#' @seealso \code{\link{summarize_directional}}
 prepare_directional <- function(df) { # use with df_ag
   df_directional <- df %>%
     filter(speaking_mode == TRUE) %>%
     mutate(empirical_dir = sign(final_attitude - initial_opinion), #vector of direction (posi = positive end opin) 
            simulated_dir = sign(opinion - initial_opinion), #vector positive implies simulated opinion is larger
            correct_dir = empirical_dir == simulated_dir, # returns TRUE/FALSE for equal or not
-           empirical_moved = empirical_dir != 0
+           empirical_moved = empirical_dir != 0,
+           agent_against_stance = (pro_reduction == 1 & opinion_change < 0) |
+                                  (pro_reduction == 0 & opinion_change > 0),
+           direction_class = case_when(
+              simulated_dir == 0 ~ "stationary",
+              correct_dir ~ "correct",
+              TRUE ~ "wrong")
            ) %>%
     filter(empirical_moved) 
 }
 
-# CLEAR summarize_directional ----
-#' aggregates individual agents to one result per debate
+#' Aggregate Directional Opinion Performance Metrics by Debate (created sometime in 7/26)
+#' updated 5/8/26 clarification of direction_class and mutations
+#'
+#' Collapses agent-level directional observations (\code{df_directional_agents}) 
+#' into debate-level summary statistics, calculating directional accuracy, error 
+#' rates, and baseline MAE comparison.
+#'
+#' @param df A data frame of agent-level directional data produced by 
+#'   \code{\link{prepare_directional}}. Must contain \code{correct_dir}, 
+#'   \code{agent_wrong_direction}, \code{opinion}, \code{final_attitude}, \code{direction_class} and 
+#'   \code{initial_opinion}.
+#'
+#' @return A summarized tibble (\code{df_directional}) grouped by \code{model_type}, 
+#'   \code{current_condition}, and \code{selected_debate_id}, containing:
+#'   \describe{
+#'     \item{pct_correct_dir}{Numeric [0,1]. Proportion of agents moving in the correct empirical direction based on \code{direction_class}.}
+#'     \item{pct_stationary_dir}{Numeric [0,1]. Proportion of agents who did not move \code{direction_class} = 0}
+#'     \item{pct_wrong_dir}{Numeric [0,1]. Proportion of agents moving in the explicit wrong direction (\code{agent_wrong_direction}).}
+#'     \item{mean_mae}{Numeric. Mean Absolute Error between simulated opinion and empirical final attitude.}
+#'     \item{mean_baseline_mae}{Numeric. Baseline Mean Absolute Error assuming zero opinion change from initial state.}
+#'     \item{n}{Integer. Count of evaluated agent observations per debate grouping.}
+#'   }
+#'
+#' @seealso \code{\link{prepare_directional}}
 summarize_directional <- function(df) {
   df %>%
     group_by(model_type, current_condition, selected_debate_id) %>%
     summarize(
-      pct_correct_dir = mean(correct_dir),
-      pct_wrong_dir = mean(agent_wrong_direction),
+      pct_correct_dir = mean(direction_class == "correct"),
+      pct_wrong_dir = mean(direction_class == "wrong"),
+      pct_stationary_dir = mean(direction_class == "stationary"),
       mean_mae = mean(abs(opinion - final_attitude)),
       mean_baseline_mae = mean(abs(initial_opinion - final_attitude)),
       n = n(),
@@ -1269,13 +1368,21 @@ summarize_directional <- function(df) {
 #'   \code{model_type} x \code{current_condition} x \code{selected_debate_id} x \code{pro_reduction}.
 #'   Columns include \code{pct_correct_dir}, \code{pct_wrong_dir}, 
 #'   \code{mean_signed_error}, \code{mean_mae}, \code{mean_baseline_mae}, and \code{n}.
+#'   \describe{
+#'     \item{pct_correct_dir}{Numeric [0,1]. Proportion of agents moving in the correct empirical direction based on \code{direction_class}.}
+#'     \item{pct_stationary_dir}{Numeric [0,1]. Proportion of agents who did not move \code{direction_class} = 0}
+#'     \item{pct_wrong_dir}{Numeric [0,1]. Proportion of agents moving in the explicit wrong direction (\code{agent_wrong_direction}).}
+#'   }
+#' 
+#' @export
 summarize_directional_valence <- function(df) {
   df %>%
     mutate(pro_reduction = as.integer(as.character(pro_reduction))) %>% 
     group_by(model_type, current_condition, selected_debate_id, pro_reduction) %>%
     summarize(
-      pct_correct_dir   = mean(correct_dir, na.rm = TRUE), 
-      pct_wrong_dir     = mean(agent_wrong_direction, na.rm = TRUE),
+      pct_correct_dir = mean(direction_class == "correct"),
+      pct_wrong_dir = mean(direction_class == "wrong"),
+      pct_stationary_dir = mean(direction_class == "stationary"),
       mean_signed_error = mean(opinion - final_attitude, na.rm = TRUE),
       mean_mae          = mean(abs(opinion - final_attitude), na.rm = TRUE),
       mean_baseline_mae = mean(abs(initial_opinion - final_attitude), na.rm = TRUE),
@@ -1655,5 +1762,3 @@ build_network_graph <- function(g) {
     theme(legend.position = "bottom") +
     theme_graph()
 }
-
-

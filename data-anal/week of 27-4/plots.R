@@ -737,19 +737,26 @@ plot_rf_importance <- function(df) {
 #' @param sensi_output_vX A specific version list (e.g., results$sensitivity$v1) containing models
 #' @param model_key The model key string (e.g., "bipolarization_FALSE")
 #' @param feature_name The parameter to plot
-plot_model_pdp <- function(sensi_output_vX, model_key, feature_name) {
+plot_model_pdp <- function(sensi_output_vX, df_batch_data, model_type_val, distinct_val, output, feature_name) {
+
+  # model key correction
+  param_key <- paste(model_type_val, distinct_val, sep = "_") # for param_cols_by_model
+  rf_key <- paste(model_type_val, distinct_val, output, sep = "_") # for rf_models
   
   # 1. Pull the pre-fitted model from the version object
-  fitted_model <- sensi_output_vX$models[[model_key]]
-  if (is.null(fitted_model)) stop("Model not found in this version object.")
+  fitted_model <- sensi_output_vX$rf_models[[rf_key]]
+  if (is.null(fitted_model)) stop("Model not found in this version object.", rf_key)
   
   # 2. Extract data slice using the version's internal data or global raw reference
-  parts <- strsplit(model_key, "_")[[1]]
-  sub_data <- df_batch %>% dplyr::filter(model_type == parts[1], use_distinct_agents == as.logical(parts[2]))
-  
-  X_sub <- sub_data[, param_cols_by_model[[model_key]], drop = FALSE]
-  X_sub[] <- lapply(X_sub, function(col) as.numeric(col))
-  y_sub <- as.numeric(sub_data$mae)
+  sub_data <- df_batch_data %>%
+    filter(model_type == model_type_val, tolower(as.character(use_distinct_agents)) == tolower(distinct_val))
+  cat("sub_data rows:", nrow(sub_data), "\n")   # <-- add this
+  if (!is.data.frame(sub_data)) sub_data <- collect(sub_data) # force eager collection if df_batch is still lazy
+
+  # Split the sub data into the model key determined by param_cols_by_model
+  X_sub <- sub_data[, param_cols_by_model[[param_key]], drop = FALSE]
+  X_sub[] <- lapply(X_sub, as.numeric)
+  y_sub <- as.numeric(sub_data[[output]]) # relative key (can change to mae, vae, etc) 
   
   # 3. Generate IML predictor and PDP
   predictor <- iml::Predictor$new(model = fitted_model, data = X_sub, y = y_sub)

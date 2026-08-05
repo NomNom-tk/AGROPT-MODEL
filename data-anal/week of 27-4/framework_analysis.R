@@ -153,7 +153,7 @@ analyze_processed_run <- function(df) {
         pcc_v1   <- sensi_v1$pcc %>% mutate(version = "v1")
         prcc_v1  <- sensi_v1$prcc %>% mutate(version = "v1")
         rf_v1 <- sensi_v1$rf %>% mutate(version = "v1")
-        sensi_v1$rf_mod_list <- sensi_v1$rf_mod_lis
+        sensi_v1$rf_mod_list <- sensi_v1$rf_mod_list
       }
       if (nrow(df_lhs_v2) > 0 && !is.null(config$batch$v2$path)) {
         sensi_v2 <- run_sensi_analysis(df_lhs_v2, param_cols_by_model, output_cols, num_trees = 500)
@@ -227,7 +227,7 @@ analyze_processed_run <- function(df) {
 
     # Branch B: simulated trajectory (H1b)
     df_sim_base <- df_ag_raw_slice |>
-      group_by(agent_id, debate_label, model_type, current_condition) |>
+      group_by(agent_id, debate_label, model_type, current_condition, seed) |> # 5/8/26 added seed to check
       summarize(
         initial_opinion = first(initial_opinion),
         opinion = mean(opinion, na.rm = TRUE), # collapse across seed
@@ -651,7 +651,7 @@ analyze_processed_run <- function(df) {
     ),
     results = list(
       sensitivity = list(
-        combined = list(pcc = pcc_lhs, prcc = prcc_lhs, rf = rf, rf_models = sensi_lhs$rf_mod_list),
+        combined = list(pcc = pcc_lhs, prcc = prcc_lhs, rf = sensi_lhs$rf, rf_models = sensi_lhs$rf_mod_list),
         v1       = if(!is.null(sensi_v1)) list(pcc = sensi_v1$pcc, prcc = sensi_v1$prcc, rf = sensi_v1$rf, rf_models = sensi_v1$rf_mod_list) else NULL,
         v2       = if(!is.null(sensi_v2)) list(pcc = sensi_v2$pcc, prcc = sensi_v2$prcc, rf = sensi_v2$rf, rf_models = sensi_v2$rf_mod_list) else NULL
       ),
@@ -696,12 +696,17 @@ analyze_processed_run <- function(df) {
       #networks = network_data_package TODO commented out because interactions took too long to compile 3/8/26
     ),
     plots = list(
-      pcc        = function() plot_pcc_heatmap(pcc_lhs),
-      prcc       = function() plot_prcc_heatmap(prcc_lhs),
+      pcc        = function() {
+        pcc <- sensi_lhs$pcc
+        plot_pcc_heatmap(pcc)},
+      prcc       = function(){
+        prcc <- sensi_lhs$prcc
+        plot_prcc_heatmap(prcc)},
       pcc_all    = function() plot_pcc_all_heatmap(pcc_all),
       prcc_all   = function() plot_prcc_all_heatmap(prcc_all),
-      abm_vs_ols = function() plot_ols_abm_comp(comparison_clean),
-      
+      abm_vs_ols = function() {
+          comparison_clean <- lhs_outputs$results$comparisons$ols_debate_mae
+          plot_ols_abm_comp(comparison_clean)},
       empirical_col   = function() plot_empir_compar(empirical_stat_check),
       empirical_cross = function() plot_empir_cross(empirical_stat_pivot),
 
@@ -737,9 +742,18 @@ analyze_processed_run <- function(df) {
       beta_distance_vs_empir = function() plot_beta_distance(simulated_betas_raw, empirical_beta_val),
 
       # RF visualizations
-      rf_importance_model_types = function() plot_rf_importance(rf_lhs),
-      pdp_v1 = function() plot_model_pdp(sensi_lhs$rf_mod_list, "bipolarization_FALSE", "repulsion_threshold")
-      
+      rf_importance_model_types = function(output_filter = NULL) {
+        df <- sensi_lhs$rf
+        if (!is.null(output_filter)) df <- df %>% filter(output == output_filter)
+        plot_rf_importance(df)
+      },
+      pdp_v1 = function(model_type_val, distinct_val, output, feature_name) {
+        plot_model_pdp(
+          sensi_lhs,
+          df_batch,
+          model_type_val, distinct_val, output, feature_name
+        )
+      }
       #homogeneous_network_plots   = homogeneous_plots_combined, TODO commented out because interactions too long 8/3/26
       #heterogeneous_network_plots = heterogeneous_plots_combined
     )

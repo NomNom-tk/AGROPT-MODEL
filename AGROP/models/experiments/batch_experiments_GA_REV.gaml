@@ -8,10 +8,10 @@ import "../main_4-3.gaml" // relative path back to main
 // BATCH EXPERIMENTS: GENETIC ALGORITHM informed by LHS samples
  
 // Batch Consensus (Genetic) 
-experiment Bt_gen_cons_ndist type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
+experiment Bt_gen_cons_ndist type: batch repeat: 1 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
     parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
     
-    method genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
+    method genetic minimize: mae_mean_all pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
     nb_prelim_gen: 5 max_gen: 10;
    
     init {
@@ -36,13 +36,13 @@ experiment Bt_gen_cons_ndist type: batch repeat: 5 keep_seed: true until: (debat
     }
 }
 
-experiment Bt_gen_cons_dist type: batch repeat: 15 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
+experiment Bt_gen_cons_dist type: batch repeat: 1 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
     parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
     
     // agent-level params
     parameter "SD Convergence Rate" var: convergence_rate_sd min: 0.0 max: 0.02; // modified from one static cr sd
     
-    method genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
+    method genetic minimize: mae_mean_all pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
     nb_prelim_gen: 5 max_gen: 10;
    
     init {
@@ -70,10 +70,10 @@ experiment Bt_gen_cons_dist type: batch repeat: 15 keep_seed: true until: (debat
     }
 }
 
-experiment Bt_gen_cons_ndist_speak type: batch repeat: 15 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
+experiment Bt_gen_cons_ndist_speak type: batch repeat: 1 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
     parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
 
-    method genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
+    method genetic minimize: mae_mean_all pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
     nb_prelim_gen: 5 max_gen: 10;
    
     init {
@@ -98,13 +98,13 @@ experiment Bt_gen_cons_ndist_speak type: batch repeat: 15 keep_seed: true until:
     }
 }
 
-experiment Bt_gen_cons_dist_speak type: batch repeat: 15 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
+experiment Bt_gen_cons_dist_speak type: batch repeat: 1 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
     parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
 
     // agent-level parameters
     parameter "SD Convergence Rate" var: convergence_rate_sd min: 0.0 max: 0.02; // modified from one static cr sd
     
-    method genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
+    method genetic minimize: mae_mean_all pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
     nb_prelim_gen: 5 max_gen: 10;
    
     init {
@@ -133,11 +133,11 @@ experiment Bt_gen_cons_dist_speak type: batch repeat: 15 keep_seed: true until: 
 }
 
 // Batch Clustering (Genetic)
-experiment Bt_gen_clst_ndist type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
+experiment Bt_gen_clst_ndist type: batch repeat: 1 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
     parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
-    parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.6;
+    parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.35;
 
-    method genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
+    method genetic minimize: mae_mean_all pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
     nb_prelim_gen: 5 max_gen: 10;
 
     init {
@@ -161,15 +161,15 @@ experiment Bt_gen_clst_ndist type: batch repeat: 5 keep_seed: true until: (debat
     }
 }
 
-experiment Bt_gen_clst_dist type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
+experiment Bt_gen_clst_dist type: batch repeat: 1 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
     parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
-    parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.6;
+    parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.35;
         
     // agent-level parameters
     parameter "SD Convergence Rate" var: convergence_rate_sd min: 0.0 max: 0.02; // modif to have some range on sd
     parameter "SD Confidence Threshold" var: confidence_threshold_sd min: 0.05 max: 0.1; // modif again to have range sd
 
-    method genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
+    method genetic minimize: mae_mean_all pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
     nb_prelim_gen: 5 max_gen: 10;
 
     init {
@@ -195,11 +195,11 @@ experiment Bt_gen_clst_dist type: batch repeat: 5 keep_seed: true until: (debate
     }
 }
 
-experiment Bt_gen_clst_ndist_speak type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
+experiment Bt_gen_clst_ndist_speak type: batch repeat: 1 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
     parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
     parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.6; 
 
-    method genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
+    method genetic minimize: mae_mean_all pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
     nb_prelim_gen: 5 max_gen: 10;
 
     init {
@@ -223,7 +223,7 @@ experiment Bt_gen_clst_ndist_speak type: batch repeat: 5 keep_seed: true until: 
     }
 }
 
-experiment Bt_gen_clst_dist_speak type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
+experiment Bt_gen_clst_dist_speak type: batch repeat: 1 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
     parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
     parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.6;
        
@@ -231,7 +231,7 @@ experiment Bt_gen_clst_dist_speak type: batch repeat: 5 keep_seed: true until: (
     parameter "SD Convergence Rate" var: convergence_rate_sd min: 0.0 max: 0.02; // modif to have some range on sd
     parameter "SD Confidence Threshold" var: confidence_threshold_sd min: 0.05 max: 0.1; // modif again to have range sd
 
-    method genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
+    method genetic minimize: mae_mean_all pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
     nb_prelim_gen: 5 max_gen: 10;
 
     init {
@@ -258,14 +258,14 @@ experiment Bt_gen_clst_dist_speak type: batch repeat: 5 keep_seed: true until: (
 }
 
 // Batch Bipolarization (Genetic)
-experiment Bt_gen_bipol_ndist type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
+experiment Bt_gen_bipol_ndist type: batch repeat: 1 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
     // ensuring that repulsion_threshold > confidence_threshold is ALWAYS TRUE
     parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
     parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.3;
     parameter "Repulsion Strength" var: repulsion_strength min: 0.05 max: 0.2;
-    parameter "Repulsion Threshold" var: repulsion_threshold min: 0.4 max: 0.7;
+    parameter "Repulsion Threshold" var: repulsion_threshold min: 0.55 max: 0.7;
 
-    method genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
+    method genetic minimize: mae_mean_all pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
     nb_prelim_gen: 5 max_gen: 10;
    
     init {
@@ -291,12 +291,12 @@ experiment Bt_gen_bipol_ndist type: batch repeat: 5 keep_seed: true until: (deba
 }
 
 
-experiment Bt_gen_bipol_dist type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
+experiment Bt_gen_bipol_dist type: batch repeat: 1 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
     // ensuring that repulsion_threshold > confidence_threshold is ALWAYS TRUE
     parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
     parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.3;
     parameter "Repulsion Strength" var: repulsion_strength min: 0.05 max: 0.2;
-    parameter "Repulsion Threshold" var: repulsion_threshold min: 0.4 max: 0.7;
+    parameter "Repulsion Threshold" var: repulsion_threshold min: 0.55 max: 0.7;
     
     // agent-level parameters
     parameter "SD Convergence Rate" var: convergence_rate_sd min: 0.0 max: 0.02;
@@ -305,7 +305,7 @@ experiment Bt_gen_bipol_dist type: batch repeat: 5 keep_seed: true until: (debat
     parameter "SD Repulsion Threshold" var: repulsion_threshold_sd min: 0.0 max: 0.03;
 
 
-    method genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
+    method genetic minimize: mae_mean_all pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
     nb_prelim_gen: 5 max_gen: 10;
    
     init {
@@ -324,8 +324,7 @@ experiment Bt_gen_bipol_dist type: batch repeat: 5 keep_seed: true until: (debat
 	composition_scope <- "M";
         
         if repulsion_threshold <= confidence_threshold {
-            mae <- 999.0;
-            mae_mean_all <- 999.0;
+            infeasible_params <- true;
             end_simulation <- true;
     	}
 
@@ -333,15 +332,15 @@ experiment Bt_gen_bipol_dist type: batch repeat: 5 keep_seed: true until: (debat
 }
 
 // until: condition modified so that it fires regardless of exp init
-experiment Bt_gen_bipol_ndist_speak type: batch repeat: 15 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
+experiment Bt_gen_bipol_ndist_speak type: batch repeat: 1 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
     // ensuring that repulsion_threshold > confidence_threshold is ALWAYS TRUE
     parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
     parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.3;
     parameter "Repulsion Strength" var: repulsion_strength min: 0.05 max: 0.2;
-    parameter "Repulsion Threshold" var: repulsion_threshold min: 0.4 max: 0.7;
+    parameter "Repulsion Threshold" var: repulsion_threshold min: 0.55 max: 0.7;
     
 
-    method genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
+    method genetic minimize: mae_mean_all pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
     nb_prelim_gen: 5 max_gen: 10;
    
     init {
@@ -360,20 +359,19 @@ experiment Bt_gen_bipol_ndist_speak type: batch repeat: 15 keep_seed: true until
 	composition_scope <- "M";
         
         if repulsion_threshold <= confidence_threshold {
-            mae <- 999.0;
-            mae_mean_all <- 999.0;
+            infeasible_params <- true;
             end_simulation <- true;
     	}
         
     }
 }
 
-experiment Bt_gen_bipol_dist_speak type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
+experiment Bt_gen_bipol_dist_speak type: batch repeat: 1 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
     // ensuring that repulsion_threshold > confidence_threshold is ALWAYS TRUE
     parameter "Convergence Rate" var: convergence_rate min: 0.005 max: 0.1;
     parameter "Confidence Threshold" var: confidence_threshold min: 0.1 max: 0.3;
     parameter "Repulsion Strength" var: repulsion_strength min: 0.05 max: 0.2;
-    parameter "Repulsion Threshold" var: repulsion_threshold min: 0.4 max: 0.7;
+    parameter "Repulsion Threshold" var: repulsion_threshold min: 0.55 max: 0.7;
     
     // agent-level parameters
     parameter "SD Convergence Rate" var: convergence_rate_sd min: 0.0 max: 0.02;
@@ -381,7 +379,7 @@ experiment Bt_gen_bipol_dist_speak type: batch repeat: 5 keep_seed: true until: 
     parameter "SD Repulsion Strength" var: repulsion_strength_sd min: 0.0 max: 0.02;
     parameter "SD Repulsion Threshold" var: repulsion_threshold_sd min: 0.0 max: 0.03;
 
-    method genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
+    method genetic minimize: mae_mean_all pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
     nb_prelim_gen: 5 max_gen: 10;
    
     init {
@@ -400,9 +398,7 @@ experiment Bt_gen_bipol_dist_speak type: batch repeat: 5 keep_seed: true until: 
         composition_scope <- "M";
         
         if repulsion_threshold <= confidence_threshold {
-            write "neutral zone is negative, skipping";
-            mae <- 999.0;
-            mae_mean_all <- 999.0;
+            infeasible_params <- true;
             end_simulation <- true;
     	}
         
@@ -410,10 +406,7 @@ experiment Bt_gen_bipol_dist_speak type: batch repeat: 5 keep_seed: true until: 
 }
 
 // NO CHANGE EXP
-experiment Bt_gen_no_change type: batch repeat: 5 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
-	
-	method genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
-    nb_prelim_gen: 5 max_gen: 10;
+experiment Bt_gen_no_change type: batch repeat: 1 keep_seed: true until: (debate_counter >= length(m_debate_list) -1 and end_simulation = true) {
 	
 	init {
 		mode_batch <- true;
@@ -440,7 +433,7 @@ experiment Batch_argumentative_gen type: batch repeat: 30 keep_seed: true until:
     // homophily parameter
     //parameter "Homophily Strength" var: homophily_strength among: [0.0, 0.3, 0.5, 0.7, 1.0];
  
-    method genetic minimize: mae pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
+    method genetic minimize: mae_mean_all pop_dim: 5 crossover_prob: 0.5 mutation_prob: 0.1
     nb_prelim_gen: 5 max_gen: 5;
    
     init {

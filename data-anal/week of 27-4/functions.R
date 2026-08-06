@@ -4,7 +4,7 @@
 
 # CLEAR read_clean to clean colnames before all else 7/5/26 (update 27/7/26 strip stray chars from headers)
 #' update 28/7/26 adjusted parquet syntax----
-read_clean <- function(path) {
+read_clean <- function(path, col_names = NULL) {
 
   # if input is parquet then read parquet
   if (grepl("\\.parquet$", path, ignore.case  = TRUE)) {
@@ -15,7 +15,7 @@ read_clean <- function(path) {
 
     # check if parquet path exists and if not slow path read clean
     if (!file.exists(parquet_path)) {
-      parquet_path <- generate_parquet_cache(path)
+      parquet_path <- generate_parquet_cache(path, col_names)
     }
 
     df <- read_parquet_duckdb(parquet_path, prudence = "lavish")
@@ -73,34 +73,45 @@ clean_stray_headers <- function(df) {
 #' meant to check whether parquet caches for data files exist and read parquet if they do
 #' if they don't then generate the parquet files to pass to read_clean
 #' attempts to read all headers as strings in utf8 encoding, otherwise reverts back to basic arrow read
-generate_parquet_cache <- function(path) {
+#' takes input col_names to strip all junk headers and replaces them with R - GAMA matched headers from save calls
+generate_parquet_cache <- function(path, col_names) {
   parquet_path <- sub("\\.csv$", ".parquet", path, ignore.case = TRUE)
 
   # paste progress
   cat(sprintf("Generating Parquet Cache: %s\n", basename(parquet_path)))
 
-  # read header names only
-  hdr <- names(read_arrow_csv(path, as_data_frame = TRUE, n_max = 0))
+  # guards for dynamically removing header lines
+  n_cols <- length(col_names)
+
+  # detect leading junk: header blocks and their continuation fragments
+  probe <- readLines(path, n = 200, warn = FALSE)
+  nf <- lengths(strsplit(probe, ",", fixed = TRUE))
+  bad <- which(nf != n_cols)
+  
+  n_skip <- if(length(bad) == 0) {
+    0L
+  } else if (identical(bad, seq_len(max(bad)))) {
+    max(bad) # takes into account the contiguous block of headers
+  } else {
+    stop("non-contiguous malformed lines at ", paste(bad, collapse = ","),
+         " - use the field-coutn filter instead of a positional skip")
+  }
+
+  message(sprintf(" skipping%d leading header lines", n_skip))
 
   # set up str schema
   str_schema <- arrow::schema(
-    stats::setNames(rep(list(arrow::utf8()), length(hdr)), hdr)
+    stats::setNames(rep(list(arrow::utf8()), n_cols), col_names)
   )
 
-  csv_stream <- tryCatch(
-    read_csv_arrow(path, as_data_frame = FALSE, col_types = str_schema),
-    error = function(e) {
-      message("all-string schema read failed, falling back to inference: ",
-              conditionMessage(e))
-      read_csv_arrow(path, as_data_frame = FALSE)
-    }
-  )
+  csv_stream <- read_csv_arrow(path, as_data_frame = FALSE, skip = n_skip, 
+                               col_names = col_names, col_types = str_schema)
       
   write_parquet(csv_stream, parquet_path)
   rm(csv_stream)
   gc()
 
-  return(parquet_path)
+  parquet_path
 }
 
 # TODO and CHECK append_metadata 28/5/26 ----
@@ -198,7 +209,7 @@ empirical_prep <- function(path) {
 ## append meta data attaches, run type, composition scope and verison columns
 ## aply composition filter to M/H?all filter\
 # returns single clean df
-load_and_prepare <- function(path, config, version = NA) {
+load_and_prepare <- function(path, config, version = NA, col_names = NULL) {
   
   # guard: return NULL if path is NULL or file does not exist
   if (is.null(path) || !file.exists(path)) {
@@ -207,7 +218,7 @@ load_and_prepare <- function(path, config, version = NA) {
   }
   
   df <- path %>%
-    read_clean() %>%
+    read_clean(col_names = col_names) %>%
     apply_batch_mutations() %>%
     add_design_cell() %>%
     add_param_set_id() %>%
@@ -466,7 +477,7 @@ compute_susceptibility_scores <- function(df) { # use with df_interactions
 add_design_cell <- function(df) {
   df <- df %>%
         mutate(design_cell = paste(model_type,
-                                   ifelse(use_distinct_agents, "ndist", "dist"),
+                                   ifelse(use_distinct_agents, "dist", "ndist"),
                                    ifelse(speaking_mode, "speak", "nospeak"),
                                    sep = "_"))
   if ("current_experiment_id" %in% colnames(df)) {
@@ -582,9 +593,19 @@ apply_batch_mutations <- function(df) {
     filter(model_type != "model_type")
   
   # columns to mutate to numeric
-  conv_cols <- c("convergence_rate", "confidence_threshold", "repulsion_strength", "repulsion_threshold",
-                 "convergence_rate_sd", "confidence_threshold_sd", "repulsion_strength_sd", "repulsion_threshold_sd",
-                 "mae", "initial_variance", "opinion_variance", "logged_batch_seed", "polarization_index", "neutral_zone_width", "mean_net_repulsion_abs", "convergence_cycle", "pro_count", "anti_count")
+  conv_cols <- c(# existing batch-level
+  "convergence_rate","confidence_threshold","repulsion_strength","repulsion_threshold",
+  "convergence_rate_sd","confidence_threshold_sd","repulsion_strength_sd","repulsion_threshold_sd",
+  "mae","initial_variance","opinion_variance","logged_batch_seed","polarization_index",
+  "neutral_zone_width","mean_net_repulsion_abs","convergence_cycle","pro_count","anti_count",
+  # agent-level
+  "initial_opinion","final_attitude","opinion","opinion_change","individual_error",
+  "mean_t2_subfactors","cumulative_opinion_change","agent_net_change",
+  "total_influences_received","retention_discount","pro_reduction","agent_id",
+  "agent_convergence_rate","agent_confidence_threshold",
+  "agent_repulsion_threshold","agent_repulsion_strength",
+  paste0("subfactor_", 1:5, "_t1"), paste0("subfactor_", 1:5, "_t2"),
+  paste0("error_sub", 1:5))
   
   # guard to convert only columns that exist in the df
   existing_conv_cols <- intersect(conv_cols, colnames(df))
@@ -732,7 +753,8 @@ apply_batch_mutations <- function(df) {
 #' @seealso \code{plot_pcc_heatmap()}, \code{plot_prcc_heatmap()} for
 #'   visualizing the returned dataframes. \code{PCC} column name confirmed
 #'   here as \code{"original"} extracted from \code{sensitivity::pcc()}.
-run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees = 500, min_rows = 2) {
+run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees = 500, 
+                               max_rows_per_cell = 50000, min_rows = 10) {
   
   sensi_split <- df %>%
     filter(model_type != "no_change") %>%
@@ -750,12 +772,18 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees =
     
     # Generate key for lookup
     cat("piece rows:", nrow(df_piece), "\n")
+
+    if (nrow(df_piece) > max_rows_per_cell) {
+      df_piece <- df_piece[sample.int(nrow(df_piece), max_rows_per_cell), , drop = FALSE]
+      cat("  subsampled to:", nrow(df_piece), "\n")
+    }
+      
     model_type_val <- as.character(unique(df_piece$model_type)) # key value for results list - unique model type -converted into char
     distinct_val   <- ifelse(unique(df_piece$use_distinct_agents), "TRUE", "FALSE") # value pair for results - distinct agents as chars
     
     # patch 6/8/26 speaking arm identifier
     speak_val <- ifelse(isTRUE(as.logical(tolower(as.character(
-                  unique(df_piece$speaking_mode))))), "TRUE", "FALSE")
+                  unique(df_piece$speaking_mode))))), "speak", "nospeak")
 
     # patch 6/8/26 two identifiers, deliberately different
     lookup_key <- paste(model_type_val, distinct_val, sep = "_")
@@ -1542,13 +1570,13 @@ pdp_all_cells <- function(df_batch, sensi_obj, param_cols_by_model,
       sv <- isTRUE(cells$speaking_mode[i])
 
       lookup_key <- paste(mt, ifelse(dv, "TRUE", "FALSE"), sep = "_")
-      key <- paste(mt, ifelse(df, "TRUE", "FALSE"),
+      key <- paste(mt, ifelse(dv, "TRUE", "FALSE"),
                    ifelse(sv, "speak", "nospeak"), sep = "_")
       rf_key <- paste(key, output, sep = "_")
 
       rf_fit <- sensi_obj$rf_mod_list[[rf_key]]
       if (is.null(rf_fit)) {
-        message("no forest for", rf_key, " - skipping")
+        message("no forest for ", rf_key, " - skipping")
         next
       }
 
@@ -1599,7 +1627,7 @@ bounds_from_pdp <- function(pdp_df, tol = 0.02) {
       j <- which(r$values & starts <= amin & ends >= amin)[1]
       data.frame(pdp_min = min(d$yhat),
                  pdp_argmin = d$x[amin],
-                 lo = d$xp[starts[j]],
+                 lo = d$x[starts[j]],
                  hi = d$x[ends[j]],
                  flat = (d$x[ends[j]] - d$x[starts[j]]) / diff(range(d$x)))
     }) %>%

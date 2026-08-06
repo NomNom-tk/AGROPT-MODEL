@@ -757,6 +757,6 @@ plot_pdp_grid <- function(pdp_df, model_filter = NULL) {
          colour = "speaking_mode", linetype = "distinct agents")
 }
  
-plot_pdp_grid(pdp_df)
-plot_pdp_grid(pdp_df, model_filter = "bipolarization")
+#plot_pdp_grid(pdp_df)
+#plot_pdp_grid(pdp_df, model_filter = "bipolarization")
 

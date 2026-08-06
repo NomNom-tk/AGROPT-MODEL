@@ -29,7 +29,7 @@ global {
     		list<float> weights_ <- opinion_agents collect each.speak_weight;
     		int chosen_index <- rnd_choice(weights_);
     		speaking_ag <- (opinion_agents at chosen_index);
-    		//write "Speaking agent: " + speaking_ag.agent_id + " mode: " + speaking_mode;
+    		write "Speaking agent: " + speaking_ag.agent_id + " mode: " + speaking_mode;
     		ask speaking_ag {
     			do talk_to_all;
     		}

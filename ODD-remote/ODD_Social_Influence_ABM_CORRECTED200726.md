@@ -148,50 +148,51 @@ Constraint: agent_repulsion_threshold > agent_confidence_threshold
 | Variable Name | Data Type | Domain Bounds | Description |
 | :--- | :--- | :--- | :--- |
 | **Model Selection** | | | |
-| `model_type` | `string` | `{"consensus", "clustering", "bipolarization", "no_change"}` | Active social influence update rule active for the simulation batch[cite: 1]. |
-| `mode_batch` | `boolean` | `true/false` | Toggle between batch execution mode (`true`) and GUI visualization mode (`false`)[cite: 1]. |
-| `speaking_mode` | `boolean` | `true/false` | Switch between turn-based speaker mechanics (`true`) and parallel network updates (`false`)[cite: 1]. |
-| `use_distinct_agents` | `boolean` | `true/false` | Toggle between heterogeneous agent parameter sampling (`true`) and homogeneous parameters (`false`)[cite: 1]. |
-| `selection_mode` | `string` | `{"filter", "explicit"}` | Determines debate selection method (context filtering vs. explicit list)[cite: 1]. |
-| `composition_scope` | `string` | `{"H", "M", "ALL"}` | Condition filtering scope for debate experiment instantiation[cite: 1]. |
+| `model_type` | `string` | `{"consensus", "clustering", "bipolarization", "no_change"}` | Active social influence update rule active for the simulation batch. |
+| `mode_batch` | `boolean` | `true/false` | Toggle between batch execution mode (`true`) and GUI visualization mode (`false`). |
+| `speaking_mode` | `boolean` | `true/false` | Switch between turn-based speaker mechanics (`true`) and parallel network updates (`false`). |
+| `use_distinct_agents` | `boolean` | `true/false` | Toggle between heterogeneous agent parameter sampling (`true`) and homogeneous parameters (`false`). |
+| `selection_mode` | `string` | `{"filter", "explicit"}` | Determines debate selection method (context filtering vs. explicit list). |
+| `composition_scope` | `string` | `{"H", "M", "ALL"}` | Condition filtering scope for debate experiment instantiation. |
 | **Population Means ($\mu$)** | | | |
-| `convergence_rate` | `float` | $[0.0, 1.0]$ | Central tendency mean for individual speed of opinion change[cite: 1]. |
-| `confidence_threshold` | `float` | $[0.0, 1.0]$ | Central tendency mean for bounded confidence attraction boundary ($\epsilon$)[cite: 1]. |
-| `repulsion_threshold` | `float` | $[0.0, 1.0]$ | Central tendency mean for repulsion boundary ($\rho$)[cite: 1]. |
-| `repulsion_strength` | `float` | $[0.0, 0.5]$ | Central tendency mean for repulsive force scaling weight ($\alpha$)[cite: 1]. |
+| `convergence_rate` | `float` | $[0.0, 1.0]$ | Central tendency mean for individual speed of opinion change. |
+| `confidence_threshold` | `float` | $[0.0, 1.0]$ | Central tendency mean for bounded confidence attraction boundary ($\epsilon$). |
+| `repulsion_threshold` | `float` | $[0.0, 1.0]$ | Central tendency mean for repulsion boundary ($\rho$). |
+| `repulsion_strength` | `float` | $[0.0, 0.5]$ | Central tendency mean for repulsive force scaling weight ($\alpha$). |
 | **Population SD ($\sigma$)** | | | |
-| `convergence_rate_sd` | `float` | $[0.0, 0.2]$ | Standard deviation of individual convergence rates around global mean[cite: 1]. |
-| `confidence_threshold_sd` | `float` | $[0.0, 0.3]$ | Standard deviation of confidence thresholds around global mean[cite: 1]. |
-| `repulsion_threshold_sd` | `float` | $[0.0, 0.3]$ | Standard deviation of repulsion thresholds around global mean[cite: 1]. |
-| `repulsion_strength_sd` | `float` | $[0.0, 0.2]$ | Standard deviation of repulsion strengths around global mean[cite: 1]. |
+| `convergence_rate_sd` | `float` | $[0.0, 0.2]$ | Standard deviation of individual convergence rates around global mean. |
+| `confidence_threshold_sd` | `float` | $[0.0, 0.3]$ | Standard deviation of confidence thresholds around global mean. |
+| `repulsion_threshold_sd` | `float` | $[0.0, 0.3]$ | Standard deviation of repulsion thresholds around global mean. |
+| `repulsion_strength_sd` | `float` | $[0.0, 0.2]$ | Standard deviation of repulsion strengths around global mean. |
 | **Composition Tracking** | | | |
-| `current_condition` | `string` | `{"homogeneous", "heterogeneous", "control"}` | Runtime detected condition string for current active debate[cite: 1]. |
-| `num_pro_agents` | `integer` | $\mathbb{Z}_{\ge 0}$ | Active count of agents with empirical `pro_reduction = 1`[cite: 1]. |
-| `num_anti_agents` | `integer` | $\mathbb{Z}_{\ge 0}$ | Active count of agents with empirical `pro_reduction = 0`[cite: 1]. |
-| `mean_opinion_pro` | `float` | $[0.0, 1.0]$ | Real-time mean opinion trajectory of pro-reduction participants[cite: 1]. |
-| `mean_opinion_anti` | `float` | $[0.0, 1.0]$ | Real-time mean opinion trajectory of anti-reduction participants[cite: 1]. |
+| `current_condition` | `string` | `{"homogeneous", "heterogeneous", "control"}` | Runtime detected condition string for current active debate. |
+| `num_pro_agents` | `integer` | $\mathbb{Z}_{\ge 0}$ | Active count of agents with empirical `pro_reduction = 1`. |
+| `num_anti_agents` | `integer` | $\mathbb{Z}_{\ge 0}$ | Active count of agents with empirical `pro_reduction = 0`. |
+| `mean_opinion_pro` | `float` | $[0.0, 1.0]$ | Real-time mean opinion trajectory of pro-reduction participants. |
+| `mean_opinion_anti` | `float` | $[0.0, 1.0]$ | Real-time mean opinion trajectory of anti-reduction participants. |
 | **Simulation Control** | | | |
-| `selected_debate_id` | `integer` | $[1, 242]$ | Active debate identifier index being simulated[cite: 1]. |
-| `max_cycles` | `integer` | Default $100$ | Hard boundary cycle limit before triggering timeout fallback[cite: 1]. |
-| `step` | `float` | Default $0.5$ | Time step duration per execution cycle[cite: 1]. |
-| `mae_convergence_threshold` | `float` | Default $0.01$ | Single convergence criterion threshold for max absolute opinion delta[cite: 1]. |
-| `end_simulation_at_convergence` | `boolean` | `true/false` | Toggle early stopping upon meeting convergence criteria vs. forced run to `max_cycles`[cite: 1]. |
-| `convergence_cycle` | `integer` | $\mathbb{Z}$ | Absolute cycle count when convergence was met ($-1$ if timed out)[cite: 1]. |
-| `debate_start_cycle` | `integer` | $\mathbb{Z}_{\ge 0}$ | Simulation baseline cycle when active debate session was instantiated[cite: 1]. |
+| `selected_debate_id` | `integer` | $[1, 242]$ | Active debate identifier index being simulated. |
+| `max_cycles` | `integer` | Default $100$ | Hard boundary cycle limit before triggering timeout fallback. |
+| `step` | `float` | Default $0.5$ | Time step duration per execution cycle. |
+| `mae_convergence_threshold` | `float` | Default $0.01$ | Single convergence criterion threshold for max absolute opinion delta. |
+| `end_simulation_at_convergence` | `boolean` | `true/false` | Toggle early stopping upon meeting convergence criteria vs. forced run to `max_cycles`. |
+| `convergence_cycle` | `integer` | $[11, max_cycles]$ | Cycle count since debate start when convergence was met (records `max_cycles` if timed out). |
+| `debate_start_cycle` | `integer` | $\mathbb{Z}_{\ge 0}$ | Simulation baseline cycle when active debate session was instantiated. |
+| `converged` | `boolean` | `true/false` | `TRUE` if the deabte met the convergence criterion before `max_cycles` was reached, `FALSE` if it terminated at `max_cycles`. Reset to `FALSE` at the start of each debate. |
 | **Output Metrics** | | | |
-| `mae` | `float` | $[0.0, 1.0]$ | Global Mean Absolute Error between final simulated attitudes and T2 data[cite: 1]. |
-| `mae_per_debate` | `map<int, float>` | Map | Session-level MAE aggregated separately per unique debate ID[cite: 1]. |
-| `opinion_variance` | `float` | $\ge 0.0$ | Current statistical variance of agent opinions across active population[cite: 1]. |
-| `num_clusters` | `integer` | $[0, 10]$ | Number of non-empty 10-bin histogram opinion clusters[cite: 1]. |
-| `polarization_index` | `float` | $\ge 0.0$ | Standardized variance of all unique pairwise opinion distance coordinates[cite: 1]. |
-| `initial_num_clusters` | `integer` | $[0, 10]$ | Baseline count of opinion clusters evaluated at step 0[cite: 1]. |
-| `interaction_log` | `list<string>` | List | Dynamic runtime container array holding step-by-step transaction logs[cite: 1]. |
+| `mae` | `float` | $[0.0, 1.0]$ | Global Mean Absolute Error between final simulated attitudes and T2 data. |
+| `mae_per_debate` | `map<int, float>` | Map | Session-level MAE aggregated separately per unique debate ID. |
+| `opinion_variance` | `float` | $\ge 0.0$ | Current statistical variance of agent opinions across active population. |
+| `num_clusters` | `integer` | $[0, 10]$ | Number of non-empty 10-bin histogram opinion clusters. |
+| `polarization_index` | `float` | $\ge 0.0$ | Standardized variance of all unique pairwise opinion distance coordinates. |
+| `initial_num_clusters` | `integer` | $[0, 10]$ | Baseline count of opinion clusters evaluated at step 0. |
+| `interaction_log` | `list<string>` | List | Dynamic runtime container array holding step-by-step transaction logs. |
 | **Diagnostics** | | | |
-| `neutral_zone_width` | `float` | $[-1.0, 1.0]$ | Bipolarization zone gap calculated as $\rho - \epsilon$[cite: 1]. |
-| `mean_net_repulsion_abs` | `float` | $\ge 0.0$ | Population average magnitude of active repulsive forces[cite: 1]. |
-| `total_attractive_interactions` | `integer` | $\mathbb{Z}_{\ge 0}$ | Cumulative count of interactions occurring in attraction zones[cite: 1]. |
-| `total_repulsive_interactions` | `integer` | $\mathbb{Z}_{\ge 0}$ | Cumulative count of interactions occurring in repulsion zones[cite: 1]. |
-| `total_neutral_interactions` | `integer` | $\mathbb{Z}_{\ge 0}$ | Cumulative count of interactions occurring in neutral buffer zones[cite: 1]. |
+| `neutral_zone_width` | `float` | $[-1.0, 1.0]$ | Bipolarization zone gap calculated as $\rho - \epsilon$. |
+| `mean_net_repulsion_abs` | `float` | $\ge 0.0$ | Population average magnitude of active repulsive forces. |
+| `total_attractive_interactions` | `integer` | $\mathbb{Z}_{\ge 0}$ | Cumulative count of interactions occurring in attraction zones. |
+| `total_repulsive_interactions` | `integer` | $\mathbb{Z}_{\ge 0}$ | Cumulative count of interactions occurring in repulsion zones. |
+| `total_neutral_interactions` | `integer` | $\mathbb{Z}_{\ge 0}$ | Cumulative count of interactions occurring in neutral buffer zones. |
 
 #### Model Selection
 - `model_type` (string): Which social influence model to use {"consensus", "clustering", "bipolarization", "no_change"}
@@ -428,22 +429,33 @@ $$\text{new\_opinion} = \max(0.0, \min(1.0, \text{raw\_opinion}))$$
 **Sources of randomness:**
 
 **At initialization:**
-- Agent parameter sampling: `agent_param ~ Normal(population_mean, population_sd)`
-- Network creation: fully connected network
-- Spatial location assignment: `location ~ Uniform(0, 100) × Uniform(0, 100)`
+- Agent parameter sampling: a Gaussian draw of each parameter when `use_distinct_agents = TRUE`
 
 **During simulation:**
-- Deterministic when speaking_mode = false
+- Deterministic when `speaking_mode = FALSE` and `use_distinct_agents = FALSE`
 - When speaking_mode = true: stochasticity is introduced at every interaction cycle via the random choice operator (rnd_choice) selecting the active speaker.
 
 **Across runs:**
 - Different random seeds produce different parameter samples and networks
-- However, empirical findings show: stochasticity has minimal effect on MAE (variance ≈ 0)
-- Implication: 1-3 seed replicates sufficient (not 30)
+- Implication: repeat: 1 for the 4 deterministic experiments and repeat: 5 for the remaining 9.
 
 **Control of stochasticity:**
 - `keep_seed: true` in batch experiments ensures reproducibility
 - Seed value saved in output files for traceability
+
+As stated above stochasticity enters the model through two channels: the Gaussian draw of agent parameter values and the `rnd_choice` when `speaking_mode = TRUE`. Four of the thirteen experiment cells (`cons_ndist_nospeak`, `clst_ndist_nospeak`, `bipol_ndist_nospeak`, `no_change_exp`) with both `use_distinct_agents` and `speaking_mode` switches off are deterministic and repeated runs under these identical parameter set ups produce identical output.
+
+By design, the nine remaining experiment cells are stochastic, however during the run reported here the flag `keep_seed: true` fixed the RNG state across repeats. Because the per-debate seed reset only took effect from the second debate onwards, the repeats varied for the first debate but were identical for all subsequent debates. The number of effective independent replicates per parameter-set by debate combination is thus one, not the nominal `repeat` value and `logged_batch_seed` records an identical value across all runs. This follows from prioritising reproducibility. A planned robustness check will require a re-run using `keep_seed: false`. 
+
+An earlier version of this document stated that stochasticity had a negligible effect on MAE. This claim is withdrawn as the diagnostic tool supporting it folded the random seed into a grouping variable, implying that variation across parameter sets was measured at a fixed seed rather than the variation resulting from different seeds. Furthermore, in a prior experimental set up before the final run, all debates within an experiment began from the same RNG state, resulting in speaker selection being replayed in the same sequence for each debate.
+
+**Non-sources of randomness**
+**At initialization:**
+- Network creation: fully deterministic (fully connected network)
+- Spatial location assignment: `location ~ Uniform(0, 100) × Uniform(0, 100)`
+The spatial location assignment comes from a uniform draw, is used purely for visualization and never enters an update rule.
+
+Regarding the lhs sweep, no run reached `max_cycles` - all 1,565,243 rows have `converged = TRUE`. Convergence detection is gated by a minimum of 10 cycles and subsequently evaluated at every cycle. The removal of a previous restriction to multiples of 5 results in the convergence cycle saved in the output files reflecting the exact cycle where the debate converged. 
 
 ## 4.10 Collectives
 **Debates** are the primary collective entity:

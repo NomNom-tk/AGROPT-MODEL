@@ -167,8 +167,8 @@ process_run <- function(config) {
   ## look at path sub-list
   if (config$version_scope == "both") {
     # 1. Extract data frames safely ONLY if paths exist
-    df_v1 <- if(!is.null(config$batch$v1$path)) load_and_prepare(config$batch$v1$path, config, config$batch$v1$version) else NULL
-    df_v2 <- if(!is.null(config$batch$v2$path)) load_and_prepare(config$batch$v2$path, config, config$batch$v2$version) else NULL
+    df_v1 <- if(!is.null(config$batch$v1$path)) load_and_prepare(config$batch$v1$path, config, config$batch$v1$version, col_names = batch_cols) else NULL
+    df_v2 <- if(!is.null(config$batch$v2$path)) load_and_prepare(config$batch$v2$path, config, config$batch$v2$version, col_names = batch_cols) else NULL
     
     # 2. Assign outputs conditionally based on what loaded successfully
     if (!is.null(df_v1) && !is.null(df_v2)) {
@@ -197,7 +197,7 @@ process_run <- function(config) {
         config$batch$v1$version
     }
     
-    df_batch     <- if (!is.null(target_path)) load_and_prepare(target_path, config, target_version) else NULL
+    df_batch     <- if (!is.null(target_path)) load_and_prepare(target_path, config, target_version, col_names = batch_cols) else NULL
     lhs_versions <- NULL
   }
   
@@ -209,7 +209,7 @@ process_run <- function(config) {
   }
 
   log_step("Starting Agent Loading Block")
-  df_ag = load_and_prepare(target_agent_path, config)
+  df_ag = load_and_prepare(target_agent_path, config, col_names = ag_cols)
   
   # INTERACTION LEVEL
   # prepare_interactions + left_join pro_reduction from df_ag
@@ -321,13 +321,13 @@ process_run <- function(config) {
   # update 6/8/26 widen asymmetries per model
   if (!is.null(df_valence) && nrow(df_valence) > 0) {
     valence_wide <- df_valence %>%
-    group_by(selected_debate_id, model_type) %>%
+    group_by(design_cell, selected_debate_id, model_type) %>%
     summarize(accuracy_asymmetry = mean(accuracy_asymmetry, na.rm = TRUE),
               error_asymmetry = mean(error_asymmetry, na.rm = TRUE),
               .groups = "drop") %>%
     pivot_wider(names_from = model_type,
                 values_from = c(accuracy_asymmetry, error_asymmetry))
-  stopifnot(!any(duplicated(valence_wide$selected_debate_id))) # guard
+  stopifnot(!any(duplicated(valence_wide[c("design_cell", "selected_debate_id")]))) # guard
 
       
     df_upset <- df_upset %>%
@@ -347,6 +347,7 @@ process_run <- function(config) {
                   .names = "pro_{.col}"),
            across(starts_with("accuracy_asymmetry_"), ~ .x < 0,
                   .names = "anti_{.col}"))
+}
     
   # RETURN LIST with consistent slot names regardless of run_type
   list(
@@ -366,7 +367,38 @@ process_run <- function(config) {
   ) 
 }
 
-# lists declaration for lm and sensitivity analyses
+# lists declaration for parquet reading and sensitivity analyses
+batch_cols <- c(
+  "model_type","current_condition","selected_debate_id","debate_label",
+  "current_experiment_id","max_cycles","converged","use_distinct_agents",
+  "speaking_mode","logged_batch_seed","pro_count","anti_count",
+  "convergence_rate","confidence_threshold","repulsion_threshold",
+  "repulsion_strength","convergence_rate_sd","confidence_threshold_sd",
+  "repulsion_threshold_sd","repulsion_strength_sd",
+  "convergence_cycle","initial_variance","mae","opinion_variance",
+  "polarization_index","num_clusters","initial_num_clusters",
+  "neutral_zone_width","mean_net_repulsion_abs")
+# ag_cols — MUST be edited in lockstep with the save[] list in save_agent_results
+ag_cols <- c("model_type", "current_condition", "selected_debate_id",
+  "debate_label","current_experiment_id","max_cycles",
+  "use_distinct_agents","speaking_mode","logged_batch_seed",
+  "agent_id","pro_reduction","pro_count","anti_count",
+  "subfactor_1_t1","subfactor_2_t1","subfactor_3_t1","subfactor_4_t1", 
+  "subfactor_5_t1","initial_opinion","initial_variance",
+  "opinion","subfactor_1_t2","subfactor_2_t2","subfactor_3_t2",
+  "subfactor_4_t2","subfactor_5_t2","final_attitude","mean_t2_subfactors",
+  "opinion_change","individual_error",
+  "error_sub1","error_sub2","error_sub3","error_sub4","error_sub5",
+  "agent_convergence_rate","agent_confidence_threshold",
+  "agent_repulsion_threshold","agent_repulsion_strength",
+  "total_influences_received","retention_discount",
+  "cumulative_opinion_change","agent_net_change",
+  "agent_wrong_direction","agent_is_saturated",
+  "convergence_rate","confidence_threshold",
+  "repulsion_threshold","repulsion_strength",
+  "convergence_cycle","converged")
+
+
 ## define input columns
 param_cols_by_model <- list(
   consensus_FALSE = c("convergence_rate"),

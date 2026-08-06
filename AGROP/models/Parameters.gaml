@@ -101,6 +101,12 @@ global {
     float mae <- 0.0;                       // Mean Absolute Error (global)
     map<int, float> mae_per_debate <- map<int, float>(map([]));
     bool converged <- false; 				// states whether debate converged or not with threshold 5/8/26
+    
+    // parameters to optimize for GA only 6/8/26
+    float mae_sum <- 0.0;
+    int mae_n <- 0;
+    float mae_mean_all <- 0.0;
+    
 
     // Opinion Stats
     float opinion_variance <- 0.0;          // Variance of opinions

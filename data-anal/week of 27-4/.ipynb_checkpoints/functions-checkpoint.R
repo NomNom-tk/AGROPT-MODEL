@@ -72,13 +72,30 @@ clean_stray_headers <- function(df) {
 #'
 #' meant to check whether parquet caches for data files exist and read parquet if they do
 #' if they don't then generate the parquet files to pass to read_clean
+#' attempts to read all headers as strings in utf8 encoding, otherwise reverts back to basic arrow read
 generate_parquet_cache <- function(path) {
   parquet_path <- sub("\\.csv$", ".parquet", path, ignore.case = TRUE)
 
   # paste progress
   cat(sprintf("Generating Parquet Cache: %s\n", basename(parquet_path)))
 
-  csv_stream <- read_csv_arrow(path, as_data_frame = FALSE)
+  # read header names only
+  hdr <- names(read_arrow_csv(path, as_data_frame = TRUE, n_max = 0)
+
+  # set up str schema
+  str_schema <- arrow::schema(
+    stats::setNames(rep(list(arrow::utf8()), length(hdr)), hdr)
+  )
+
+  csv_stream <- tryCatch(
+    read_csv_arrow(path, as_data_frame = FALSE, col__type = str_schema),
+    error = function(e) {
+      message("all-string schema read failed, falling back to inference: ",
+              conditionMessage(e))
+      read_csv_arrow(path, as_data_frame = FALSE)
+    }
+  )
+      
   write_parquet(csv_stream, parquet_path)
   rm(csv_stream)
   gc()
@@ -162,17 +179,21 @@ empirical_prep <- function(path) {
   read_clean(path) %>%
     mutate(index_t0_check = ((db_factor1t0 + db_factor2t0) / 2) - ((db_factor3t0 + db_factor4t0 + db_factor5t0) / 3),
           composition = substr(id_group_all, 1, 1),
-          change_t0_t1 = (db_index_t1 - db_index_t0) / 6,
-          change_t1_t2 = (db_index_t2 - db_index_t1) / 6,
-          change_t0_t2 = (db_index_t2 - db_index_t0) / 6,
+          change_t0_t1 = (db_index_t1 - db_index_t0) / 12,
+          change_t1_t2 = (db_index_t2 - db_index_t1) / 12,
+          change_t0_t2 = (db_index_t2 - db_index_t0) / 12,
+          opinion_t1 = (db_index_t1 + 6) / 12,
+          opinion_t0 = (db_index_t0 + 6) / 12,
+          opinion_t2 = (db_index_t2 = 6) / 12,
           abs_change_t1_t2 = abs(change_t1_t2),
-          opinion_strength = abs(db_index_t1 - 0.5), # strength is initial opinion - neutrality point (0.5)
+          opinion_strength = abs(db_index_t1) / 12, # strength is initial opinion folded at zero because that is neutral on the scale
           opinion_strength_cent = opinion_strength - mean(opinion_strength, na.rm = TRUE), # added for colinearity problem in h2
           perceived_norm_cent = perceived_norms - mean(perceived_norms, na.rm = TRUE), # centered perceived norms for h2
           self_control_cent = self_control - mean(self_control, na.rm = TRUE)) # centered self control for h2
 }
 
 # load and prepare 27/5/26 ----/
+#' update 6/8/26 added add_design_cell for cleaner df_ag and batch encoding
 ## prepare data handling using read_clean, batch mutations, bipol_contraints
 ## append meta data attaches, run type, composition scope and verison columns
 ## aply composition filter to M/H?all filter\
@@ -188,6 +209,8 @@ load_and_prepare <- function(path, config, version = NA) {
   df <- path %>%
     read_clean() %>%
     apply_batch_mutations() %>%
+    add_design_cell() %>%
+    add_param_set_id() %>%
     bipol_constraint_filter() %>%
     append_metadata(config, version = version) %>%
     apply_composition_filter(config)
@@ -434,6 +457,37 @@ compute_susceptibility_scores <- function(df) { # use with df_interactions
       .groups = "drop"
     )
 }
+
+#' Add design Cell Helper 6/8/29
+#' 
+#' Encodes model x distinct x speaking independent of current_experiment_id
+#' ensure that we have on design cell per model_type
+#' mutate current_experiment_id to char as an extra label
+add_design_cell <- function(df) {
+  df <- df %>%
+        mutate(design_cell = paste(model_type,
+                                   ifelse(use_distinct_agents, "ndist", "dist"),
+                                   ifelse(speaking_mode, "speak", "nospeak"),
+                                   sep = "_"))
+  if ("current_experiment_id" %in% colnames(df)) {
+    df <- df %>% mutate(experiment_id_label = as.character(current_experiment_id))
+  }
+  return(df)
+}
+
+#' Param set id creation 6/8/26
+#' intersects population parameters with names in df 
+#' allows distinct calls in framework_analysis to call one specific point in parameter space we can identify
+add_param_set_id <- function(df) {
+  pcols <- intersect(c("convergence_rate", "confidence_threshold",
+                       "repulsion_threshold", "repulsion_strength"),
+                     names(df))
+  df %>%
+    group_by(across(all_of(pcols))) %>%
+    mutate(param_set_id = cur_group_id()) %>%
+    ungroup()
+}
+               
 # CLEAR combine_df_versions ----
 # allows combination of different versions of tests for comparison e.g., convergence_threshold
 combine_df_versions <- function(dfs, version_names) {
@@ -484,6 +538,7 @@ aggregate_abm_debate <- function(df, mae_col = "mae") {
 
 
 #' Apply Batch Mutations and Type Coercion to Simulation Output
+#' update 6/8/26 added logical_cols coercion and trim to lowercase
 #'
 #' Cleans and type-converts raw GAMA batch output for downstream analysis.
 #' Converts character/logical columns to numeric where applicable, derives
@@ -572,12 +627,19 @@ apply_batch_mutations <- function(df) {
   if ("logged_batch_seed" %in% colnames(df)) {
     df <- df %>% mutate(seed = as.character(logged_batch_seed))
   }
-  if ("agent_wrong_direction" %in% colnames(df)) {
+
+  # Replace agent_wrong_direction with logical cols coercion
+  logical_cols <- intersect(
+    c("speaking_mode", "use_distinct_agents", "converged",
+      "agent_wrong_direction", "agent_is_saturated"),
+      colnames(df)
+  )
+
+  # check length of logical cols and then coerce to logical in lower case
+  if (length(logical_cols) > 0) {
     df <- df %>%
-      mutate(
-        agent_wrong_direction = as.logical(agent_wrong_direction),
-        agent_is_saturated = as.logical(agent_is_saturated)
-      )
+      mutate(across(all_of(logical_cols),
+                    ~ as.logical(tolower(trimws(as.character(.))))))
   }
 
   # collect once to materialize into local RAM before diagnostics
@@ -609,6 +671,8 @@ apply_batch_mutations <- function(df) {
 }
 
 #' Compute PCC/PRCC/RF Sensitivity Indices per Model/Agent-Type Combination (updated on 24/7/26)
+#' update 6/8/26 corrected key for speaking_mode (true/false) writing to same list element (added to group_by)
+#' correction: two identifiers, lookup key (from param_cols_by_model) and key (result storage)
 #'
 #' Runs Partial Correlation Coefficient (PCC) and Partial Rank Correlation
 #' Coefficient (PRCC) and Random Forest (RF) sensitivity analysis (via \code{sensitivity::pcc()})
@@ -672,7 +736,7 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees =
   
   sensi_split <- df %>%
     filter(model_type != "no_change") %>%
-    group_by(model_type, use_distinct_agents) %>%
+    group_by(model_type, use_distinct_agents, speaking_mode) %>%
     group_split()
   
   # Initialize storage
@@ -688,15 +752,22 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees =
     cat("piece rows:", nrow(df_piece), "\n")
     model_type_val <- as.character(unique(df_piece$model_type)) # key value for results list - unique model type -converted into char
     distinct_val   <- ifelse(unique(df_piece$use_distinct_agents), "TRUE", "FALSE") # value pair for results - distinct agents as chars
-    key <- paste(model_type_val, distinct_val, sep="_") # key creation [model, val] separated by _
-    cat("key:", key, "| in param_cols_by_model:", key %in% names(param_cols_by_model))
+    
+    # patch 6/8/26 speaking arm identifier
+    speak_val <- ifelse(isTRUE(as.logical(tolower(as.character(
+                  unique(df_piece$speaking_mode))))), "TRUE", "FALSE")
+
+    # patch 6/8/26 two identifiers, deliberately different
+    lookup_key <- paste(model_type_val, distinct_val, sep = "_")
+    key <- paste(model_type_val, distinct_val, speak_val, sep="_") # key creation [model, val] separated by _
+    cat("key:", key, "| lookup:", lookup_key, "| in param_cols_by_model:", lookup_key %in% names(param_cols_by_model), "\n")
       
     # key debug
     #print(paste("key:", key))
     #print(names(param_cols_by_model))
     
     # Retrieve relevant parameter columns
-    param_cols <- param_cols_by_model[[key]]       # lookup mapping
+    param_cols <- param_cols_by_model[[lookup_key]]       # lookup mapping
     if (is.null(param_cols)) next                 # skip if key not found
     param_cols <- intersect(param_cols, colnames(df_piece))  # restrict param_cols to only columns existing in this df_piece
     
@@ -814,6 +885,7 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees =
       key = rep(key, length(imp_scores)),
       model_type = rep(model_type_val, length(imp_scores)),
       use_distinct_agents = rep(distinct_val, length(imp_scores)),
+      speaking_mode = rep(distinct_val, length(imp_scores)),
       output = rep(output, length(imp_scores)),
       parameter = names(imp_scores),
       importance = as.numeric(imp_scores),
@@ -884,6 +956,7 @@ fit_lm <- function(df, param_cols, output_cols, standardize = FALSE) {
 }
                   
 #' Generate GAML Parameter Bound Declarations from Top-Performing Configs 24/7/26 (update to incorporate guards and initialize as characters)
+#' update 6/8/26 added SD parameters so they don't get skipped in generation, header block addition
 #'
 #' Translates a dataframe of best-performing parameter ranges (one row per
 #' model_type / use_distinct_agents combination) into GAML \code{parameter}
@@ -953,6 +1026,7 @@ generate_gaml_bounds <- function(df, buffer = 0.05) {
     header <- paste0(
       "\n// ", row$model_type, 
       " | distinct: ", row$use_distinct_agents,
+      " | speaking: ", if ("speaking_mode" %in% names(row)) row$speaking_mode else "NA",
       " | best_mae: ", round(row$best_mae, 4),
       " | n: ", row$n
     )
@@ -993,8 +1067,8 @@ generate_gaml_bounds <- function(df, buffer = 0.05) {
       ))
     }
     
-    # SD parameters — only for distinct agents
-    if (row$use_distinct_agents == TRUE) {
+    # SD parameters — only for distinct agents corrected row$use_distinct_agents
+    if (isTRUE(as.logical(tolower(as.character(row$use_distinct_agents))))) {
       cr_sd_range <- expand_range(row$cr_min_sd, row$cr_max_sd, buffer)
       output_lines <- c(output_lines, paste0(
         'parameter "SD Convergence Rate" var: convergence_rate_sd',
@@ -1106,6 +1180,9 @@ bipol_constraint_filter <- function(df, verbose = TRUE) {
 }
 
 # CLEAR param_region_extraction ####
+#' update 6/8/26
+#' added speaking mode to both group_by calls / added | to range check instead of AND
+#' rewrote bipol_check gap change so that it doesn't error
 param_region_extraction <- function(df, percentile = 0.25,
                                     cr_max_cap = NULL,
                                     rs_max_cap = NULL,
@@ -1125,14 +1202,14 @@ param_region_extraction <- function(df, percentile = 0.25,
   
   # group specific threhsold and filter
   df <- df %>%
-    group_by(model_type, use_distinct_agents) %>%
+    group_by(model_type, use_distinct_agents, speaking_mode) %>%
     mutate(mae_threshold = quantile(mae, percentile)) %>%
     filter(mae <= mae_threshold) %>%
     ungroup()
   
   # summarise per group of vars / added neutral zone width checks 27/7/26
   df <- df %>% 
-    group_by(model_type, use_distinct_agents) %>%
+    group_by(model_type, use_distinct_agents, speaking_mode) %>%
     summarize(
       cr_min = min(convergence_rate),
       cr_max = max(convergence_rate),
@@ -1180,8 +1257,7 @@ param_region_extraction <- function(df, percentile = 0.25,
   )
   
   for (pair in param_pairs) {
-    min_col <- pair[1]
-    max_col <- pair[2]
+    min_col <- pair[1]; max_col <- pair[2]
     df <- df %>%
       mutate(
         !!min_col := ifelse(.data[[max_col]] <= 0.01, NA, .data[[min_col]]),
@@ -1217,7 +1293,6 @@ param_region_extraction <- function(df, percentile = 0.25,
       rs_sd_range_ok = is.na(rs_max_sd) | (rs_max_sd - rs_min_sd) >= min_range,
       rt_sd_range_ok = is.na(rt_max_sd) | (rt_max_sd - rt_min_sd) >= min_range,
     ) 
-  #%>% select(model_type, use_distinct_agents, ends_with("_range_ok"))
   
   # print warning for narrow ranges
   # assign a differnet df to checks
@@ -1228,7 +1303,7 @@ param_region_extraction <- function(df, percentile = 0.25,
       names_to = "parameter",
       values_to = "range_ok"
     ) %>%
-    filter(!range_ok, is.na(range_ok))
+    filter(!range_ok | is.na(range_ok))
   
   if (nrow(range_check) > 0) { # pulls df from warning prints (should equate to zero)
     print("WARNING: the following parameters have ranges too narrow for follow up algorithm search:")
@@ -1242,10 +1317,10 @@ param_region_extraction <- function(df, percentile = 0.25,
   bipol_check <- regions %>%
     filter(model_type == "bipolarization") %>%
     mutate(constraint_ok = is.na(ct_max) | is.na(rt_max) | (ct_max < rt_min),
-           gap = ifelse(!is.na(ct_max) & !is.na(rt_min) | rt_min - ct_max, NA)) %>%
-    select(model_type, use_distinct_agents, ct_max, rt_min, gap, constraint_ok)
+           gap = ifelse(!is.na(ct_max) & !is.na(rt_min), rt_min - ct_max, NA_real_)) %>%
+    select(model_type, use_distinct_agents, speaking_mode, ct_max, rt_min, gap, constraint_ok)
   
-  if (any(!bipol_check$constraint_ok)) {
+  if (nrow(bipol_check) > 0 && any(!bipol_check$constraint_ok)) {
     print("WARNING: bipolarization bounds violate repulsion/confidence constraint")
     print("Adjust ct_max or rt_min manually before running follow up algorithm")
     print(bipol_check %>% filter(!constraint_ok))
@@ -1282,8 +1357,8 @@ param_region_extraction <- function(df, percentile = 0.25,
 #'     \item{simulated_dir}{Numeric (-1, 0, 1). Sign of simulated shift (\code{opinion - initial_opinion}).}
 #'     \item{correct_dir}{Logical. \code{TRUE} if simulated movement sign matches empirical movement sign.}
 #'     \item{empirical_moved}{Logical. \code{TRUE} if empirical opinion actually changed (\code{empirical_dir != 0}).}
-#'     \item{agent_against_stance}{Logical. \code{TRUE} if the agent is pro_reduction and their opinion_change < 0. \code{FALSE} anti reduction with positive change}
-#'     \item{direction_class}{Factor. "stationary" if \code{simulated_dir} = 0, "correct" if \code{correct_dir} evals to TRUE, "wrong" if \code{direction_class} evals to TRUE}
+#'     \item{agent_against_stance}{Logical. \code{TRUE} if the agent is pro_reduction and their opinion_change < 0. \code{TRUE} anti reduction with positive change}
+#'     \item{direction_class}{Character. "stationary" if \code{simulated_dir} = 0, "correct" if \code{correct_dir} evals to TRUE, "wrong" is fallback when agent moved but not in empirical direction}
 #'   }
 #'
 #' @details
@@ -1297,7 +1372,7 @@ param_region_extraction <- function(df, percentile = 0.25,
 #'
 #' @seealso \code{\link{summarize_directional}}
 prepare_directional <- function(df) { # use with df_ag
-  df_directional <- df %>%
+  df %>%
     filter(speaking_mode == TRUE) %>%
     mutate(empirical_dir = sign(final_attitude - initial_opinion), #vector of direction (posi = positive end opin) 
            simulated_dir = sign(opinion - initial_opinion), #vector positive implies simulated opinion is larger
@@ -1322,15 +1397,15 @@ prepare_directional <- function(df) { # use with df_ag
 #'
 #' @param df A data frame of agent-level directional data produced by 
 #'   \code{\link{prepare_directional}}. Must contain \code{correct_dir}, 
-#'   \code{agent_wrong_direction}, \code{opinion}, \code{final_attitude}, \code{direction_class} and 
+#'   \code{opinion}, \code{final_attitude}, \code{direction_class} and 
 #'   \code{initial_opinion}.
 #'
 #' @return A summarized tibble (\code{df_directional}) grouped by \code{model_type}, 
 #'   \code{current_condition}, and \code{selected_debate_id}, containing:
 #'   \describe{
 #'     \item{pct_correct_dir}{Numeric [0,1]. Proportion of agents moving in the correct empirical direction based on \code{direction_class}.}
-#'     \item{pct_stationary_dir}{Numeric [0,1]. Proportion of agents who did not move \code{direction_class} = 0}
-#'     \item{pct_wrong_dir}{Numeric [0,1]. Proportion of agents moving in the explicit wrong direction (\code{agent_wrong_direction}).}
+#'     \item{pct_stationary_dir}{Numeric [0,1]. Proportion of agents who did not move \code{direction_class} = "stationary"}
+#'     \item{pct_wrong_dir}{Numeric [0,1]. Proportion of agents moving in the explicit wrong direction (\code{direction_class}).}
 #'     \item{mean_mae}{Numeric. Mean Absolute Error between simulated opinion and empirical final attitude.}
 #'     \item{mean_baseline_mae}{Numeric. Baseline Mean Absolute Error assuming zero opinion change from initial state.}
 #'     \item{n}{Integer. Count of evaluated agent observations per debate grouping.}
@@ -1361,7 +1436,7 @@ summarize_directional <- function(df) {
 #' 
 #' @param df Agent-level dataframe (e.g., df_directional_agents) containing:
 #'   \code{model_type}, \code{current_condition}, \code{selected_debate_id},
-#'   \code{pro_reduction}, \code{correct_dir}, \code{agent_wrong_direction},
+#'   \code{pro_reduction}, \code{correct_dir}, \code{direction_class},
 #'   \code{opinion}, \code{final_attitude}, and \code{initial_opinion}.
 #'
 #' @return A summarized data frame in long format with one row per 
@@ -1371,14 +1446,14 @@ summarize_directional <- function(df) {
 #'   \describe{
 #'     \item{pct_correct_dir}{Numeric [0,1]. Proportion of agents moving in the correct empirical direction based on \code{direction_class}.}
 #'     \item{pct_stationary_dir}{Numeric [0,1]. Proportion of agents who did not move \code{direction_class} = 0}
-#'     \item{pct_wrong_dir}{Numeric [0,1]. Proportion of agents moving in the explicit wrong direction (\code{agent_wrong_direction}).}
+#'     \item{pct_wrong_dir}{Numeric [0,1]. Proportion of agents moving in the explicit wrong direction (\code{direction_class}).}
 #'   }
 #' 
 #' @export
 summarize_directional_valence <- function(df) {
   df %>%
     mutate(pro_reduction = as.integer(as.character(pro_reduction))) %>% 
-    group_by(model_type, current_condition, selected_debate_id, pro_reduction) %>%
+    group_by(design_cell, model_type, current_condition, selected_debate_id, pro_reduction) %>%
     summarize(
       pct_correct_dir = mean(direction_class == "correct"),
       pct_wrong_dir = mean(direction_class == "wrong"),
@@ -1411,7 +1486,7 @@ compute_valence_asymmetry <- function(df) {
     
   df %>%
     mutate(pro_reduction = factor(as.character(pro_reduction), levels = c("0", "1"))) %>%
-    select(model_type, current_condition, selected_debate_id, pro_reduction,
+    select(design_cell, model_type, current_condition, selected_debate_id, pro_reduction,
            pct_correct_dir, mean_signed_error, mean_mae) %>%
     pivot_wider(
       names_from   = pro_reduction,

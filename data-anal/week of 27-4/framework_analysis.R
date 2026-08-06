@@ -63,7 +63,7 @@ analyze_processed_run <- function(df) {
       wilcox.test(mu = 0)
 
     ## difference in opinion change between homogeneous and mixed experimental conditions
-    df_empirical %>%
+    wilcox_h_vs_m <- df_empirical %>%
       filter(composition %in% c("H", "M")) %>%
       mutate(composition = as.factor(composition)) %>%
       wilcox.test(change_t1_t2 ~ composition, data = .)
@@ -122,6 +122,7 @@ analyze_processed_run <- function(df) {
   pcc_all  <- NULL
   prcc_all <- NULL
   df_version_summary <- NULL
+  sensi_lhs <- NULL
   sensi_v1 <- NULL
   sensi_v2 <- NULL
   
@@ -174,7 +175,6 @@ analyze_processed_run <- function(df) {
   comparison_clean   <- NULL
   comparison_summary <- NULL
   ols_global_mae     <- NULL
-  ols_model          <- NULL
   mlm_model_h1a      <- NULL # standardized mlm for H1 with empirical data
   mlm_model_h1b      <- NULL # standardized mlm for H1 with simulated data
   abm_mae_debate     <- NULL
@@ -215,23 +215,51 @@ analyze_processed_run <- function(df) {
 
 
     # df_ag_raw_slice base set up to collect prior to H1a/h1b and df_ag_deduped 30/7/26
+    # updated 6/8/26 widen df_ag_raw_slice with population parameters and their SDs
+    # agent level realised draws, and flags
+    ag_slice_cols <- c(
+      # identity
+      "agent_id", "debate_label", "selecte_debate_id", "seed",
+      "model_type", "current_condition",
+      # design factors
+      "current_experiment_id", "speaking_mode", "use_distinct_agents",
+      # population parameters
+      "convergence_rate", "confidence_threshold", "repulsion_threshold", "repulsion_strength",
+      # realised agent draws (differ from above only when distinct)
+      "agent_convergence_rate", "agent_confidence_threshold",
+      "agent_repulsion_threshold", "agent_repulsion_strength",
+      # outcomes
+      "initial_opinion", "final_attitude", "opinion", "opinion_change",
+      "individual_error", "pro_reduction",
+      # flags
+      "agent_wrong_direction", "agent_is_saturated", "converged", "convergence_cycle"
+    )
+    
     df_ag_raw_slice <- df_ag |>
-      select(agent_id, debate_label, selected_debate_id, seed, model_type,
-             current_condition, initial_opinion, final_attitude, opinion, pro_reduction, opinion_change) |>
+      select(any_of(ag_slice_cols)) |> # any_of so a missing column warns rather than errors
       filter(!is.na(agent_id)) |>
-      collect()
+      collect() |>
+      add_design_cell() # from GA bounds patch logic
+
+    # report what was requested but absent
+    # character(0) expected, anything listed here is missing from GAML save list
+    setdiff(ag_slice_cols, names(df_ag_raw_slice))
 
     # Branch A: empirical trajectory (H1a)
     df_ag_base <- df_ag_raw_slice |>
       distinct(agent_id, debate_label, .keep_all = TRUE) # one real T1->T2 per agent/debate
 
     # Branch B: simulated trajectory (H1b)
+    # updated 6/8/26 compute SD first instead of summarizing sequentially
+    # corrected grouping by design cell and param_set id
+    # sd_opinion_seeds is NA only where n_seeds = 1
     df_sim_base <- df_ag_raw_slice |>
-      group_by(agent_id, debate_label, model_type, current_condition, seed) |> # 5/8/26 added seed to check
+      group_by(agent_id, debate_label, model_type, current_condition, design_cell, param_set_id) |> # 5/8/26 added seed to check
       summarize(
         initial_opinion = first(initial_opinion),
-        opinion = mean(opinion, na.rm = TRUE), # collapse across seed
-        sd_opinion_seeds = sd(opinion, na.rm = TRUE), # keep and report separately
+        sd_opinion_seeds = sd(opinion, na.rm = TRUE), # before the mean calc
+        n_seeds = n_distinct(seed),
+        opinion = mean(opinion, na.rm = TRUE), # collapse across seed ONLY
         .groups = "drop"
       )
 
@@ -326,8 +354,19 @@ analyze_processed_run <- function(df) {
 
     # Branch C: MAE / OLS/ABM Comparison 
     log_step("Starting branch C df setups, ols vs abm...")
+
+    # update 6/8/26 added best_param_cell to find best mae within each cell (not which sorted first)
+    best_param_by_cell <- df_batch %>%
+      filter(model_type != "no_change") %>%
+      group_by(design_cell, param_set_id) %>%
+      summarize(mean_mae = mean(mae, na.rm = TRUE), .groups = "drop_last") %>%
+      slice_min(mean_mae, n = 1, with_ties = FALSE) %>%
+      ungroup() %>%
+      select(design_cell, param_set_id, mean_mae)
+      
     df_ag_deduped <- df_ag_raw_slice %>%
-      distinct(agent_id, selected_debate_id, seed, model_type, .keep_all = TRUE)
+      semi_join(best_param_by_cell, by = c("design_cell", "param_set_id")) %>%
+      distinct(agent_id, selected_debate_id, seed, design_cell, .keep_all = TRUE)
 
     if (!is.null(mlm_model_h1a)) {
         df_t2_preds <- df_empir_long %>%
@@ -344,16 +383,19 @@ analyze_processed_run <- function(df) {
           group_by(selected_debate_id, debate_label) %>%
           summarize(ols_mae = mean(ols_error, na.rm = TRUE), .groups = "drop")
     
-        # ABM simulation MAE summary
+        # ABM simulation MAE summary update 6/8/26
+        # take baseline out of treatment, added cell in the grain
         abm_mae_debate <- df_batch %>%
-          select(selected_debate_id, mae, debate_label, use_distinct_agents) |>
-          group_by(selected_debate_id) %>%  
+          filter(model_type != "no_change") %>%
+          add_design_cell() %>%
+          group_by(design_cell, selected_debate_id) %>%  
           summarize(
             abm_mae = mean(mae, na.rm = TRUE),
-            debate_label = first(debate_label),  
-            pct_hetero = mean(use_distinct_agents == TRUE, na.rm = TRUE),
+            abm_mae_min = min(mae, na.rm = TRUE),
+            debate_label = first(debate_label),
+            n_param_sets = n_distinct(param_set_id)
             .groups = "drop"
-          ) |>
+          ) %>%
           collect()
     
         # merge MAE scores for comparison
@@ -530,8 +572,8 @@ analyze_processed_run <- function(df) {
   }
   
   stochasticity_check_1 <- df_batch %>%
-    group_by(model_type, use_distinct_agents, selected_debate_id, seed) %>%
-    summarize(mae_sd = sd(mae), n = n(), .groups = "drop")
+    group_by(design_cell, param_set_id, selected_debate_id) %>%
+    summarize(mae_sd = sd(mae, na.rm = TRUE), n_seeds = n_distinct(seed), .groups = "drop")
   
   heterogeneity_check <- df_batch %>%
     group_by(model_type, use_distinct_agents) %>%
@@ -558,11 +600,23 @@ analyze_processed_run <- function(df) {
   model_comparison_relative <- model_comparison_main %>%
     group_by(speaking_mode) %>%
     mutate(best_mae = min(mae_mean), delta_mae = mae_mean - best_mae) %>% ungroup()
-  
+
+  # modification to estblish relative baseline 6/8/26
+  baseline_by_debate <- df_batch %>%
+    filter(model_type != "no_change") %>%
+    group_by(selected_debate_id) %>%
+    summarize(baseline_mae = mean(mae, na.rm = TRUE), .groups = "drop")
+
+  # failure means the model did worse than assuming nothign changed 6/8/26
   failures_comp <- df_batch %>%
-    mutate(failures = mae > 0.18) %>%
-    group_by(model_type, failures) %>%
-    summarize(mean_convergence = mean(convergence_rate), pct_hetero = mean(use_distinct_agents == TRUE) * 100, n_total = n(), .groups = "drop")
+    filter(model_type != "no_change") %>%
+    left_join(baseline_by_debate, by = "selected_debate_id") %>%
+    mutate(failures = mae > baseline_mae) %>%
+    group_by(design_cell, model_type, failures) %>%
+    summarize(mean_convergence_cycle = mean(convergence_cycle, na.rm = TRUE), 
+              pct_converged = mean(converged, na.rm = TRUE), 
+              n_total = n(), 
+              .groups = "drop")
   
   clusters <- NULL
     clusters <- df_batch %>%
@@ -656,13 +710,13 @@ analyze_processed_run <- function(df) {
         v2       = if(!is.null(sensi_v2)) list(pcc = sensi_v2$pcc, prcc = sensi_v2$prcc, rf = sensi_v2$rf, rf_models = sensi_v2$rf_mod_list) else NULL
       ),
       models = list(conv = run_conv_model(df_conv_debate), 
-                    ols = ols_model, # raw pooled individual model 13/7/26
                     mlm_h1a = mlm_model_h1a, # deduplicated H1a (empirical) test
                     mlm_h1b = mlm_model_h1b, # deduplicated H1b (simualted) test
                     mlm_h2 = mlm_model_h2, # integrated H2 test with perceived_norms and self_control
                     mlm_h2_cent = mlm_model_h2_cent # H2 with centered values (corrects for variable inflation factors)
                    ),
       comparisons = list(
+        wilcox_h_m      = wilcox_h_vs_m,
         empirical       = empirical_stat_check, # from df_empirical, computed mean and SD for each time (T0,T1,T2)
         empirical_cohen = empir_cohen, # linear regression from raw df_empirical pro_reduction on changet1t2, filtered by Mixed debates)
         ols_debate_mae  = comparison_clean, # inner join abm_mae (from df_batch) and ols_mae (from df_ag) by selected_debate_id and calculates delta 

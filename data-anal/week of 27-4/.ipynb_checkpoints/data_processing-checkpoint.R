@@ -300,7 +300,7 @@ process_run <- function(config) {
   if (!is.null(df_sum_directional_valence)) {
     log_step("Upset df calculation starting...")
     df_upset <- df_sum_directional_valence %>% # added 6/7/26 for upset plots
-      group_by(selected_debate_id, model_type) %>%
+      group_by(design_cell, selected_debate_id, model_type) %>%
       summarize(pct_correct_dir = mean(pct_correct_dir), .groups = "drop") %>%
       pivot_wider(names_from = model_type, values_from = pct_correct_dir)
 
@@ -318,26 +318,35 @@ process_run <- function(config) {
         cons_correct = consensus > 0.5) 
       
   #guard to safely join df_valence only if it exists and is non empty
+  # update 6/8/26 widen asymmetries per model
   if (!is.null(df_valence) && nrow(df_valence) > 0) {
+    valence_wide <- df_valence %>%
+    group_by(selected_debate_id, model_type) %>%
+    summarize(accuracy_asymmetry = mean(accuracy_asymmetry, na.rm = TRUE),
+              error_asymmetry = mean(error_asymmetry, na.rm = TRUE),
+              .groups = "drop") %>%
+    pivot_wider(names_from = model_type,
+                values_from = c(accuracy_asymmetry, error_asymmetry))
+  stopifnot(!any(duplicated(valence_wide$selected_debate_id))) # guard
+
+      
     df_upset <- df_upset %>%
     left_join(
-        df_valence %>% select(selected_debate_id, accuracy_asymmetry, error_asymmetry),
-        by = "selected_debate_id") 
+        valence_wide,
+        by = c("design_cell", "selected_debate_id") 
   } else {
     df_upset <- df_upset %>%
-      mutate(
-        accuracy_asymmetry = NA_real_,
-        error_asymmetry = NA_real_
-      )
+      mutate(across(paste0("accuracy_asymmetry_", c("bipolarization","clustering","consensus")),
+                  ~ NA_real_))
   }
 
   # compute bias flags safely
   log_step("Bias flag computation for df_valence starting")
-    df_upset <- df_upset %>%
-    mutate(
-        pro_biased = accuracy_asymmetry > 0,
-        anti_biased = accuracy_asymmetry < 0)
-  }
+  df_upset <- df_upset %>%
+    mutate(across(starts_with("accuracy_asymmetry_"), ~ .x > 0,
+                  .names = "pro_{.col}"),
+           across(starts_with("accuracy_asymmetry_"), ~ .x < 0,
+                  .names = "anti_{.col}"))
     
   # RETURN LIST with consistent slot names regardless of run_type
   list(

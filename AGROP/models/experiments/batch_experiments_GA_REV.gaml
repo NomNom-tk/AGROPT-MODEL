@@ -284,6 +284,8 @@ experiment Bt_gen_bipol_ndist type: batch repeat: 5 keep_seed: true until: (deba
 	composition_scope <- "M";
         
         if repulsion_threshold <= confidence_threshold {
+            mae <- 999.0;
+            mae_mean_all <- 999.0;
             end_simulation <- true;
     	}
 	}
@@ -323,6 +325,8 @@ experiment Bt_gen_bipol_dist type: batch repeat: 5 keep_seed: true until: (debat
 	composition_scope <- "M";
         
         if repulsion_threshold <= confidence_threshold {
+            mae <- 999.0;
+            mae_mean_all <- 999.0;
             end_simulation <- true;
     	}
 
@@ -357,6 +361,8 @@ experiment Bt_gen_bipol_ndist_speak type: batch repeat: 15 keep_seed: true until
 	composition_scope <- "M";
         
         if repulsion_threshold <= confidence_threshold {
+            mae <- 999.0;
+            mae_mean_all <- 999.0;
             end_simulation <- true;
     	}
         
@@ -396,6 +402,8 @@ experiment Bt_gen_bipol_dist_speak type: batch repeat: 5 keep_seed: true until: 
         
         if repulsion_threshold <= confidence_threshold {
             write "neutral zone is negative, skipping";
+            mae <- 999.0;
+            mae_mean_all <- 999.0;
             end_simulation <- true;
     	}
         

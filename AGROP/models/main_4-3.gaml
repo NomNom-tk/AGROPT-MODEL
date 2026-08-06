@@ -505,6 +505,11 @@ action compute_fit {
     // Global MAE
     mae <- length(all_errors) > 0 ? mean(all_errors) : 0.0;
     
+    // MAE for GA optimization, mae is reset per debate, minimize this 6/8/26
+    mae_sum <- mae_sum + mae;
+    mae_n <- mae_n + 1;
+    mae_mean_all <- mae_sum / mae_n;
+    
     // Compute mean absolute net repulsion (cluster stability measure)
     list<float> net_repulsions <- [];
     

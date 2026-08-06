@@ -510,6 +510,12 @@ action compute_fit {
     mae_n <- mae_n + 1;
     mae_mean_all <- mae_sum / mae_n;
     
+    // infeasible penalty
+    if infeasible_params {
+    	mae <- 999.0;
+    	mae_mean_all <- 999.0;
+    }
+    
     // Compute mean absolute net repulsion (cluster stability measure)
     list<float> net_repulsions <- [];
     
@@ -618,15 +624,6 @@ action save_batch_results {
     do compute_pro_anti_counts;
     string debate_label <- first(opinion_agents).debate_label;
     
-    if !file_exists("outputs/batch_summary.csv") {
-    save "model_type, current_condition, selected_debate_id, debate_label, current_experiment_id, max_cycles, converged, use_distinct_agents,
-            speaking_mode, logged_batch_seed, pro_count, anti_count, convergence_rate, confidence_threshold, repulsion_threshold, 
-            repulsion_strength, convergence_rate_sd, confidence_threshold_sd, repulsion_threshold_sd, repulsion_strength_sd, 
-            convergence_cycle, initial_variance, mae, opinion_variance, polarization_index, num_clusters, 
-            initial_num_clusters, neutral_zone_width, mean_net_repulsion_abs"
-    to: "outputs/batch_summary.csv" rewrite: false;
-    }
-    
     if model_type = "bipolarization" {
         neutral_zone_width <- repulsion_threshold - confidence_threshold;
         
@@ -654,7 +651,7 @@ action save_batch_results {
             repulsion_strength, convergence_rate_sd, confidence_threshold_sd, repulsion_threshold_sd, repulsion_strength_sd, 
             convergence_cycle, initial_variance, mae, opinion_variance, polarization_index, num_clusters, 
             initial_num_clusters, neutral_zone_width, mean_net_repulsion_abs]
-    to: "outputs/batch_summary.csv" rewrite: false header: true format: "csv";
+    to: "outputs/batch_summary.csv" rewrite: false header: false format: "csv";
     
     if debug_mode = true {
         write "=== Saving Results ===";
@@ -674,18 +671,6 @@ action save_batch_results {
 // ACTION: SAVE PER-AGENT RESULTS
 action save_agent_results {
     do compute_pro_anti_counts;
-    
-    if !file_exists("outputs/agent_level_results.csv") {
-    save "model_type,current_condition,selected_debate_id,debate_label,current_experiment_id,
-		  max_cycles,use_distinct_agents,speaking_mode,logged_batch_seed,agent_id,pro_reduction,pro_count,anti_count,
-		  subfactor_1_t1,subfactor_2_t1,subfactor_3_t1,subfactor_4_t1,subfactor_5_t1,initial_opinion,initial_variance,
-		  opinion,subfactor_1_t2,subfactor_2_t2,subfactor_3_t2,subfactor_4_t2,subfactor_5_t2,final_attitude,mean_t2_subfactors,
-		  opinion_change,individual_error,error_sub1,error_sub2,error_sub3,error_sub4,error_sub5,agent_convergence_rate,
-		  agent_confidence_threshold,agent_repulsion_threshold,agent_repulsion_strength,total_influences_received,
-		  retention_discount,cumulative_opinion_change,agent_net_change,agent_wrong_direction,agent_is_saturated,
-		  convergence_rate,confidence_threshold,repulsion_threshold,repulsion_strength,convergence_cycle,converged"
-    to: "outputs/agent_level_results.csv" rewrite: false;
-	}
     
     // could the error be due to subfactors not being declard in opinion_agent
     ask opinion_agents {
@@ -781,7 +766,7 @@ action save_agent_results {
             convergence_cycle,
             converged 
         ]
-        to: "outputs/agent_level_results.csv" rewrite: false header: true format: "csv";
+        to: "outputs/agent_level_results.csv" rewrite: false header: false format: "csv";
     }
     
     if debug_mode = false {

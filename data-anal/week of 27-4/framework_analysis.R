@@ -393,7 +393,7 @@ analyze_processed_run <- function(df) {
             abm_mae = mean(mae, na.rm = TRUE),
             abm_mae_min = min(mae, na.rm = TRUE),
             debate_label = first(debate_label),
-            n_param_sets = n_distinct(param_set_id)
+            n_param_sets = n_distinct(param_set_id),
             .groups = "drop"
           ) %>%
           collect()

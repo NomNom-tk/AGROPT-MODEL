@@ -333,7 +333,7 @@ process_run <- function(config) {
     df_upset <- df_upset %>%
     left_join(
         valence_wide,
-        by = c("design_cell", "selected_debate_id") 
+        by = c("design_cell", "selected_debate_id")) 
   } else {
     df_upset <- df_upset %>%
       mutate(across(paste0("accuracy_asymmetry_", c("bipolarization","clustering","consensus")),
@@ -347,6 +347,7 @@ process_run <- function(config) {
                   .names = "pro_{.col}"),
            across(starts_with("accuracy_asymmetry_"), ~ .x < 0,
                   .names = "anti_{.col}"))
+}
     
   # RETURN LIST with consistent slot names regardless of run_type
   list(

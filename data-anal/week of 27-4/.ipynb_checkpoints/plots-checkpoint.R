@@ -717,50 +717,46 @@ plot_model_comparison_uncertainty <- function(df) {
   return(p)
 }
 
-#' RF Importance Across Model Types
+#' RF Importance Across Model Types 6/8/26
 #' 
 #' Takes the RF output from \code{run_sensi_analysis} and plots the individual variable
 #' importance for each model_type
 #'
 #'
-plot_rf_importance <- function(df) {
-  ggplot(df, aes(x= reorder(parameter, importance), y = importance, fill = model_type)) +
-  geom_col(position = "dodge") +
-  coord_flip() +
-  facet_wrap(~output, scales = "free") +
-  theme_minimal() +
-  labs(title = "Random Forest Variable Importance", x = "Parameter", y = "Importance Score")
+plot_rf_importance_by_cell <- function(rf_df, output_filter = "mae") {
+  rf_df %>%
+    filter(output == output_filter) %>%
+    ggplot(aes(x = reorder(parameter, importance), y = importance,
+               fill = speaking_mode)) +
+    geom_col(position = "dodge") +
+    coord_flip() +
+    facet_grid(model_type ~ use_distinct_agents, scales = "free_y") +
+    theme_minimal() +
+    labs(title = paste("RF permutation importance for", output_filter),
+         x = "Parameter", y = "Importance", fill = "speaking_mode")
 }
+ 
+#plot_rf_importance_by_cell(sensi_lhs$rf, "mae")
 
-#' Streamlined PDP Plotter
-#' 
-#' @param sensi_output_vX A specific version list (e.g., results$sensitivity$v1) containing models
-#' @param model_key The model key string (e.g., "bipolarization_FALSE")
-#' @param feature_name The parameter to plot
-plot_model_pdp <- function(sensi_output_vX, df_batch_data, model_type_val, distinct_val, output, feature_name) {
 
-  # model key correction
-  param_key <- paste(model_type_val, distinct_val, sep = "_") # for param_cols_by_model
-  rf_key <- paste(model_type_val, distinct_val, output, sep = "_") # for rf_models
-  
-  # 1. Pull the pre-fitted model from the version object
-  fitted_model <- sensi_output_vX$rf_models[[rf_key]]
-  if (is.null(fitted_model)) stop("Model not found in this version object.", rf_key)
-  
-  # 2. Extract data slice using the version's internal data or global raw reference
-  sub_data <- df_batch_data %>%
-    filter(model_type == model_type_val, tolower(as.character(use_distinct_agents)) == tolower(distinct_val))
-  cat("sub_data rows:", nrow(sub_data), "\n")   # <-- add this
-  if (!is.data.frame(sub_data)) sub_data <- collect(sub_data) # force eager collection if df_batch is still lazy
-
-  # Split the sub data into the model key determined by param_cols_by_model
-  X_sub <- sub_data[, param_cols_by_model[[param_key]], drop = FALSE]
-  X_sub[] <- lapply(X_sub, as.numeric)
-  y_sub <- as.numeric(sub_data[[output]]) # relative key (can change to mae, vae, etc) 
-  
-  # 3. Generate IML predictor and PDP
-  predictor <- iml::Predictor$new(model = fitted_model, data = X_sub, y = y_sub)
-  effect <- iml::FeatureEffect$new(predictor, feature = feature_name, method = "pdp")
-  
-  plot(effect) + ggplot2::theme_minimal()
+# Free y scale per panel: cells differ in absolute MAE and a shared scale 6/8/26
+# flattens the within-cell structure you are trying to read.
+ 
+plot_pdp_grid <- function(pdp_df, model_filter = NULL) {
+  d <- if (is.null(model_filter)) pdp_df else filter(pdp_df, model_type == model_filter)
+ 
+  ggplot(d, aes(x = x, y = yhat,
+                colour = speaking_mode,
+                linetype = use_distinct_agents)) +
+    geom_line(linewidth = 0.8) +
+    facet_grid(model_type ~ feature, scales = "free") +
+    theme_minimal() +
+    labs(title = paste("Partial dependence of", unique(d$output), "on each parameter"),
+         subtitle = "One line per design cell; flat-and-low regions are candidate GA bounds",
+         x = "Parameter value", y = paste("Predicted", unique(d$output)),
+         colour = "speaking_mode", linetype = "distinct agents")
 }
+ 
+plot_pdp_grid(pdp_df)
+plot_pdp_grid(pdp_df, model_filter = "bipolarization")
+

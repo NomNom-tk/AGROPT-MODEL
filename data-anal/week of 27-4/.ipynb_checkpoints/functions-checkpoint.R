@@ -80,7 +80,7 @@ generate_parquet_cache <- function(path) {
   cat(sprintf("Generating Parquet Cache: %s\n", basename(parquet_path)))
 
   # read header names only
-  hdr <- names(read_arrow_csv(path, as_data_frame = TRUE, n_max = 0)
+  hdr <- names(read_arrow_csv(path, as_data_frame = TRUE, n_max = 0))
 
   # set up str schema
   str_schema <- arrow::schema(
@@ -88,7 +88,7 @@ generate_parquet_cache <- function(path) {
   )
 
   csv_stream <- tryCatch(
-    read_csv_arrow(path, as_data_frame = FALSE, col__type = str_schema),
+    read_csv_arrow(path, as_data_frame = FALSE, col_types = str_schema),
     error = function(e) {
       message("all-string schema read failed, falling back to inference: ",
               conditionMessage(e))
@@ -1426,7 +1426,6 @@ summarize_directional <- function(df) {
     )
 }
 
-#' Summarize Direcitonal Accuracy, Valence split 
 #' Summarize Directional Accuracy by Valence Split 1/7/26
 #' 
 #' Extension of summarize_directional() with a pro_reduction split./ update 23/7 to take into account homogeneous debates where all agents are pro_reduciton == 0
@@ -1498,7 +1497,114 @@ compute_valence_asymmetry <- function(df) {
       error_asymmetry    = mean_signed_error_1 - mean_signed_error_0
     )
 }
-        
+
+#' compute pdp 6/8/26
+#'
+#' pdp is: for each grid value v of the feature, overwrite that column with 
+#' v across all rows, predict, average.
+compute_pdp <- function(rf_fit, X, feature, grid_n = 40, max_rows = 2000, trim = 0.025) {
+    if (!feature %in% names(X)) stop("feature not in X: ", feature)
+
+    # subsample of total rows for speed, PDP in an average, taking 2k rows is fine
+    if (nrow(X) > max_rows) X <- X[sample.int(nrow(X), max_rows), , drop = FALSE]
+
+    # added lo and hi to trim the grid to interior quantiles
+    lo <- quantile(X[[feature]], trim, na.rm = TRUE)
+    hi <- quantile(X[[feature]], 1 - trim, na.rm = TRUE)
+    
+    grid <- seq(lo, hi, length.out = grid_n)
+
+    yhat <- vapply(grid, function(v) {
+      Xg <- X
+      Xg[[feature]] <- v
+      mean(predict(rf_fit, data = Xg)$predictions, na.rm = TRUE)
+    }, numeric(1))
+
+    data.frame(feature = feature, x = grid, yhat = yhat)
+}
+
+#' pdp for every parameter in every design cell
+#'
+#' rebuilds each cell's X the same way run_sensi_analysis did
+#' column order matches what the forest was trained on. (need two identifiers
+#' lookup_key (model_distinct) for param columns and key (speaking arm) for the fitted model)
+pdp_all_cells <- function(df_batch, sensi_obj, param_cols_by_model,
+                          output = "mae", grid_n = 40) {
+    out <- list()
+
+    cells <- df_batch %>%
+      filter(model_type != "no_change") %>%
+      distinct(model_type, use_distinct_agents, speaking_mode)
+
+    for (i in seq_len(nrow(cells))) {
+      mt <- cells$model_type[i]
+      dv <- isTRUE(cells$use_distinct_agents[i])
+      sv <- isTRUE(cells$speaking_mode[i])
+
+      lookup_key <- paste(mt, ifelse(dv, "TRUE", "FALSE"), sep = "_")
+      key <- paste(mt, ifelse(df, "TRUE", "FALSE"),
+                   ifelse(sv, "speak", "nospeak"), sep = "_")
+      rf_key <- paste(key, output, sep = "_")
+
+      rf_fit <- sensi_obj$rf_mod_list[[rf_key]]
+      if (is.null(rf_fit)) {
+        message("no forest for", rf_key, " - skipping")
+        next
+      }
+
+      param_cols <- intersect(param_cols_by_model[[lookup_key]], names(df_batch))
+      if (length(param_cols) == 0) next
+
+      X <- df_batch %>%
+        filter(model_type == mt,
+               use_distinct_agents == dv,
+               speaking_mode == sv) %>%
+        select(all_of(param_cols)) %>%
+        mutate(across(everything(), as.numeric)) %>%
+        as.data.frame()
+      X <- X[complete.cases(X), , drop = FALSE]
+      if (nrow(X) < 10) next
+
+      for (f in param_cols) {
+        out[[paste(key, f, sep = "__")]] <- compute_pdp(rf_fit, X, f, grid_n) %>%
+          mutate(key = key, model_type = mt,
+                 use_distinct_agents = dv, speaking_mode = sv, output = output)
+      }
+    }
+
+    bind_rows(out)
+}
+
+#' Bounds from pdp
+#' keep region where pdp is within its 'tol' of its own minimum
+#' this matters because a bare yhat <= threshold filter can return and min and max
+#' spanning a hump between two separate basins
+#'
+#' Function is a complement to param_region_extraction(). Compare the two and use the union 
+#' if they disagree
+#' interpretation: 
+#' flat near 1 means param bearely matters in that cell (forest sees near horizontal surface)
+#' pdp_argmin sitting on either end of searched range is boundary solution
+bounds_from_pdp <- function(pdp_df, tol = 0.02) {
+  pdp_df %>%
+    group_by(key, model_type, use_distinct_agents, speaking_mode, feature) %>%
+    group_modify(~ {
+      d <- .x[order(.x$x), ]
+      thr <- min(d$yhat) + tol * diff(range(d$yhat))
+      ok <- d$yhat <= thr
+      # longest contiguous TRUE run containing the argmin
+      r <- rle(ok)
+      ends <- cumsum(r$lengths); starts <- ends - r$lengths + 1
+      amin <- which.min(d$yhat)
+      j <- which(r$values & starts <= amin & ends >= amin)[1]
+      data.frame(pdp_min = min(d$yhat),
+                 pdp_argmin = d$x[amin],
+                 lo = d$xp[starts[j]],
+                 hi = d$x[ends[j]],
+                 flat = (d$x[ends[j]] - d$x[starts[j]]) / diff(range(d$x)))
+    }) %>%
+    ungroup()
+}
 
 #' Build Per-Agent Influence Network Metrics (Debate-Level and Aggregate) 6/5/26
 #'

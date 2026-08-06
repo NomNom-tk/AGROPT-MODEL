@@ -107,6 +107,9 @@ global {
     int mae_n <- 0;
     float mae_mean_all <- 0.0;
     
+    // infeasible flag to skip sim in GA 6/8/26
+    bool infeasible_params <- false; 
+    
 
     // Opinion Stats
     float opinion_variance <- 0.0;          // Variance of opinions

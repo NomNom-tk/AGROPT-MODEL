@@ -284,8 +284,7 @@ experiment Bt_gen_bipol_ndist type: batch repeat: 5 keep_seed: true until: (deba
 	composition_scope <- "M";
         
         if repulsion_threshold <= confidence_threshold {
-            mae <- 999.0;
-            mae_mean_all <- 999.0;
+            infeasible_params <- true;
             end_simulation <- true;
     	}
 	}

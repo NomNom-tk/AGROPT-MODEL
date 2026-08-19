@@ -58,10 +58,10 @@ The following entities are present in the model: agents representing individuals
 | `subfactor_4_t1` / `subfactor_4_t2` | `float` | $[0.0, 1.0]$ | Cultural tradition (CONTRA-reduction) at T1 (initial) and T2 (empirical target)[cite: 1]. |
 | `subfactor_5_t1` / `subfactor_5_t2` | `float` | $[0.0, 1.0]$ | Economic concerns (CONTRA-reduction) at T1 (initial) and T2 (empirical target)[cite: 1]. |
 | **Individual Dynamics** | | | |
-| `agent_convergence_rate` | `float` | $[0.01, 0.99]$ | Personal speed of opinion adjustment ($\mu_i$), sampled from population distribution[cite: 1]. |
-| `agent_confidence_threshold` | `float` | $[0.01, 0.99]$ | Similarity boundary required for attraction ($\epsilon_i$), sampled from population distribution[cite: 1]. |
-| `agent_repulsion_threshold` | `float` | $[0.01, 0.99]$ | Dissimilarity boundary triggering repulsion ($\rho_i$), sampled from population distribution[cite: 1]. |
-| `agent_repulsion_strength` | `float` | $[0.01, 0.99]$ | Relative force multiplier for negative influence ($\alpha_i$), sampled from population distribution[cite: 1]. |
+| `agent_convergence_rate` | `float` | $[0.001, 0.99]$ | Personal speed of opinion adjustment ($\mu_i$), sampled from population distribution[cite: 1]. |
+| `agent_confidence_threshold` | `float` | $[0.001, 0.99]$ | Similarity boundary required for attraction ($\epsilon_i$), sampled from population distribution[cite: 1]. |
+| `agent_repulsion_threshold` | `float` | $[0.001, 0.99]$ | Dissimilarity boundary triggering repulsion ($\rho_i$), sampled from population distribution[cite: 1]. |
+| `agent_repulsion_strength` | `float` | $[0.001, 0.99]$ | Relative force multiplier for negative influence ($\alpha_i$), sampled from population distribution[cite: 1]. |
 | **Fatigue & Interaction** | | | |
 | `recent_speech` | `list<int>` | Binary vector | Rolling speech history window across cycles ($1 = \text{spoke}$, $0 = \text{listened}$)[cite: 1]. |
 | `speak_weight` | `float` | $(0.0, 1.0]$ | Speaker selection probability weight: $1.0 / (\sum(\text{recent\_speech}) + 1.0)$[cite: 1]. |
@@ -120,7 +120,7 @@ Constraint: agent_repulsion_threshold > agent_confidence_threshold
 - `speak_weight` (float): Dynamic selection priority weight computed as: $$\text{speak\_weight} = \frac{1.0}{\sum(\text{recent\_speech}) + 1.0}$$
 - `total_influences_received` (integer): Cumulative counter tracking individual received incoming communication events.
 - `retention_discount` (float [0,1]): Dynamic cognitive fatigue modifier scaling down opinion adjustment steps, computed as: $$\text{retention\_discount} = \frac{1.0}{1.0 + \text{total\_influences\_received} \times 0.1}$$
-- `agent_is_saturated` (boolean): Flag trigerred true when an agent becomes fatigue-inhibited (retention_discount > 0.2)
+- `agent_is_saturated` (boolean): Flag trigerred true when an agent becomes fatigue-inhibited (retention_discount < 0.2)
 - `cumulative_opinion_change` (float): Running total of all absolute local shifts across steps.
 
 #### Network Structure
@@ -135,15 +135,15 @@ Constraint: agent_repulsion_threshold > agent_confidence_threshold
 ## 2.3 Scales
 **Spatial:** 100 × 100 continuous 2D space (for visualization only)  
 **Temporal:** Discrete time steps (abstract, not calibrated to real time)
-**Typical simulation length:** 15-110 cycles until convergence 
+**Typical simulation length:** 11–100 cycles; no run in the sweep reached `max_cycles`
 (max 100 cycles — applies equally to speaking and non-speaking mode)
+**Update opportunities per debate:** Cycle counting begins at 0 and the timeout condition is `(cycle - debate_start_cycle) >= max_cycles`, so a debate that runs to the ceiling receives 101 update opportunities rather than 100.
 **Convergence threshold:** max |opinion - previous_opinion| < 0.01 (see Submodel 7.2 for the full convergence-checking algorithm and its consequences)
 **Opinion scale:** Continuous [0,1] where 0=strongly anti-reduction, 1=strongly pro-reduction  
 **Empirical basis:** Real debates lasted ~60 minutes; model time is abstract (not calibrated to real minutes)
 
 
 ## 2.4 Global State Variables
-### 2.4 Global State Variables
 
 | Variable Name | Data Type | Domain Bounds | Description |
 | :--- | :--- | :--- | :--- |
@@ -155,7 +155,7 @@ Constraint: agent_repulsion_threshold > agent_confidence_threshold
 | `selection_mode` | `string` | `{"filter", "explicit"}` | Determines debate selection method (context filtering vs. explicit list). |
 | `composition_scope` | `string` | `{"H", "M", "ALL"}` | Condition filtering scope for debate experiment instantiation. |
 | **Population Means ($\mu$)** | | | |
-| `convergence_rate` | `float` | $[0.0, 1.0]$ | Central tendency mean for individual speed of opinion change. |
+| `convergence_rate` | `float` | $[0.005, 1.0]$ | Central tendency mean for individual speed of opinion change. |
 | `confidence_threshold` | `float` | $[0.0, 1.0]$ | Central tendency mean for bounded confidence attraction boundary ($\epsilon$). |
 | `repulsion_threshold` | `float` | $[0.0, 1.0]$ | Central tendency mean for repulsion boundary ($\rho$). |
 | `repulsion_strength` | `float` | $[0.0, 0.5]$ | Central tendency mean for repulsive force scaling weight ($\alpha$). |
@@ -176,9 +176,9 @@ Constraint: agent_repulsion_threshold > agent_confidence_threshold
 | `step` | `float` | Default $0.5$ | Time step duration per execution cycle. |
 | `mae_convergence_threshold` | `float` | Default $0.01$ | Single convergence criterion threshold for max absolute opinion delta. |
 | `end_simulation_at_convergence` | `boolean` | `true/false` | Toggle early stopping upon meeting convergence criteria vs. forced run to `max_cycles`. |
-| `convergence_cycle` | `integer` | $[11, max_cycles]$ | Cycle count since debate start when convergence was met (records `max_cycles` if timed out). |
+| `convergence_cycle` | `integer` | $[11, max\_cycles]$ | Cycle count since debate start when convergence was met (records `max_cycles` if timed out). |
 | `debate_start_cycle` | `integer` | $\mathbb{Z}_{\ge 0}$ | Simulation baseline cycle when active debate session was instantiated. |
-| `converged` | `boolean` | `true/false` | `TRUE` if the deabte met the convergence criterion before `max_cycles` was reached, `FALSE` if it terminated at `max_cycles`. Reset to `FALSE` at the start of each debate. |
+| `converged` | `boolean` | `true/false` | `TRUE` if the debate met the convergence criterion before `max_cycles` was reached, `FALSE` if it terminated at `max_cycles`. Reset to `FALSE` at the start of each debate. |
 | **Output Metrics** | | | |
 | `mae` | `float` | $[0.0, 1.0]$ | Global Mean Absolute Error between final simulated attitudes and T2 data. |
 | `mae_per_debate` | `map<int, float>` | Map | Session-level MAE aggregated separately per unique debate ID. |
@@ -230,9 +230,10 @@ Control individual differences:
 - `max_cycles` (integer, default=100): Maximum simulation length for local debate. This is the sole cycle-limit parameter in the model — there is no separate 300-cycle timeout; see Submodel 7.2.
 - `step` (float, default=0.5): Time step duration
 - `mae_convergence_threshold` (float, default=0.01): Opinion change below this triggers end. This is the model's only convergence-threshold variable; earlier drafts of this document referred to a separate `opinion_delta_threshold`, which does not exist in the implementation and has been removed.
-- `end_simulation_at_convergence` (boolean): Global toggle that determines early halt or forcs continuous run until max_cycles.
-- `convergence_cycle` (integer): Cycle when convergence occurred (-1 if not converged)
+- `end_simulation_at_convergence` (boolean): Global toggle that determines early halt or forces continuous run until max_cycles.
+- `convergence_cycle` (integer): Cycles elapsed since debate start when convergence was met; records `max_cycles` on timeout. Initialised to -1 at debate reset, but this sentinel is always overwritten before saving.
 - `debate_start_cycle` (integer): Records the absolute simulation baseline cycle when active debate group loop instantiated.
+- `converged` (boolean). Gets set to true if the debate reaches convergence before `max_cycles`; `false` if it terminated at the ceiling. It is reset to `false` at the start of each subsequent debate.
 
 #### Output Metrics
 - `mae` (float): Global Mean Absolute Error (predicted vs empirical T2)
@@ -312,7 +313,7 @@ In each batch simulation, one of the two interaciton models is active, determine
 - Calculate mean opinion of both groups
 
 
-[every 5 cycles after cycle 10 from debate start, if end_simulation_at_convergence is true]
+[every cycle after cycle 10 from debate start, if end_simulation_at_convergence is true]
 5. Convergence check (`check_convergence`) — see Submodel 7.2 for the full algorithm, threshold value, and finalization/debate-progression logic triggered on convergence.
 
 [every cycle]
@@ -325,7 +326,9 @@ Rationale: The within-agent updates procedure avoids order effects and maintains
 
 For each simulation loop, agents execute reflexes under one kind of model of social influence as the batch experiments are designed to calibrate parameters according to each model. This aligns with the purpose of the study to investigate how each model performs in comparison with the others and OLS. The decision to perform compute pro/anti stats and global metrics is done every 10 cycles to allow for deliberation processes to occur and to reduce computational load when running the batch experiments. 
 
-The convergence cycle reflex (`check_convergence`) is evaluated every 5 cycles after the 10th cycle from debate start. This allows for an initial period of deliberation where the debates will most likely not converge, while progressively checking whether group stabilization has occurred against an exact absolute tolerance floor (`mae_convergence_threshold <- 0.01;`). The final reflex for max_cycles and no convergence evaluates the timeout boundary continuously every cycle after a pre-defined maximum length (`max_cycles <- 100;`). This design cap minimizes computational load across vast batch combinations, as empirical testing demonstrates that stable debate runs successfully settle within 100 cycles.
+The convergence cycle reflex (`check_convergence`) is evaluated every cycle after the 10th cycle from debate start. This allows for an initial period of deliberation where the debates will most likely not converge, while progressively checking whether group stabilization has occurred against an exact absolute tolerance floor (`mae_convergence_threshold <- 0.01;`). The final reflex for max_cycles and no convergence evaluates the timeout boundary continuously every cycle after a pre-defined maximum length (`max_cycles <- 100;`). This design cap minimizes computational load across vast batch combinations, as empirical testing demonstrates that stable debate runs successfully settle within 100 cycles.
+
+Empirical testing demonstrates that stable debate runs successfully settle within 100 cycles.
 
 # 4. DESIGN CONCEPTS
 
@@ -478,36 +481,33 @@ Regarding the lhs sweep, no run reached `max_cycles` - all 1,565,243 rows have `
 
 **Output files:**
 
-**batch_summary.csv** (debate-level):
-- model_type, current_condition, selected_debate_id
-- pro_count, anti_count, seed, max_cycles, speaking_mode
-- debate_label, current_experiment_id, use_distinct_agents
-- convergence_rate, confidence_threshold, repulsion_threshold, repulsion_strength (population params)
-- convergence_rate_sd, confidence_threshold_sd, repulsion_threshold_sd, repulsion_strength_sd (population variation)
-- convergence_cycle, initial_variance,
-- mae, opinion_variance, polarization_index, num_clusters, initial_num_clusters,
-- Diagnostics: neutral_zone_width, mean_net_repulsion_abs
+**batch_summary.csv** (debate-level, 29 columns) — one row per debate × parameter set × repetition:
+- **Run identification:** `model_type`, `current_condition`, `selected_debate_id`, `debate_label`, `current_experiment_id`, `max_cycles`, `converged`, `use_distinct_agents`, `speaking_mode`, `logged_batch_seed`
+- **Debate composition:** `pro_count`, `anti_count`
+- **Population parameters:** `convergence_rate`, `confidence_threshold`, `repulsion_threshold`, `repulsion_strength`
+- **Population variation:** `convergence_rate_sd`, `confidence_threshold_sd`, `repulsion_threshold_sd`, `repulsion_strength_sd`
+- **Outcomes:** `convergence_cycle`, `initial_variance`, `mae`, `opinion_variance`, `polarization_index`, `num_clusters`, `initial_num_clusters`
+- **Bipolarization diagnostics:** `neutral_zone_width`, `mean_net_repulsion_abs`
 
-**agent_level_results.csv** (individual):
-- All columns from batch_summary (repeated)
-- agent_id
-- subfactor_1_t1 through subfactor_5_t1 (initial)
-- initial_opinion (computed from subfactors), initial_variance
-- opinion (final simulated)
-- subfactor_1_t2 through subfactor_5_t2 (empirical targets), mean_t2_subfactors
-- final_attitude (empirical T2 attitude)
-- speaking_mode
-- opinion_change, individual_error
-- error_sub1 through error_sub5 (prediction error per subfactor)
-- agent_convergence_rate, agent_confidence_threshold, agent_repulsion_threshold, agent_repulsion_strength (individual params),
-- total_influences_received, retention_discount, cumulative_opinion_change,
-- agent_net_change, agent_wrong_direction, agent_is_saturated,
-- convergence_rate, confidence_threshold, repulsion_threshold, repulsion_strength (population params)
+**agent_level_results.csv** (individual, 51 columns):
+Shares the run-identification and population-parameter columns of `batch_summary.csv` (`model_type`, `current_condition`, `selected_debate_id`, `debate_label`, `current_experiment_id`, `max_cycles`, `use_distinct_agents`, `speaking_mode`, `logged_batch_seed`, `pro_count`, `anti_count`, the four population parameters, `convergence_cycle`, `converged`). It does **not** carry the debate-level outcome columns (`mae`, `opinion_variance`, `polarization_index`, `num_clusters`, `initial_num_clusters`, `neutral_zone_width`, `mean_net_repulsion_abs`), which exist only at debate grain. Agent-specific columns are:
+- `agent_id`, `pro_reduction`
+- `subfactor_1_t1` through `subfactor_5_t1` (initial)
+- `initial_opinion` (computed from subfactors), `initial_variance`
+- `opinion` (final simulated attitude)
+- `subfactor_1_t2` through `subfactor_5_t2` (empirical targets), `mean_t2_subfactors`
+- `final_attitude` (empirical T2 attitude — the prediction target, not a model output)
+- `opinion_change`, `individual_error`, `error_sub1` through `error_sub5`
+- `agent_convergence_rate`, `agent_confidence_threshold`, `agent_repulsion_threshold`, `agent_repulsion_strength` (realised individual draws)
+- `total_influences_received`, `retention_discount`, `cumulative_opinion_change`
+- `agent_net_change`, `agent_wrong_direction`, `agent_is_saturated`
 
-**interaction_log.csv** (asynchronous turn-based interaction logs)
-Contains step by step transaction (agent interaction data) generate when `speaking_mode` is true, includes:
-- speaking_mode, model_type,current_condition,selected_debate_id,debate_label,current_experiment_id,use_distinct_agents,seed,cycle,sender_id,receiver_id,
-sender_opinion,opinion_before,opinion_after,delta,agent_is_saturated,agent_wrong_direction, max_cycles.
+This file does **not** carry the debate-level outcome columns (`mae`, `opinion_variance`, `polarization_index`, `num_clusters`, `initial_num_clusters`, `neutral_zone_width`, `mean_net_repulsion_abs`), nor the population variation parameters (`*_sd`), all of which exist only at debate grain.
+
+**interaction_log.csv** (18 columns) — one row per dyadic influence event; written only when `speaking_mode = true`:
+- **Run identification:** `speaking_mode`, `model_type`, `current_condition`, `selected_debate_id`, `debate_label`, `current_experiment_id`, `use_distinct_agents`, `logged_batch_seed`, `max_cycles`
+- **Event:** `cycle`, `sender_id`, `receiver_id`, `sender_opinion`, `opinion_before`, `opinion_after`, `delta`
+- **Flags at event time:** `agent_is_saturated`, `agent_wrong_direction`
 
 # 5. INITIALIZATION
 
@@ -523,7 +523,7 @@ sender_opinion,opinion_before,opinion_after,delta,agent_is_saturated,agent_wrong
 ## 5.2 Data Loading
 **Source:** `../data-dictionary/exp-dat/train_data.csv`, loaded via `load_csv_data` in the model's `init` block. This is the calibration split only — see Section 6.1/6.2 for data structure, column mapping, and integrity checks, and Appendix C for how this file is produced from the full dataset.
 
-**Note on validation runs:** the file path above is currently hardcoded in `main_4-3.gaml`'s `init` block, with no runtime switch to `test_data.csv`. Validation-set runs (Section 8.1.2, Hypotheses H3/H5/H6) will require a manual path edit to simulate based on the test data (already implemented in model code for out-of-sample validation).
+**Note on validation runs:** the file path above is hardcoded in `main_4-3.gaml`'s `init` block, with no runtime switch to `test_data.csv`. Validation-set runs (Section 8.1.2, Hypotheses H3/H5/H6) require a manual path edit to simulate based on the test data (already implemented in model code for out-of-sample validation).
 
 ## 5.3 Debate ID Mapping
 Multi-agent debates are parsed using an explicit string-to-integer translation map (`stable_group_map`). 
@@ -543,26 +543,31 @@ For each agent in a selected debate:
 - final_attitude ← final_attitude_list[idx]  // Empirical T2
 
 #### Step 2: Sample individual dynamics parameters
-If heterogeneous distributions are enabled (`use_distinct_agents = true`), individual dynamic attributes are drawn from Gaussian distributions centered on global population means with assigned standard deviations ($\sigma$). To enforce strict multi-run determinism, sampling is bound to a local agent seed offset (`local_agent_seed` $\leftarrow \text{seed} + \text{idx}$). Draws are clamped to $[0.01, 0.99]$ to avoid boundary calculation errors:
+If heterogeneous distributions are enabled (`use_distinct_agents = true`), individual dynamic attributes are drawn from Gaussian distributions centered on global population means with assigned standard deviations ($\sigma$). To enforce strict multi-run determinism, the RNG is seeded once per agent as (`seed` $\leftarrow \text{logged_batch_seed} + \text{idx}$) before sampling; the four parameters are then drawn in sequence from that single stream. Draws are clamped to $[0.001, 0.99]$ to avoid boundary calculation errors:
 
-| Dynamic Parameter | Symbol | Global Sampling Mean ($\mu$) Domain | Standard Deviation ($\sigma$) Bounds | Individual Truncated Domain | Seed Offset |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Convergence Rate** | $\mu_i$ | $[0.005, 0.100]$ | $[0.000, 0.020]$ | $[0.010, 0.990]$ | `local_agent_seed` |
-| **Confidence Threshold** | $\epsilon_i$ | $[0.100, 0.300]$ | $[0.000, 0.020]$ | $[0.010, 0.990]$ | `local_agent_seed + 1` |
-| **Repulsion Strength** | $\alpha_i$ | $[0.050, 0.200]$ | $[0.000, 0.020]$ | $[0.010, 0.990]$ | `local_agent_seed + 2` |
-| **Repulsion Threshold** | $\rho_i$ | $[0.400, 0.700]$ | $[0.000, 0.030]$ | $[0.010, 0.990]$ | `local_agent_seed + 3` |
+The mean domains below are the Latin hypercube sampling ranges used in the exploratory sweep. The Genetic Algorithm search bounds are derived per design cell from that sweep and are narrower for some parameters, see 6.5.1.
+
+| Dynamic Parameter | Symbol | Global Sampling Mean ($\mu$) Domain | Standard Deviation ($\sigma$) Bounds | Individual Truncated Domain |
+| :--- | :--- | :--- | :--- | :--- |
+| **Convergence Rate** | $\mu_i$ | $[0.005, 0.100]$ | $[0.000, 0.020]$ | $[0.001, 0.990]$ |
+| **Confidence Threshold** | $\epsilon_i$ | $[0.100, 0.300]$ | $[0.000, 0.020]$ | $[0.001, 0.990]$ |
+| **Repulsion Strength** | $\alpha_i$ | $[0.050, 0.200]$ | $[0.000, 0.020]$ | $[0.001, 0.990]$ |
+| **Repulsion Threshold** | $\rho_i$ | $[0.400, 0.700]$ | $[0.000, 0.030]$ | $[0.001, 0.990]$ |
 
 *Algorithmic sampling and deterministic seeding logic:*
-- `agent_convergence_rate` $\leftarrow \max(0.01, \min(0.99, \text{gauss}(\{\text{convergence\_rate}, \text{convergence\_rate\_sd}\}, \text{local\_agent\_seed})))$
-- `agent_confidence_threshold` $\leftarrow \max(0.01, \min(0.99, \text{gauss}(\{\text{confidence\_threshold}, \text{confidence\_threshold\_sd}\}, \text{local\_agent\_seed} + 1)))$
-- `agent_repulsion_strength` $\leftarrow \max(0.01, \min(0.99, \text{gauss}(\{\text{repulsion\_strength}, \text{repulsion\_strength\_sd}\}, \text{local\_agent\_seed} + 2)))$
-- `agent_repulsion_threshold` $\leftarrow \max(0.01, \min(0.99, \text{gauss}(\{\text{repulsion\_threshold}, \text{repulsion\_threshold\_sd}\}, \text{local\_agent\_seed} + 3)))$
+- `agent_convergence_rate` $\leftarrow \max(0.001, \min(0.99, \text{gauss}(\{\text{convergence\_rate}, \text{convergence\_rate\_sd}\})))$
+- `agent_confidence_threshold` $\leftarrow \max(0.001, \min(0.99, \text{gauss}(\{\text{confidence\_threshold}, \text{confidence\_threshold\_sd}\})))$
+- `agent_repulsion_strength` $\leftarrow \max(0.001, \min(0.99, \text{gauss}(\{\text{repulsion\_strength}, \text{repulsion\_strength\_sd}\})))$
+- `agent_repulsion_threshold` $\leftarrow \max(0.001, \min(0.99, \text{gauss}(\{\text{repulsion\_threshold}, \text{repulsion\_threshold\_sd}\})))$
+- `agent_repulsion_threshold` $\leftarrow \max(`agent_confidence_threshold` + 0.05, `agent_repulsion_threshold`)
 
 *Structural Neutral Zone Enforcer:*
 To guarantee physical validity and prevent invalid overlap between attraction and repulsion zones ($\rho_i \le \epsilon_i$), the model enforces a minimum neutral buffer of $0.05$:
 $$\text{agent\_repulsion\_threshold} \leftarrow \max(\text{agent\_confidence\_threshold} + 0.05, \text{agent\_repulsion\_threshold})$$
 
-If heterogeneous mode is disabled (`use_distinct_agents = false`), agents inherit global population baseline values directly ($\mu_i = \mu, \epsilon_i = \epsilon, \alpha_i = \alpha, \rho_i = \rho$).
+The realized distribution of $\rho_i$ is truncated from below at $\epsilon_i + 0.05$ and is not the declared Gaussian. This implies that the marginal distributions of `confidence_threshold` and `repulsion_threshold` differ between heterogeneous and homogenous arms.
+
+If heterogeneous mode is disabled (`use_distinct_agents = false`), agents inherit global population baseline values directly ($\mu_i = \mu, \epsilon_i = \epsilon, \alpha_i = \alpha, \rho_i = \rho$). The clamp and enforcer thus do not fire in this arm; the constraint $\epsilon < \rho$ is instead guaranteed by the population level ranges and the initialization guard described in section 7.1.3.
 
 #### Step 3: Mapping initial opinions and tracking baselines
 - `initial_opinion` ← Derived from the pre-normalized empirical initial attitude data column.
@@ -630,7 +635,7 @@ The global data loader parses CSV columns dynamically at step 0 (`load_csv_data`
 When `debug_mode` is enabled, the global initialization block executes defensive verification routines:
 - Verifies that all position variables and stance scores fall strictly within $[0.0, 1.0]$.
 - Executes `do debug_init` to confirm algebraically that initial attitudes match the composite balance of input subfactors within floating-point tolerances ($10^{-10}$).
-- Enforces deterministic agent-level seed binding (`local_agent_seed` $\leftarrow \text{seed} + \text{idx}$) to guarantee identical data ingestion and parameter assignments across execution runs.
+- Enforces deterministic agent-level seed binding (`local\_agent\_seed` $\leftarrow \text{logged_batch_seed} + \text{idx}$) to guarantee identical data ingestion and parameter assignments across execution runs.
 
 ## 6.3 Environmental Data
 **None.** The simulation world contains:
@@ -649,31 +654,38 @@ When `debug_mode` is enabled, the global initialization block executes defensive
 **Design Rationale:** To evaluate social influence as an abstract, rule-based process, individual differences are compressed into starting opinion stances and susceptibility parameters. This minimal input baseline enables rigorous testing of hypothesis **H3**: evaluating whether an agent-based model driven strictly by localized interaction rules can match or outperform traditional statistical models that rely on full demographic attributes.
 
 ## 6.5 Calibration Search Space & Sensitivity Pipeline
-
 ### 6.5.1 Active Parameter Bounds
-When heterogeneous parameter sampling is active (`use_distinct_agents = true`), population means ($\mu$) and standard deviations ($\sigma$) are optimized by the Genetic Algorithm (`minimize: mae`) within the following empirical search bounds:
 
-| Parameter Name | GAML Variable Name | Mean Search Bound ($\mu$) | Standard Deviation Bound ($\sigma$) |
-| :--- | :--- | :--- | :--- |
-| **Convergence Rate** | `convergence_rate` | $[0.005, 0.100]$ | $[0.000, 0.020]$ |
-| **Confidence Threshold** | `confidence_threshold` | $[0.100, 0.300]$ | $[0.000, 0.020]$ |
-| **Repulsion Strength** | `repulsion_strength` | $[0.050, 0.200]$ | $[0.000, 0.020]$ |
-| **Repulsion Threshold** | `repulsion_threshold` | $[0.400, 0.700]$ | $[0.000, 0.030]$ |
+Population means ($\mu$) and, where heterogeneous sampling is active (`use_distinct_agents = true`), standard deviations ($\sigma$) are optimised by the Genetic Algorithm within the search bounds below. Bounds are derived per design cell from the LHS sweep (see §8.2); the ranges shown are the widest applied to any cell.
+
+GAMA's genetic method searches over an enumerated parameter space. A `step` must therefore be declared for each parameter: with `min` and `max` alone the method evaluates only the interval endpoints and no interior values are sampled.
+
+| Parameter Name | GAML Variable | Mean Search Bound ($\mu$) | Step | SD Bound ($\sigma$) | SD Step |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Convergence Rate** | `convergence_rate` | $[0.005, 0.100]$ | $0.005$ | $[0.000, 0.020]$ | $0.002$ |
+| **Confidence Threshold** | `confidence_threshold` | $[0.100, 0.350]$ clustering (non-speaking); $[0.100, 0.600]$ clustering (speaking); $[0.100, 0.300]$ bipolarization | $0.01$–$0.02$ | $[0.050, 0.100]$ clustering; $[0.000, 0.020]$ bipolarization | $0.005$ / $0.002$ |
+| **Repulsion Strength** | `repulsion_strength` | $[0.050, 0.200]$ | $0.01$ | $[0.000, 0.020]$ | $0.002$ |
+| **Repulsion Threshold** | `repulsion_threshold` | $[0.550, 0.700]$ | $0.01$ | $[0.000, 0.030]$ | $0.003$ |
 
 *Genetic Algorithm Calibration Configuration:*
-- **Optimization Criterion:** Minimize global Mean Absolute Error (`minimize: mae`).
+- **Optimization Criterion:** `minimize: mae_mean_all`, the unweighted mean of per-debate MAE across all calibration debates. The global `mae` variable is reset at the start of each debate, so minimising `mae` directly would optimise only the final debate of each run.
 - **Population Size:** `pop_dim: 5`
 - **Crossover Probability:** `crossover_prob: 0.5`
 - **Mutation Probability:** `mutation_prob: 0.1`
-- **Generation Limits:** 5 preliminary generations, 10 maximum generations (`max_gen: 10`).
-- **Active Execution Flags:** `speaking_mode = true`, `use_distinct_agents = true`.
+- **Generation Limits:** 5 preliminary generations, 10 maximum generations (`max_gen: 10`)
+- **Repetitions:** `repeat: 1` (see §4.9 — `keep_seed: true` fixes the RNG state across repeats, so additional repetitions produce identical output)
+- **Scope:** All twelve design cells are calibrated independently (3 model types × heterogeneity × speaking mode), plus the `no_change` baseline, which has no free parameters and is evaluated in a single pass.
 
 ### 6.5.2 Sensitivity Analysis Workflow
-To assess parameter importance prior to statistical hypothesis testing ($H_1, H_2$) and the argumentation handoff phase, a two-stage evaluation strategy is executed on pooled LHS and GA parameter pairs:
-1. **Partial Correlation Coefficients (PCC/PRCC):** Evaluates monotonic linear dependencies between input parameters ($\mu_i, \epsilon_i, \alpha_i, \rho_i$) and output outcomes ($\text{MAE}$, polarization index).
-2. **Random Forest (RF) Permutation Importance:** Serves as the non-parametric sensitivity check to quantify non-linear interactions across parameter spaces without optimizing separate parameters for population subtypes.
+Parameter importance is assessed on the LHS sweep, independently within each design cell (`model_type` × `use_distinct_agents` × `speaking_mode`), rather than pooled across cells. Pooling would combine response surfaces that differ in both dimensionality and shape.
 
-Completing this LHS/GA calibration and PCC/RF sensitivity analysis defines the formal stopping condition for model parameterization before moving on to statistical hypothesis testing and argumentation modeling.
+Because between-debate variation in MAE substantially exceeds between-parameter variation, sensitivity is computed on debate-centred MAE: within each design cell, the mean MAE of each debate is subtracted, so the remaining variation is attributable to parameters rather than to debate difficulty. Analyses are run on a random subsample of 50,000 rows per cell for tractability.
+
+1. **Partial Correlation Coefficients (PCC/PRCC):** monotonic dependencies between input parameters ($\mu_i, \epsilon_i, \alpha_i, \rho_i$ and their standard deviations) and outputs (MAE, opinion variance, convergence cycle).
+2. **Random Forest permutation importance and partial dependence:** non-parametric check for non-linear effects and interactions. Out-of-bag $R^2$ on MAE is reported per cell as an identifiability diagnostic — a low value indicates that MAE in that cell is not well predicted by the swept parameters, and that calibrated values there should not be interpreted as estimates.
+3. **Bound derivation:** GA search bounds are taken as the union of (a) the empirical envelope of parameter values attaining top-quartile MAE within the cell and (b) the region of the partial dependence surface within tolerance of its minimum. Where a parameter's partial dependence amplitude is negligible relative to the debate-level MAE standard deviation, the parameter is treated as unidentified and its LHS range retained unchanged.
+
+Completing this calibration and sensitivity analysis defines the formal stopping condition for model parameterization before statistical hypothesis testing and argumentation modeling.
 
 # 7. SUBMODELS
 ## 7.1 Opinion Update Models
@@ -768,7 +780,7 @@ For each agent $i$:
 |opinion_diff| ≥ ρ:       REPULSION (move away from neighbor)
 
 **Constraint:** 
-- $\epsilon < \rho$ (The population-level attraction threshold must be strictly less than the repulsion threshold). If this global rule is broken, initialization is terminated early via a hard constraint guard (`end_simulation <- true`). For heterogeneous agents, if individual sampling causes an overlap ($\epsilon_i \ge \rho_i$), it violates the structural premise of a neutral zone buffer which is corrected in Section 5.4.
+- $\epsilon < \rho$ (The population-level attraction threshold must be strictly less than the repulsion threshold). If this global rule is broken, initialization is flagged via `infeasible_params` flag, the simulation is terminated `end_simulation <- true`, and a fitness penalty is  applied in `compute_fit`. For heterogeneous agents, if individual sampling causes an overlap ($\epsilon_i \ge \rho_i$), it violates the structural premise of a neutral zone buffer which is corrected in Section 5.4.
 
 **Expected behavior:**
 - Opinions drive outward toward opposite extremes ($0.0$ and $1.0$), forcing distinct ideological polarization.
@@ -782,6 +794,14 @@ For each agent $i$:
 When dyadic turn-based interactions are activated, parallel neighbor loops are replaced by sequential broadcast dynamics via `compute_opinion_speaker(speaker_opinion, sender)`. In each cycle, a speaker agent $S$ broadcasts position $o_S$ to listening peers $i \in N(S)$.
 
 Across all three submodels, stance updates in speaker mode incorporate an explicit pairwise averaging construct and are scaled by the individual cognitive fatigue factor (`retention_discount`).
+
+**Differences from the parallel regime**
+Within the `speaking_mode` mechanic, three model properties change together:
+- Scheduling: There is one speaker per cycle who is selected by a weighted probabilistic draw (`rnd_choice` over `speak_weight`) who broadcasts to all other agents in the debate. Under `speaking_mode = false`, every agent simulatenously update from their full neighborhood.
+- Influence dose: In speaking_mode a listener received one influence per cycle compared with `N - 1` under parallel updating. The effective adjustment per cycle therefore differs by approximately an order of magnitude for typical debate sizes, independent of parameter values.
+- Cognitive fatigue: `retention_discount` only applies in the `speaking_mode` path. Under parallel updating the fatigue term does not enter the update rules and `total_influences_received` does not accumulate.
+
+Because these three properties change together, comparing outcomes from both regimes is not feasible as their differences are attributable to the change in properties. The two regimes are therefore reported as separate model variants, rather than two levels of an experimental factor.
 
 #### 1. Consensus Speaker
 All listening neighbors evaluate the midpoint $\bar{o}_{\text{sim}} = \frac{o_i + o_S}{2}$ and adjust their stance:
@@ -828,29 +848,33 @@ Whenever an interaction occurs within an active influence zone, the listening ag
 ## 7.2 Convergence Detection
 **Purpose:** Stop simulation when opinions stabilize (computational efficiency + realism)
 
-**Mechanism:** The global orchestration loop executes a structural tracking check every 5 execution cycles (beginning on step 10, relative to `debate_start_cycle`) via the `check_convergence` reflex, to determine if state stabilization has been reached. A separate `max_cycles_reached` reflex provides a fallback timeout, evaluated every cycle.
+**Mechanism:** The global orchestration loop executes a structural tracking check every cycle (beginning on step 10, relative to `debate_start_cycle`) via the `check_convergence` reflex, to determine if state stabilization has been reached. A separate `max_cycles_reached` reflex provides a fallback timeout, evaluated every cycle.
 
 **Algorithm (`check_convergence`):**
 1. Collect each agent's opinion displacement since the previous cycle:
    $$\text{max\_delta} = \max \left( |o_i(t) - o_i(t-1)| \right) \quad \forall i$$
-   (`previous_opinion` is refreshed every cycle by a separate reflex, so this is always a one-cycle comparison, evaluated on the 5-cycle check schedule.)
+   (`previous_opinion` is refreshed every cycle by a separate reflex, so this is always a one-cycle comparison.)
 2. If $\text{max\_delta} < \text{mae\_convergence\_threshold}$ (hardcoded to $0.01$):
-   - Set `convergence_cycle` $\leftarrow$ current cycle $-$ `debate_start_cycle`.
-   - Trigger `end_simulation <- true`.
-   - Call `do compute_fit` and `do compute_final_statistics`.
-   - If `mode_batch` is true, execute `do save_batch_results`.
-   - Sequential loop control: if `debate_counter < length(m_debate_list) - 1`, increment the counter, update `selected_debate_id` to the next debate, remove all current agent instances, and call `do init_debate`; otherwise set `end_simulation <- true`.
+- Set `convergence_cycle` $\leftarrow$ current cycle $-$ `debate_start_cycle`.
+- Set `converged` $\leftarrow$ `true`.
+- Trigger `end_simulation <- true`.
+- Call `do compute_fit` and `do compute_final_statistics`.
+- If `mode_batch` is true, execute `do save_batch_results`.
+- Sequential loop control: if `debate_counter < length(m_debate_list) - 1`, increment the counter, update `selected_debate_id` to the next debate, remove all current agent instances, and call `do init_debate`; otherwise set `end_simulation <- true`.
 
 **Algorithm (`max_cycles_reached`, fallback):**
 1. If `(cycle - debate_start_cycle) >= max_cycles` (default 100) and `end_simulation` is still false:
-   - Set `convergence_cycle` to the current elapsed cycle count (recorded regardless of non-convergence).
-   - Trigger `end_simulation <- true`.
-   - Call `do compute_fit` and `do compute_final_statistics`, then (if `mode_batch`) `do save_batch_results`.
-   - Same sequential debate-progression logic as above.
+- Set `convergence_cycle` $\leftarrow$ current cycle $-$ `debate_start_cycle`, which under this trigger condition equals `max_cycles`. The sentinel value $-1$ assigned at debate reset is therefore never written to output.
+- Set `converged` $\leftarrow$ `false`.
+- Trigger `end_simulation <- true`.
+- Call `do compute_fit` and `do compute_final_statistics`, then (if `mode_batch`) `do save_batch_results`.
+- Same sequential debate-progression logic as above.
 
-**Convergence criterion:** Maximum opinion change < 0.01, checked every 5 cycles starting at cycle 10 relative to debate start.
+Both `convergence_cycle` and `converged` are reset at the start of each debate by `reset_debate_globals`, to $-1$ and `false` respectively.
 
-**Rationale:** Opinion change becomes negligible; further cycles add no information. The 10-cycle initial grace period allows deliberation to begin before checking is meaningful; checking every 5 cycles (rather than every cycle) reduces computational load across large batch runs.
+**Convergence criterion:** Maximum opinion change < 0.01, checked every cycle starting at cycle 10 relative to debate start.
+
+**Rationale:** Opinion change becomes negligible; further cycles add no information. The 10-cycle initial grace period allows deliberation to begin before checking is meaningful.
 
 **Fallback:** If `max_cycles` (100) is reached without convergence, the simulation is force-stopped by `max_cycles_reached` and finalized identically to a converged run, with `convergence_cycle` still recorded for diagnostic purposes.
 
@@ -891,11 +915,10 @@ The simulation utilizes a static, complete network framework configured at step 
    $$\forall (i, j), \text{ if } \text{debate\_id}_i == \text{debate\_id}_j \text{ and } i \neq j \Rightarrow j \in N(i)$$
 3. **Control Isolation Guard:** If an agent's experimental descriptor matches `"Control"`, network allocation functions bypass the agent entirely, ensuring their neighbor register remains strictly empty.
 
-# 8. MODEL CALIBRATION AND VALIDATION
+# 8. EXPERIMENTAL SETUP & PARAMETER BOUND PROTOCOL (ODD+D)
 **Registration status note:** Sections 8.1-8.4 are pre-specified analysis plans registered prior to completion of full batch simulation and validation analyses. 
 Results and interpretations will be added upon completion and will be document as post-registration additions in the appending to distinguish them from pre-specified analyses.
 
-# 8. EXPERIMENTAL SETUP & PARAMETER BOUND PROTOCOL (ODD+D)
 
 ## 8.1 Exploratory Sampling Design & Sensitivity Analysis
 ### 8.1.1 Latin Hypercube Sampling (LHS)
@@ -941,13 +964,15 @@ Early pilot exploration across legacy datasets used heuristic parameter tuning t
 
 ```
 method genetic 
-  minimize: mae 
+  minimize: mae_mean_all 
   pop_dim: 5 
   crossover_prob: 0.5 
   mutation_prob: 0.1 
   nb_prelim_gen: 5 
   max_gen: 10;
 ```
+
+Mae is reset per debate, so minimising it would have optimized only the final debate of each run.
 
 * **Search Space Constraints:** The GA space is constrainted by the operational parameter ranges created by `generate_gaml_bounds`.
 * **Objective Function:** The GA has the goal of optimizing parameters to obtain the minimal Mean Absolute Error ($MAE$) between final simulated stance ($o_{i, \text{final}}$) and post-debate empirical stances ($T2$).

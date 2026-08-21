@@ -246,3 +246,11 @@ structure (in gama there is no compartmentalization of global variables, loads i
 - next step is finishing protocol and ODD to be submitted by EOW
 - NEXT: finish documenting plots and functions and update data-dictionary
 - NEXT: implement upgraded LM functions and RF sensitivity analysis
+
+# 20/8/26
+- finished README translation layer for hypotheses, organized git repo and almost finished the R analyses
+- created a changelog to integrate into the `bug-dev-journal` file
+- ready for final H3 and H5 implementation, then transition to one final document to start coding the argumentation
+
+# 21/8/26
+- working on H3 and H5 pseudo code before touching R

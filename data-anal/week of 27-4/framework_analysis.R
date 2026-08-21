@@ -281,6 +281,18 @@ analyze_processed_run <- function(df) {
       ) %>%
       filter(!is.na(Attitude), !is.na(Condition))
 
+    # introduction of val dataframe and labelling 21/8/26
+    if (!is.null(df$sim_val)) {
+      val_labels <- unique(df$sim_val$df_batch$debate_label)
+
+      df_empir_long_train <- df_empir_long %>% filter(!debate_label %in% val_labels)
+      df_empir_long_val <- df_empir_long %>% filter(debate_label %in% val_labels)
+    } else {
+      val_labels <- character(0)
+      df_empir_long_train <- df_empir_long
+      df_empir_long_test <- NULL
+    }
+
     # Model H1a: Empirical trajectory
     if (nrow(df_empir_long) > 0) {
       log_step("Finished df creation, now starting H1a mlm...")
@@ -302,6 +314,36 @@ analyze_processed_run <- function(df) {
           data = df_empir_long
         )
       }
+    }
+
+    # validation frame set up takes empirical rows, predict and compute error 21/8/26
+    if (!is.null(df$sim_val)) {
+      log_step("H3 benchmark: building test frame from sim_val$df_ag")
+    
+      df_empir_test <- df$sim_val$df_ag %>%
+        collect() %>%
+        distinct(agent_id, debate_label, .keep_all = TRUE) %>%
+        mutate(Condition = factor(current_condition),
+               Time = factor("T2", levels = c("T1", "T2")),
+               Attitude = final_attitude)
+
+      log_step(paste("test_frame:", nrow(df_empir_test), "rows,",
+                     n_distinct(df_empir_test$debate_label), "debates"))
+
+      log_step(paste("columns:", paste(colnames(df_empir_test), collapse = ", ")))
+
+      df_empir_test$mlm_pred <- predict(mlm_model_h1a, newdata = df_empir_test,
+                                        allow.new.levels = TRUE)
+      df_empir_test$mlm_error <- abs(df_empir_test$final_attitude - df_empir_test$mlm_pred)
+
+
+      log_step(paste("mlm_error summary — mean:", round(mean(df_empir_test$mlm_error, na.rm = TRUE), 4),
+                 "range:", round(min(df_empir_test$mlm_error, na.rm = TRUE), 4), 
+                 "to", round(max(df_empir_test$mlm_error, na.rm = TRUE), 4),
+                 "NAs:", sum(is.na(df_empir_test$mlm_error))))
+    } else {
+      log_step("H3 benchmark: no sim_val supplied, skipping test frame construction")
+      df_empir_test <- NULL
     }
 
     # MLM H1b test with simulated opinions for T2

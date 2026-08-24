@@ -31,6 +31,7 @@ library(broom)
 run_configs <- list()
 lhs <- list()
 ga <- list()
+val <- list()
 
 # ==========================================
 # 2. BUILD THE LHS CONFIGURATION
@@ -55,7 +56,7 @@ lhs$interaction$v2      <- NULL
 # 3. BUILD THE GA CONFIGURATION
 # ==========================================
 ga$run_type          <- "GA"
-ga$composition_scope <- "M"
+ga$composition_scope <- "ALL"
 ga$version_scope     <- "v1"
 
 ga$batch$v1$path     <- "./data/ga_batch_summary.csv"
@@ -65,10 +66,24 @@ ga$agent$v1$path     <- "./data/ga_agent_level_results.csv"
 ga$interaction$v1$path <- "./data/ga_interaction_log.csv"
 
 # ==========================================
-# 4. ASSIGN TO MASTER CONTAINER
+# 4. BUILD THE GA VALIDATION
+# ==========================================
+val$run_type         <- "VAL"
+val$composition_scope <- "ALL"
+val$version_scope    <- "v1"
+
+val$batch$v1$path    <- "./data/val_batch_summary.csv"
+val$batch$v1$version <- "ga_val_v1"
+
+val$agent$v1$path     <- "./data/val_agent_level_results.csv"
+val$interactions$v1$path <- "./data/val_interaction_log.csv"
+
+# ==========================================
+# 5. ASSIGN TO MASTER CONTAINER
 # ==========================================
 run_configs$lhs_main <- lhs
 run_configs$ga_main  <- ga
+run_configs$ga_val   <- val
 
 #' Load and process one simulation run (LHS or GA) into canonical analysis objects 28/5/26
 #' 

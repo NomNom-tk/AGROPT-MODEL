@@ -68,15 +68,15 @@ ga$interaction$v1$path <- "./data/ga_interaction_log.csv"
 # ==========================================
 # 4. BUILD THE GA VALIDATION
 # ==========================================
-val$run_type         <- "GA"
+val$run_type         <- "VAL"
 val$composition_scope <- "ALL"
 val$version_scope    <- "v1"
 
-val$batch$v1$path    <- "./data/ga_val_batch_summary.csv"
+val$batch$v1$path    <- "./data/val_batch_summary.csv"
 val$batch$v1$version <- "ga_val_v1"
 
-ga$agent$v1$path     <- "./data/ga_val_agent_level_results.csv"
-ga$interactions$v1$path <- "./data/ga_val_interaction_log.csv"
+val$agent$v1$path     <- "./data/val_agent_level_results.csv"
+val$interactions$v1$path <- "./data/val_interaction_log.csv"
 
 # ==========================================
 # 5. ASSIGN TO MASTER CONTAINER

@@ -1,0 +1,14 @@
+Hypothesis Results -  2026-08-24 14:26:30.202372 
+============================================================ 
+
+## Empirical model recording 
+
+### H3a - Individual Level (Held out debates) 
+ mode: abm_error ~ model_type + (1 | debate_label) 
+n_obs: 236  | n_debates: 12 
+  (Intercept): est=0.04586 se=0.00619 t=7.405 
+  model_typebipolarization: est=-0.00013 se=0.00566 t=-0.023 
+  model_typeclustering: est=-0.00002 se=0.00566 t=-0.004 
+  model_typeconsensus: est=-0.00025 se=0.00566 t=-0.044 
+ debate-level variance: 0.000266 
+ residual variance: 0.000946 

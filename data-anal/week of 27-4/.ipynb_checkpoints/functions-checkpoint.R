@@ -69,16 +69,25 @@ clean_stray_headers <- function(df) {
 }
 
 #' Generate Parquet Cache (RUN ONCE) 30/7/26
+#' update 24/8/26: col_names argument is optional to bypass it for the empirical data
 #'
 #' meant to check whether parquet caches for data files exist and read parquet if they do
 #' if they don't then generate the parquet files to pass to read_clean
 #' attempts to read all headers as strings in utf8 encoding, otherwise reverts back to basic arrow read
 #' takes input col_names to strip all junk headers and replaces them with R - GAMA matched headers from save calls
-generate_parquet_cache <- function(path, col_names) {
+generate_parquet_cache <- function(path, col_names = NULL) {
   parquet_path <- sub("\\.csv$", ".parquet", path, ignore.case = TRUE)
 
   # paste progress
   cat(sprintf("Generating Parquet Cache: %s\n", basename(parquet_path)))
+
+  # no column vector supplied for empirical file and not gama simulation
+  if (is.null(col_names)) {
+    csv_stream <- read_csv_arrow(path, as_data_frame = FALSE)
+    write_parquet(csv_stream, parquet_path)
+    rm(csv_stream); gc()
+    return(parquet_path)
+  }
 
   # guards for dynamically removing header lines
   n_cols <- length(col_names)
@@ -123,6 +132,23 @@ append_metadata <- function(df, config, version = NA) {
       composition_scope = config$composition_scope,
       version = version
     )
+}
+
+#' WriteLines for Hypotheses 24/8/26
+#'
+#' Writes results to a .txt file for output, should be used after each hypothesis
+#'
+#' @param text a text declaration of what should be included in each paste
+#' @param file "" denotes the file to append to 
+#'
+#' @note initialize with a timestamp call
+#' @examples
+#' \dontrun{
+#' write_result(paste("Hypothesis Results —", Sys.time()), append = FALSE)
+#' write_result(paste(rep("=", 60), collapse = ""))
+#' }
+write_result <- function(text, file = "../hypothesis_results.txt", append = TRUE) {
+    cat(text, "\n", file = file, append = append)
 }
 
 #' Apply Debate Composition Filter Dynamically (created 27/5/26) 

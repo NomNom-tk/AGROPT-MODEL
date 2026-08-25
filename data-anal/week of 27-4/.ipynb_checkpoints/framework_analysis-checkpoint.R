@@ -485,7 +485,9 @@ analyze_processed_run <- function(df) {
         p = binom.test(wins, n, 0.5)$p.value,
         .groups = "drop")
           
-      
+    # Results log to .txt 24/8/26
+    write_result("\n ABM vs No-Change Across Held-out Debates")
+    #write_result(" Models with the most wins:", abm_vs_nc$wins %>% sort(as.character(abm_vs_nc$wins, decreasing = TRUE)))
 
 
 #     H3b — debate level:

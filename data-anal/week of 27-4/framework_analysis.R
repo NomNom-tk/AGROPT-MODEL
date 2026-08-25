@@ -443,7 +443,7 @@ analyze_processed_run <- function(df) {
       
     # H3b set up 24/8/26
     write_result("\n### H3b - Debate Level (Held out debates)")
-    write_result(paste(" mode:", deparse(formula(mlm_h3a))))
+    write_result(paste(" mode: two-sided sign test across 12 held-out debates")
     df_h3b <- df$sim_val$df_batch %>%
       group_by(design_cell, debate_label, model_type) %>%
       summarize(abm_mae = mean(mae, na.rm = TRUE), .groups = "drop")
@@ -473,7 +473,8 @@ analyze_processed_run <- function(df) {
         n = n(),
         mean_diff = mean(abm_mae - nc_mae,na.rm = TRUE),
         p = binom.test(wins, n, 0.5)$p.value,
-        .groups = "drop")
+        .groups = "drop") %>%
+      arrange(desc(wins))
 
     ## ABM < MLM MAE across 12 debates
     abm_vs_mlm <- df_h3b %>%
@@ -483,11 +484,41 @@ analyze_processed_run <- function(df) {
         n = n(),
         mean_diff = mean(abm_mae - mlm_mae, na.rm = TRUE),
         p = binom.test(wins, n, 0.5)$p.value,
-        .groups = "drop")
+        .groups = "drop") %>%
+      arrange(desc(wins))
           
     # Results log to .txt 24/8/26
     write_result("\n ABM vs No-Change Across Held-out Debates")
-    write_result(" Models with the most wins:", abm_vs_nc$wins %>% sort(as.character(abm_vs_nc$wins, decreasing = TRUE))
+    abm_vs_nc$model_type <- sub("_.*", "", abm_vs_nc$design_cell)
+    for (mt in unique(abm_vs_nc$model_type)) {
+      header <- paste("\n", mt)
+      subset <- abm_vs_nc %>% filter(model_type == mt)
+      rows <- paste(
+          sprintf("  %s: %d wins, %.4f mean difference, %.4f p-value",
+                  subset$design_cell, subset$wins, subset$mean_diff, subset$p),
+        collapse = "\n")
+    
+      cat(header, "\n", rows, "\n")
+      write_result(header)
+      write_result(rows)
+    }
+
+    write_result("\n ABM vs MLM Across Held-out Debates")
+    abm_vs_mlm$model_type <- sub("_.*", "", abm_vs_mlm$design_cell)
+    for (mt in unique(abm_vs_mlm$model_type)) {
+      header <- paste("\n", mt)
+      subset <- abm_vs_mlm %>% filter(model_type == mt)
+      rows <- paste(
+          sprintf("  %s: %d wins, %.4f mean difference, %.4f p-value",
+                  subset$design_cell, subset$wins, subset$mean_diff, subset$p),
+        collapse = "\n")
+    
+      cat(header, "\n", rows, "\n")
+      write_result(header)
+      write_result(rows)
+    }
+
+    write_result("Decision: H3b NOT SUPPORTED - no model reaches significance at alpha = 0.05")
 
 
 #     H3b — debate level:

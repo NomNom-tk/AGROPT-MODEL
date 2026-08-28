@@ -1,4 +1,4 @@
-Hypothesis Results -  2026-08-25 13:17:35.641771 
+Hypothesis Results -  2026-08-28 16:05:48.858968 
 ============================================================ 
 
 ## Empirical model recording 
@@ -18,67 +18,49 @@ n_obs: 236  | n_debates: 12
  model_typeconsensus: 95% CI [-0.01135 0.01085] 
 Decision: H3a NOT SUPPORTED - no model improves/beats the no_change baseline 
 
-### H3b - Debate Level (Held out debates) 
- mode: abm_error ~ model_type + (1 | debate_label) 
+### H3b - Debate Level Held out debates 
 
  ABM vs No-Change Across Held-out Debates 
-
- clustering 
-  clustering_ndist_nospeak: 7 wins, -0.0010 mean difference, 0.7744 p-value
-  clustering_ndist_speak: 7 wins, -0.0001 mean difference, 0.7744 p-value
-  consensus_dist_speak: 7 wins, -0.0004 mean difference, 0.7744 p-value
-  consensus_ndist_nospeak: 7 wins, -0.0002 mean difference, 0.7744 p-value
-  consensus_ndist_speak: 7 wins, -0.0004 mean difference, 0.7744 p-value
-  bipolarization_dist_nospeak: 6 wins, 0.0011 mean difference, 1.0000 p-value
-  bipolarization_dist_speak: 6 wins, -0.0001 mean difference, 1.0000 p-value
-  bipolarization_ndist_nospeak: 6 wins, 0.0002 mean difference, 1.0000 p-value
-  clustering_dist_nospeak: 6 wins, 0.0000 mean difference, 1.0000 p-value
-  consensus_dist_nospeak: 6 wins, -0.0003 mean difference, 1.0000 p-value
-  bipolarization_ndist_speak: 5 wins, -0.0002 mean difference, 0.7744 p-value
-  clustering_dist_speak: 3 wins, 0.0018 mean difference, 0.1460 p-value 
-
- consensus 
-  clustering_ndist_nospeak: 7 wins, -0.0010 mean difference, 0.7744 p-value
-  clustering_ndist_speak: 7 wins, -0.0001 mean difference, 0.7744 p-value
-  consensus_dist_speak: 7 wins, -0.0004 mean difference, 0.7744 p-value
-  consensus_ndist_nospeak: 7 wins, -0.0002 mean difference, 0.7744 p-value
-  consensus_ndist_speak: 7 wins, -0.0004 mean difference, 0.7744 p-value
-  bipolarization_dist_nospeak: 6 wins, 0.0011 mean difference, 1.0000 p-value
-  bipolarization_dist_speak: 6 wins, -0.0001 mean difference, 1.0000 p-value
-  bipolarization_ndist_nospeak: 6 wins, 0.0002 mean difference, 1.0000 p-value
-  clustering_dist_nospeak: 6 wins, 0.0000 mean difference, 1.0000 p-value
-  consensus_dist_nospeak: 6 wins, -0.0003 mean difference, 1.0000 p-value
-  bipolarization_ndist_speak: 5 wins, -0.0002 mean difference, 0.7744 p-value
-  clustering_dist_speak: 3 wins, 0.0018 mean difference, 0.1460 p-value 
-
- bipolarization 
-  clustering_ndist_nospeak: 7 wins, -0.0010 mean difference, 0.7744 p-value
-  clustering_ndist_speak: 7 wins, -0.0001 mean difference, 0.7744 p-value
-  consensus_dist_speak: 7 wins, -0.0004 mean difference, 0.7744 p-value
-  consensus_ndist_nospeak: 7 wins, -0.0002 mean difference, 0.7744 p-value
-  consensus_ndist_speak: 7 wins, -0.0004 mean difference, 0.7744 p-value
-  bipolarization_dist_nospeak: 6 wins, 0.0011 mean difference, 1.0000 p-value
-  bipolarization_dist_speak: 6 wins, -0.0001 mean difference, 1.0000 p-value
-  bipolarization_ndist_nospeak: 6 wins, 0.0002 mean difference, 1.0000 p-value
-  clustering_dist_nospeak: 6 wins, 0.0000 mean difference, 1.0000 p-value
-  consensus_dist_nospeak: 6 wins, -0.0003 mean difference, 1.0000 p-value
-  bipolarization_ndist_speak: 5 wins, -0.0002 mean difference, 0.7744 p-value
-  clustering_dist_speak: 3 wins, 0.0018 mean difference, 0.1460 p-value 
-
- clustering 
-  clustering_ndist_nospeak: 7 wins, -0.0010 mean difference, 0.7744 p-value
-  clustering_ndist_speak: 7 wins, -0.0001 mean difference, 0.7744 p-value
-  clustering_dist_nospeak: 6 wins, 0.0000 mean difference, 1.0000 p-value
-  clustering_dist_speak: 3 wins, 0.0018 mean difference, 0.1460 p-value 
-
- consensus 
-  consensus_dist_speak: 7 wins, -0.0004 mean difference, 0.7744 p-value
-  consensus_ndist_nospeak: 7 wins, -0.0002 mean difference, 0.7744 p-value
-  consensus_ndist_speak: 7 wins, -0.0004 mean difference, 0.7744 p-value
-  consensus_dist_nospeak: 6 wins, -0.0003 mean difference, 1.0000 p-value 
 
  bipolarization 
   bipolarization_dist_nospeak: 6 wins, 0.0011 mean difference, 1.0000 p-value
   bipolarization_dist_speak: 6 wins, -0.0001 mean difference, 1.0000 p-value
   bipolarization_ndist_nospeak: 6 wins, 0.0002 mean difference, 1.0000 p-value
   bipolarization_ndist_speak: 5 wins, -0.0002 mean difference, 0.7744 p-value 
+
+ clustering 
+  clustering_dist_nospeak: 6 wins, 0.0000 mean difference, 1.0000 p-value
+  clustering_dist_speak: 3 wins, 0.0018 mean difference, 0.1460 p-value
+  clustering_ndist_nospeak: 7 wins, -0.0010 mean difference, 0.7744 p-value
+  clustering_ndist_speak: 7 wins, -0.0001 mean difference, 0.7744 p-value 
+
+ consensus 
+  consensus_dist_nospeak: 6 wins, -0.0003 mean difference, 1.0000 p-value
+  consensus_dist_speak: 7 wins, -0.0004 mean difference, 0.7744 p-value
+  consensus_ndist_nospeak: 7 wins, -0.0002 mean difference, 0.7744 p-value
+  consensus_ndist_speak: 7 wins, -0.0004 mean difference, 0.7744 p-value 
+
+ ABM vs MLM Across Held-out Debates 
+
+ bipolarization 
+  bipolarization_dist_nospeak: 6 wins, 0.0003 mean difference, 1.0000 p-value
+  bipolarization_dist_speak: 4 wins, -0.0008 mean difference, 0.3877 p-value
+  bipolarization_ndist_nospeak: 7 wins, -0.0006 mean difference, 0.7744 p-value
+  bipolarization_ndist_speak: 8 wins, -0.0010 mean difference, 0.3877 p-value 
+
+ clustering 
+  clustering_dist_nospeak: 5 wins, -0.0008 mean difference, 0.7744 p-value
+  clustering_dist_speak: 5 wins, 0.0010 mean difference, 0.7744 p-value
+  clustering_ndist_nospeak: 6 wins, -0.0018 mean difference, 1.0000 p-value
+  clustering_ndist_speak: 6 wins, -0.0009 mean difference, 1.0000 p-value 
+
+ consensus 
+  consensus_dist_nospeak: 6 wins, -0.0011 mean difference, 1.0000 p-value
+  consensus_dist_speak: 5 wins, -0.0012 mean difference, 0.7744 p-value
+  consensus_ndist_nospeak: 6 wins, -0.0010 mean difference, 1.0000 p-value
+  consensus_ndist_speak: 5 wins, -0.0012 mean difference, 0.7744 p-value 
+
+### H5 - Global Level Primary Cell (Held-out Debates 
+ MLM pooled falls within the ABM 95% CI for all three model types 
+ Differences of 0.001 cannot be distinguished from sampling noise 
+ Decision: H5 NOT SUPPORTED despite two cells meeting the literal criterion 

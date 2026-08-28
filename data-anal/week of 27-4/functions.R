@@ -617,6 +617,10 @@ apply_batch_mutations <- function(df) {
   
   df <- df %>%
     filter(model_type != "model_type")
+
+  # collect once to materialize into local RAM before any coercions or mutations
+  df <- collect(df)
+  message("lazy data frame collected and pulled into R memory, starting col coercion and NA diagnostics")
   
   # columns to mutate to numeric
   conv_cols <- c(# existing batch-level
@@ -663,6 +667,8 @@ apply_batch_mutations <- function(df) {
       #                                use_distinct_agents == "false" ~ FALSE),
       normalised_convergence = convergence_cycle / 100, # divided by 100 to normalize, updated to 100 6/5/26
     )
+
+  log_step("Char and Logical Col coercion finished, starting NA diagnostics...")
   
   # guards for string tags matching if columns exist 2/6/26
   if ("debate_label" %in% colnames(df)) {
@@ -688,10 +694,6 @@ apply_batch_mutations <- function(df) {
       mutate(across(all_of(logical_cols),
                     ~ as.logical(tolower(trimws(as.character(.))))))
   }
-
-  # collect once to materialize into local RAM before diagnostics
-  df <- collect(df)
-  message("lazy data frame collected and pulled into R memory, starting NA diagnostics")
   
   # count NAs // recheck logic
   na_check <- colSums(is.na(df))
@@ -1156,7 +1158,8 @@ generate_gaml_bounds <- function(df, buffer = 0.05) {
       }
     }
   }
-  
+
+  log_step("Finished GA bounds creation")
   return(output_lines)
 }
                   

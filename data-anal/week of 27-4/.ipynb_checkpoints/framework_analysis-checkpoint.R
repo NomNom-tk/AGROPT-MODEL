@@ -188,6 +188,15 @@ analyze_processed_run <- function(df) {
   empirical_beta_val <- NULL
   beta_distance <- NULL
   simulated_betas_raw <- NULL
+  # new additions for implemented MLM hypotheses H3 & H5 28/8/26
+  mlm_bench_h3       <- NULL
+  df_empir_test      <- NULL
+  h3a_model          <- NULL
+  df_h3a             <- NULL
+  df_h3b             <- NULL
+  abm_vs_nc          <- NULL
+  abm_vs_mlm         <- NULL
+  df_h5              <- NULL
   
   if (!is.null(df_ag)) { # H1a and H1b implemented 22/7/26 / updated to robust model 24/7/26
     log_step("DEBUG: sucessfully entered df_ag mutation block before lmer calculations")
@@ -246,13 +255,12 @@ analyze_processed_run <- function(df) {
     
     df_ag_raw_slice <- df_ag |>
       select(any_of(ag_slice_cols)) |> # any_of so a missing column warns rather than errors
-      filter(!is.na(agent_id)) |>
-      collect()
+      filter(!is.na(agent_id))
       #add_design_cell() # from GA bounds patch logic
 
     # report what was requested but absent
     # character(0) expected, anything listed here is missing from GAML save list
-    setdiff(ag_slice_cols, names(df_ag_raw_slice))
+    message(setdiff(ag_slice_cols, names(df_ag_raw_slice)))
 
     # Branch A: empirical trajectory (H1a)
     df_ag_base <- df_ag_raw_slice |>
@@ -274,8 +282,7 @@ analyze_processed_run <- function(df) {
 
     # corrected H1 test
     # Nesting individuals (ID) inside debate groups (ID_Group_all) / use with debate_label in deduped data
-    # empirical h1 comparison
-    ## empirical long format for mlm
+    # empirical h1 comparison in long format for mlm
     log_step("starting H1a df creation")
     df_empir_long <- df_ag_base %>%
       filter(!is.na(initial_opinion), !is.na(final_attitude)) %>%
@@ -313,57 +320,15 @@ analyze_processed_run <- function(df) {
       }
     }
 
-    # H3 shared set up (base model) 24/8/26
-    mlm_bench_h3 <- lme4::lmer(final_attitude ~ initial_opinion + (1 | debate_label),
-                               data = df_ag_base)
-
-    # validation frame set up takes empirical rows, predict and compute error 21/8/26
-    if (!is.null(df$sim_val)) {
-      log_step("H3 benchmark: building test frame from sim_val$df_ag")
-    
-      df_empir_test <- df$sim_val$df_ag %>%
-        collect() %>%
-        distinct(agent_id, debate_label, .keep_all = TRUE) %>%
-        mutate(Condition = factor(current_condition),
-               Time = factor("T2", levels = c("T1", "T2")),
-               Attitude = final_attitude)
-
-      log_step(paste("test_frame:", nrow(df_empir_test), "rows,",
-                     n_distinct(df_empir_test$debate_label), "debates"))
-
-      log_step(paste("columns:", paste(colnames(df_empir_test), collapse = ", ")))
-
-      df_empir_test$mlm_pred <- predict(mlm_bench_h3, newdata = df_empir_test,
-                                        allow.new.levels = TRUE)
-      df_empir_test$mlm_error <- abs(df_empir_test$final_attitude - df_empir_test$mlm_pred)
-
-
-      log_step(paste("mlm_bench_h3 fixed effects:", 
-               paste(names(fixef(mlm_bench_h3)), round(fixef(mlm_bench_h3), 4), 
-                     sep = "=", collapse = ", ")))
-        log_step(paste("mlm_pred range:", 
-                       round(min(df_empir_test$mlm_pred, na.rm = TRUE), 4), "to",
-                       round(max(df_empir_test$mlm_pred, na.rm = TRUE), 4)))
-        log_step(paste("initial_opinion range in test:",
-                       round(min(df_empir_test$initial_opinion, na.rm = TRUE), 4), "to",
-                       round(max(df_empir_test$initial_opinion, na.rm = TRUE), 4)))
-        log_step(paste("final_attitude range in test:",
-                       round(min(df_empir_test$final_attitude, na.rm = TRUE), 4), "to",
-                       round(max(df_empir_test$final_attitude, na.rm = TRUE), 4)))
-
-      log_step(paste("mlm_error summary — mean:", round(mean(df_empir_test$mlm_error, na.rm = TRUE), 4),
-                 "range:", round(min(df_empir_test$mlm_error, na.rm = TRUE), 4), 
-                 "to", round(max(df_empir_test$mlm_error, na.rm = TRUE), 4),
-                 "NAs:", sum(is.na(df_empir_test$mlm_error))))
-    } else {
-      log_step("H3 benchmark: no sim_val supplied, skipping test frame construction")
-      df_empir_test <- NULL
-    }
-
     # MLM H1b test with simulated opinions for T2
     ## H1b long data frame
     mlm_model_h1b_list <- list()
     for (mt in unique(df_sim_base$model_type)) {
+      # removal of h1b testing for no_change 28/8/26
+      if (mt == "no_change") {
+        log_step("Skipping H1b for no_change - T1 equals T2 by definition")
+        next
+      }
     log_step("H1b df setup starting...") 
     df_sim_long <- df_sim_base %>%
       filter(model_type == mt, !is.na(initial_opinion), !is.na(opinion), !is.na(agent_id)) %>%
@@ -406,110 +371,202 @@ analyze_processed_run <- function(df) {
       }
     }
 
-    # H3a set up 24/8/26
-    df_h3a <- df$sim_val$df_ag %>%
-      collect() %>%
-      distinct(agent_id, selected_debate_id, seed, model_type, .keep_all = TRUE) %>%
-      mutate(abm_error = abs(final_attitude - opinion)) %>%
-      left_join(df_empir_test %>% select(agent_id, debate_label, mlm_error), by = c("debate_label", "agent_id")) %>%
-      mutate(model_type = relevel(factor(model_type), ref = "no_change"))
+    # Guard for validation (H3 and H5) takes empirical rows, predict and compute error 21/8/26 (update 28/8/26)
+    if (!is.null(df$sim_val)) {
+      log_step("H3 benchmark: building test frame from sim_val$df_ag")
 
-    log_step("Set up H3a df and starting lmer call...")
-    mlm_h3a <- lme4::lmer(abm_error ~ model_type + ( 1 | debate_label),
+      # H3 shared set up (base model) 24/8/26
+      mlm_bench_h3 <- lme4::lmer(final_attitude ~ initial_opinion + (1 | debate_label),
+                                 data = df_ag_base)
+    
+      df_empir_test <- df$sim_val$df_ag %>%
+        collect() %>%
+        distinct(agent_id, debate_label, .keep_all = TRUE) %>%
+        mutate(Condition = factor(current_condition),
+               Time = factor("T2", levels = c("T1", "T2")),
+               Attitude = final_attitude)
+
+      log_step(paste("test_frame:", nrow(df_empir_test), "rows,",
+                     n_distinct(df_empir_test$debate_label), "debates"))
+
+      log_step(paste("columns:", paste(colnames(df_empir_test), collapse = ", ")))
+
+      df_empir_test$mlm_pred <- predict(mlm_bench_h3, newdata = df_empir_test,
+                                        allow.new.levels = TRUE)
+      df_empir_test$mlm_error <- abs(df_empir_test$final_attitude - df_empir_test$mlm_pred)
+
+
+      log_step(paste("mlm_bench_h3 fixed effects:", 
+               paste(names(fixef(mlm_bench_h3)), round(fixef(mlm_bench_h3), 4), 
+                     sep = "=", collapse = ", ")))
+        log_step(paste("mlm_pred range:", 
+                       round(min(df_empir_test$mlm_pred, na.rm = TRUE), 4), "to",
+                       round(max(df_empir_test$mlm_pred, na.rm = TRUE), 4)))
+        log_step(paste("initial_opinion range in test:",
+                       round(min(df_empir_test$initial_opinion, na.rm = TRUE), 4), "to",
+                       round(max(df_empir_test$initial_opinion, na.rm = TRUE), 4)))
+        log_step(paste("final_attitude range in test:",
+                       round(min(df_empir_test$final_attitude, na.rm = TRUE), 4), "to",
+                       round(max(df_empir_test$final_attitude, na.rm = TRUE), 4)))
+
+      log_step(paste("mlm_error summary — mean:", round(mean(df_empir_test$mlm_error, na.rm = TRUE), 4),
+                 "range:", round(min(df_empir_test$mlm_error, na.rm = TRUE), 4), 
+                 "to", round(max(df_empir_test$mlm_error, na.rm = TRUE), 4),
+                 "NAs:", sum(is.na(df_empir_test$mlm_error))))
+
+      # H3a set up 24/8/26
+      df_h3a <- df$sim_val$df_ag %>%
+        collect() %>%
+        distinct(agent_id, selected_debate_id, seed, model_type, .keep_all = TRUE) %>%
+        mutate(abm_error = abs(final_attitude - opinion)) %>%
+        left_join(df_empir_test %>% select(agent_id, debate_label, mlm_error), by = c("debate_label", "agent_id")) %>%
+        mutate(model_type = relevel(factor(model_type), ref = "no_change"))
+
+      log_step("Set up H3a df and starting lmer call...")
+      mlm_h3a <- lme4::lmer(abm_error ~ model_type + ( 1 | debate_label),
                          data = df_h3a)
 
-    # write results to file
-    write_result("\n### H3a - Individual Level (Held out debates)")
-    write_result(paste(" mode:", deparse(formula(mlm_h3a))))
-    write_result(paste("n_obs:", nobs(mlm_h3a), " | n_debates:",
+      # write results to file
+      write_result("\n### H3a - Individual Level (Held out debates)")
+      write_result(paste(" mode:", deparse(formula(mlm_h3a))))
+      write_result(paste("n_obs:", nobs(mlm_h3a), " | n_debates:",
                        summary(mlm_h3a)$ngrps))
 
-    coefs <- summary(mlm_h3a)$coefficients
-      for (i in seq_len(nrow(coefs))) {
-        write_result(sprintf("  %s: est=%.5f se=%.5f t=%.3f",
+      coefs <- summary(mlm_h3a)$coefficients
+        for (i in seq_len(nrow(coefs))) {
+          write_result(sprintf("  %s: est=%.5f se=%.5f t=%.3f",
                              rownames(coefs)[i], coefs[i,1], coefs[i,2], coefs[i,3]))
-    }
+      }
 
-    vc <- as.data.frame(VarCorr(mlm_h3a))
-    write_result(paste(" debate-level variance:", round(vc$vcov[1], 6)))
-    write_result(paste(" residual variance:", round(vc$vcov[2], 6)))
+      vc <- as.data.frame(VarCorr(mlm_h3a))
+      write_result(paste(" debate-level variance:", round(vc$vcov[1], 6)))
+      write_result(paste(" residual variance:", round(vc$vcov[2], 6)))
 
-    ci <- confint(mlm_h3a, parm = "beta_", method = "Wald")
-    for (i in seq_len(nrow(ci))) {
-      write_result(sprintf(" %s: 95%% CI [%.5f %.5f]",
+      ci <- confint(mlm_h3a, parm = "beta_", method = "Wald")
+      for (i in seq_len(nrow(ci))) {
+        write_result(sprintf(" %s: 95%% CI [%.5f %.5f]",
                            rownames(ci)[i], ci[i,1], ci[i,2]))
-    }
-    write_result("Decision: H3a NOT SUPPORTED - no model improves/beats the no_change baseline")
+      }
+      write_result("Decision: H3a NOT SUPPORTED - no model improves/beats the no_change baseline")
       
-    # H3b set up 24/8/26
-    write_result("\n### H3b - Debate Level (Held out debates)")
-    write_result(paste(" mode:", deparse(formula(mlm_h3a))))
-    df_h3b <- df$sim_val$df_batch %>%
-      group_by(design_cell, debate_label, model_type) %>%
-      summarize(abm_mae = mean(mae, na.rm = TRUE), .groups = "drop")
+      # H3b set up 24/8/26
+      write_result("\n### H3b - Debate Level Held out debates")
+      df_h3b <- df$sim_val$df_batch %>%
+        group_by(design_cell, debate_label, model_type) %>%
+        summarize(abm_mae = mean(mae, na.rm = TRUE), .groups = "drop")
 
-    # mlm debate level mae set up
-    mlm_debate_mae <- df_empir_test %>%
-      group_by(debate_label) %>%
-      summarize(mlm_mae = mean(mlm_error, na.rm = TRUE), .groups = "drop")
+      # mlm debate level mae set up
+      mlm_debate_mae <- df_empir_test %>%
+        group_by(debate_label) %>%
+        summarize(mlm_mae = mean(mlm_error, na.rm = TRUE), .groups = "drop")
 
-    # No change mae extraction prior ot left_join
-    nc_mae <- df_h3b %>%
-      filter(model_type == "no_change") %>%
-      select(debate_label, nc_mae = abm_mae)
+      # No change mae extraction prior ot left_join
+      nc_mae <- df_h3b %>%
+        filter(model_type == "no_change") %>%
+        select(debate_label, nc_mae = abm_mae)
     
-    # join on debate_label to perform sign tests
-    df_h3b <- df_h3b %>%
-      filter(model_type != "no_change") %>%
-      left_join(nc_mae, by = "debate_label") %>%
-      left_join(mlm_debate_mae, by = "debate_label")
+      # join on debate_label to perform sign tests
+      df_h3b <- df_h3b %>%
+        filter(model_type != "no_change") %>%
+        left_join(nc_mae, by = "debate_label") %>%
+        left_join(mlm_debate_mae, by = "debate_label")
 
-    # two sided sign tests set up
-    ## ABM < NC across 12 debates
-    abm_vs_nc <- df_h3b %>%
-      group_by(design_cell) %>%
-      summarize(
-        wins = sum(abm_mae < nc_mae, na.rm = TRUE),
-        n = n(),
-        mean_diff = mean(abm_mae - nc_mae,na.rm = TRUE),
-        p = binom.test(wins, n, 0.5)$p.value,
-        .groups = "drop")
+      # two sided sign tests set up
+      ## ABM < NC across 12 debates
+      abm_vs_nc <- df_h3b %>%
+        group_by(design_cell) %>%
+        summarize(
+          wins = sum(abm_mae < nc_mae, na.rm = TRUE),
+          n = n(),
+          mean_diff = mean(abm_mae - nc_mae,na.rm = TRUE),
+          p = binom.test(wins, n, 0.5)$p.value,
+          .groups = "drop")
 
-    ## ABM < MLM MAE across 12 debates
-    abm_vs_mlm <- df_h3b %>%
-      group_by(design_cell) %>%
-      summarize(
-        wins = sum(abm_mae < mlm_mae, na.rm = TRUE),
-        n = n(),
-        mean_diff = mean(abm_mae - mlm_mae, na.rm = TRUE),
-        p = binom.test(wins, n, 0.5)$p.value,
-        .groups = "drop")
+      ## ABM < MLM MAE across 12 debates
+      abm_vs_mlm <- df_h3b %>%
+        group_by(design_cell) %>%
+        summarize(
+          wins = sum(abm_mae < mlm_mae, na.rm = TRUE),
+          n = n(),
+          mean_diff = mean(abm_mae - mlm_mae, na.rm = TRUE),
+          p = binom.test(wins, n, 0.5)$p.value,
+          .groups = "drop")
           
-    # Results log to .txt 24/8/26
-    write_result("\n ABM vs No-Change Across Held-out Debates")
-    #write_result(" Models with the most wins:", abm_vs_nc$wins %>% sort(as.character(abm_vs_nc$wins, decreasing = TRUE)))
+      # Results log to .txt 24/8/26
+      write_result("\n ABM vs No-Change Across Held-out Debates")
+      abm_vs_nc$model_type <- sub("_.*", "", abm_vs_mlm$design_cell)
+      for (mt in unique(abm_vs_nc$model_type)) {
+        header <- paste("\n", mt)
+        subset <- abm_vs_nc %>% filter(model_type == mt)
+        rows <- paste(
+                sprintf("  %s: %d wins, %.4f mean difference, %.4f p-value",
+                        subset$design_cell, subset$wins, subset$mean_diff, subset$p),
+                collapse = "\n")
+    
+        cat(header, "\n", rows, "\n")
+        write_result(header)
+        write_result(rows)
+      }
+ 
+      write_result("\n ABM vs MLM Across Held-out Debates")
+      abm_vs_mlm$model_type <- sub("_.*", "", abm_vs_mlm$design_cell)
+      for (mt in unique(abm_vs_mlm$model_type)) {
+        header <- paste("\n", mt)
+        subset <- abm_vs_mlm %>% filter(model_type == mt)
+        rows <- paste(
+                sprintf("  %s: %d wins, %.4f mean difference, %.4f p-value",
+                        subset$design_cell, subset$wins, subset$mean_diff, subset$p),
+                collapse = "\n")
+    
+        cat(header, "\n", rows, "\n")
+        write_result(header)
+        write_result(rows)
+      }
 
+      # H5 set up 28/8/26
+      log_step("H5 df initialization")
+      df_h5 <- df$sim_val$df_ag %>%
+        filter(use_distinct_agents == TRUE, speaking_mode == TRUE) %>%
+        collect() %>%
+        group_by(model_type) %>%
+        summarize(abm_pooled_mae = mean(individual_error),
+                  mlm_pooled_mae = mean(df_empir_test$mlm_error)) %>%
+        mutate(difference = abm_pooled_mae - mlm_pooled_mae,
+                  h5_supported = abm_pooled_mae < mlm_pooled_mae)
 
-#     H3b — debate level:
-#   - From df$sim_val$df_batch: mean MAE per (design_cell, debate_label)
-#   - From df_empir_test: mean mlm_error per debate_label
-#   - From no_change rows in df$sim_val$df_batch: MAE per debate_label
-#   - Join all three on debate_label
-#   - Per design cell: sign test on ABM_MAE < NC_MAE across 12 debates
-#   - Per design cell: sign test on ABM_MAE < MLM_MAE across 12 debates
-#   - Output: table with wins, mean differences, p-values
+      df_h5_detail <- df$sim_val$df_ag %>%
+        filter(use_distinct_agents == TRUE, speaking_mode == TRUE) %>%
+        collect() %>%
+        select(model_type, debate_label, agent_id, individual_error)
 
-# H5 — global level:
-#   - Filter df$sim_val$df_ag to primary cell only
-#     (use_distinct_agents = TRUE, speaking_mode = TRUE) per model_type
-#   - abm_pooled_mae per model_type = mean(individual_error)
-#   - mlm_pooled_mae = mean(df_empir_test$mlm_error)
-#   - Table: one row per model_type, abm vs mlm, difference
-#   - Decision: supported if abm_pooled_mae < mlm_pooled_mae
+      df_h5_se <- df_h5_detail %>%
+        group_by(model_type) %>%
+        summarize(
+          n = n(),
+          abm_pooled_mae = mean(individual_error, na.rm = TRUE),
+          se = sd(individual_error, na.rm = TRUE) / sqrt(n()),
+          .groups = "drop")
 
+      df_h5 <- df_h5 %>%
+        left_join(df_h5_se %>% select(model_type, n, se), by = "model_type") %>%
+        mutate(
+          abm_ci_lo = abm_pooled_mae - 1.96 * se,
+          abm_ci_hi = abm_pooled_mae + 1.96 * se,
+          mlm_inside_ci = mlm_pooled_mae >= abm_ci_lo & mlm_pooled_mae <= abm_ci_hi)
+
+      write_result("\n### H5 - Global Level Primary Cell (Held-out Debates")
+      write_result(" MLM pooled falls within the ABM 95% CI for all three model types")
+      write_result(" Differences of 0.001 cannot be distinguished from sampling noise")
+      write_result(" Decision: H5 NOT SUPPORTED despite two cells meeting the literal criterion")
+        
+    } else {
+      log_step("Skipping H3 Benchmark and H5 set up, no validation data in bundle")
+      df_empir_test <- NULL
+    }
+      
     # Error Benchmarks (MAE) only deduped here because we want one row of empirical agent data
 
-    # Branch C: MAE / OLS/ABM Comparison 
+    # Branch C: MAE / OLS/ABM Comparison (In sample exploratory - calib and fitted on 43 debates)
     log_step("Starting branch C df setups, ols vs abm...")
 
     # update 6/8/26 added best_param_cell to find best mae within each cell (not which sorted first)
@@ -870,7 +927,12 @@ analyze_processed_run <- function(df) {
                     mlm_h1a = mlm_model_h1a, # deduplicated H1a (empirical) test
                     mlm_h1b = mlm_model_h1b, # deduplicated H1b (simualted) test
                     mlm_h2 = mlm_model_h2, # integrated H2 test with perceived_norms and self_control
-                    mlm_h2_cent = mlm_model_h2_cent # H2 with centered values (corrects for variable inflation factors)
+                    mlm_h2_cent = mlm_model_h2_cent, # H2 with centered values (corrects for variable inflation factors)
+                    mlm_bench_h3 = mlm_bench_h3, # benchmark model for H3, calibrated on training debate data (43)
+                    h3a_model = h3a_model, # formula of mlm for h3a at individual level
+                    df_h3a = df_h3a, # df comparison of abm vs no change and mlm for individual agents
+                    df_h3b = df_h3b, # df introducing the nature of H3 simulated comparisons on held out debates - debate level
+                    df_h5 = df_h5 # summary of comparisons of primary design cell in ABM vs NC and MLM
                    ),
       comparisons = list(
         wilcox_h_m      = wilcox_h_vs_m,
@@ -888,7 +950,9 @@ analyze_processed_run <- function(df) {
         sum_dir_valence = df_sum_directional_valence, # pulls from \code{df_directional_agents}, one row per model x current_condition x selected_debate_id x pro_reduction and returns right and wrong dir/signed error of simul data
         valence_metrics = df_valence, # applies \code{compute_valence_asymmetry} to sum_dir_valence, wide pivot to calculate error_asymmetery and accuracy_asymmetry
         upset_prep = df_upset,
-        df_ols_agent_data = df_ag_deduped
+        df_ols_agent_data = df_ag_deduped,
+        abm_vs_nc = abm_vs_nc, # table comparing H3 abm results versus no change baseline (sign test and mean differences)
+        abm_vs_mlm = abm_vs_mlm # comparison of H3 abm vs mlm benchmark
       ),
       behavioral = list(
         composition = h_vs_m, # pulls from df_batch (grouped by debate_composition, model_type, speaking_mode, use_distinct_agents) summarizes mean_mae and SD

@@ -42,6 +42,7 @@ analyze_processed_run <- function(df) {
   empir_cohen          <- NULL
   mlm_model_h2       <- NULL # standardize lm for H2 with perceived_norms and self_control
   mlm_model_h2_cent        <- NULL # centered version to correct and decrease collinearity of variables
+  df_h4b                <- NULL
 
   # initialization of write_result 24/8/26
   write_result(paste("Hypothesis Results - ", Sys.time()), append = FALSE)
@@ -70,7 +71,12 @@ analyze_processed_run <- function(df) {
     wilcox_h_vs_m <- df_empirical %>%
       filter(composition %in% c("H", "M")) %>%
       mutate(composition = as.factor(composition)) %>%
-      wilcox.test(change_t1_t2 ~ composition, data = .)
+      wilcox.test(abs(change_t1_t2) ~ composition, data = .) 
+      
+    h4a_means <- df_empirical %>%
+      filter(composition %in% c("H", "M")) %>%
+      group_by(composition) %>%
+      summarize(mean_abs_change = mean(abs(change_t1_t2), na.rm = TRUE))
 
     # empirical mlm for pro_reduction effect to create standardized effects
     df_emp_m <- df_empirical %>%
@@ -96,6 +102,17 @@ analyze_processed_run <- function(df) {
       std_estimate = fixef(empir_model_m)[["pro_reduction_z"]],
       row.names = NULL
     )
+
+    # H4 set up 1/9/26
+    df_h4b <- df_ag %>%
+      select(agent_id, debate_label, model_type, current_condition, opinion, initial_opinion) %>%
+      collect() %>%
+      distinct(agent_id, debate_label, model_type, .keep_all = TRUE) %>%
+      mutate(sim_abs_change = abs(opinion - initial_opinion)) %>%
+      group_by(current_condition, model_type) %>%
+      summarize(mean_abs_change = mean(sim_abs_change, na.rm = TRUE),
+                sd = sd(sim_abs_change, na.rm = TRUE),
+                n = n(), .groups = "drop")
 
 
     # H2 test set up
@@ -912,6 +929,7 @@ analyze_processed_run <- function(df) {
   analysis_output_package <- list(
     inputs = list(
       raw              = df_batch, # raw batch file (per debate x speaking_mode x model)
+      agent            = df_ag, # agent level for each input list
       versions         = lhs_versions, # differentiates between different lhs version runs
       version_summary  = df_version_summary, # aggregated versions for pcc/prcc
       influence        = df_influence, # pulled from df_interactions to compute influence of each speaking agent on others
@@ -932,7 +950,9 @@ analyze_processed_run <- function(df) {
                     mlm_h3a = mlm_h3a, # formula of mlm for h3a at individual level
                     df_h3a = df_h3a, # df comparison of abm vs no change and mlm for individual agents
                     df_h3b = df_h3b, # df introducing the nature of H3 simulated comparisons on held out debates - debate level
-                    df_h5 = df_h5 # summary of comparisons of primary design cell in ABM vs NC and MLM
+                    df_h5 = df_h5, # summary of comparisons of primary design cell in ABM vs NC and MLM
+                    df_h4b = df_h4b, # comparison of simulated heterogeneous debates, their mean attitude change compared with homogeneous debates  
+                    h4a_means = h4a_means # dataframe for h4a with means to indicate direction of change by group composition
                    ),
       comparisons = list(
         wilcox_h_m      = wilcox_h_vs_m,

@@ -123,7 +123,7 @@ plot_empir_compar <- function(df) {
     #geom_hline(yintercept = df %>% filter(condition == "Control") %>%
    #              pull(mean_change_t1_t2), linetype = "dashed") +
     theme_minimal() +
-    scale_fill_manual(values = c("t0_t1" = "#2C3E50", "t1_t2" = "#E74C3C")) +
+    #scale_fill_manual(values = c("t0_t1" = "#2C3E50", "t1_t2" = "#E74C3C")) +
     labs(x = "Condition", y = "Avg Change T1->T2", 
          title = "Opinion Change from T1 to T2")
 }
@@ -143,6 +143,8 @@ plot_empir_compar <- function(df) {
 plot_empir_cross <- function(df) {
   ggplot(df, aes(x = condition, y = value, fill = change_type)) +
     geom_col(position = "dodge") +
+    geom_errorbar(aes(ymin = mean_change_t1_t2 - sd_change_t1_t2, 
+                  ymax = mean_change_t1_t2 + sd_change_t1_t2)) +
     geom_hline(yintercept = 0) +
     labs(x = "Condition", y = "Average Change",
          title = "Opinion Change Across T0-T1-T2")

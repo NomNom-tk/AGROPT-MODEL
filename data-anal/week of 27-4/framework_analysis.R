@@ -183,7 +183,7 @@ analyze_processed_run <- function(df) {
   comparison_summary <- NULL
   ols_global_mae     <- NULL
   mlm_model_h1a      <- NULL # standardized mlm for H1 with empirical data
-  mlm_model_h1b      <- NULL # standardized mlm for H1 with simulated data
+  mlm_model_h1b_list <- list() # standardized mlm for H1 with simulated data
   abm_mae_debate     <- NULL
   empirical_beta_val <- NULL
   beta_distance <- NULL
@@ -191,7 +191,7 @@ analyze_processed_run <- function(df) {
   # new additions for implemented MLM hypotheses H3 & H5 28/8/26
   mlm_bench_h3       <- NULL
   df_empir_test      <- NULL
-  h3a_model          <- NULL
+  mlm_h3a            <- NULL
   df_h3a             <- NULL
   df_h3b             <- NULL
   abm_vs_nc          <- NULL
@@ -925,11 +925,11 @@ analyze_processed_run <- function(df) {
       ),
       models = list(conv = run_conv_model(df_conv_debate), 
                     mlm_h1a = mlm_model_h1a, # deduplicated H1a (empirical) test
-                    mlm_h1b = mlm_model_h1b, # deduplicated H1b (simualted) test
+                    mlm_h1b = mlm_model_h1b_list, # deduplicated H1b (simualted) test
                     mlm_h2 = mlm_model_h2, # integrated H2 test with perceived_norms and self_control
                     mlm_h2_cent = mlm_model_h2_cent, # H2 with centered values (corrects for variable inflation factors)
                     mlm_bench_h3 = mlm_bench_h3, # benchmark model for H3, calibrated on training debate data (43)
-                    h3a_model = h3a_model, # formula of mlm for h3a at individual level
+                    mlm_h3a = mlm_h3a, # formula of mlm for h3a at individual level
                     df_h3a = df_h3a, # df comparison of abm vs no change and mlm for individual agents
                     df_h3b = df_h3b, # df introducing the nature of H3 simulated comparisons on held out debates - debate level
                     df_h5 = df_h5 # summary of comparisons of primary design cell in ABM vs NC and MLM
@@ -937,6 +937,7 @@ analyze_processed_run <- function(df) {
       comparisons = list(
         wilcox_h_m      = wilcox_h_vs_m,
         empirical       = empirical_stat_check, # from df_empirical, computed mean and SD for each time (T0,T1,T2)
+        empirical_pivot = empirical_stat_pivot, # pivoted df for cross comparison plot object
         empirical_cohen = empir_cohen, # linear regression from raw df_empirical pro_reduction on changet1t2, filtered by Mixed debates)
         ols_debate_mae  = comparison_clean, # inner join abm_mae (from df_batch) and ols_mae (from df_ag) by selected_debate_id and calculates delta 
         summary         = comparison_summary, # df to calculate mean delta, SD, and CI for when ABM is better/worse than pure OLS
@@ -983,13 +984,14 @@ analyze_processed_run <- function(df) {
           comparison_clean <- lhs_outputs$results$comparisons$ols_debate_mae
           plot_ols_abm_comp(comparison_clean)},
       empirical_col   = function() plot_empir_compar(empirical_stat_check),
-      empirical_cross = function() plot_empir_cross(empirical_stat_pivot),
+      empirical_cross = function() plot_empir_cross(empirical_pivot),
 
       # OLS models viz empir and sim
       mlm_h1a_viz = function() check_model(mlm_model_h1a, check = c("linearity", "homogeneity", "vif", "qq", "reqq", "outliers")),
       mlm_h1b_viz = function() check_model(mlm_model_h1b, check = c("linearity", "homogeneity", "vif", "qq", "reqq", "outliers")),
       mlm_h2_viz = function() check_model(mlm_model_h2, check = c("linearity", "homogeneity", "vif", "qq", "reqq", "outliers")),
       mlm_h2_cent_viz = function() check_model(mlm_model_h2_cent, check = c("linearity", "homogeneity", "vif", "qq", "reqq", "outliers")),
+      mlm_h3a_viz = function() check_model(mlm_h3a, check = c("linearity", "qq", "reqq", "homogeneity")),
       
       model_rank_versions           = function() plot_model_rank_versions(model_comparison_main), 
       model_performance_rank_main   = function() plot_model_performance_rank_main(model_comparison_main),

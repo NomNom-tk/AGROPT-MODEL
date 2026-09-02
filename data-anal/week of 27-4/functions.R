@@ -134,6 +134,21 @@ append_metadata <- function(df, config, version = NA) {
     )
 }
 
+# TODO 2/9/26 
+#' meant to set up a duckdb query to select a limited amount of rows from the parquet files
+load_via_duckdb <- function(parquet_path, pull_cols, con) {
+  # turn pull_cols into a comma separated string, could use paste with the collapse argument
+  query_cols <- paste(pull_cols, collapse = ",")
+    
+  # sprintf call with two %s placeholders, one for columns string and one for the path
+  sql_query <- sprintf(" SELECT %s FROM read_parquet('%s') WHERE agent_id IS NOT NULL", query_cols, parquet_path)
+    
+  df <- dbGetQuery(con, sql_query)
+
+  return(df)
+    }
+
+
 #' WriteLines for Hypotheses 24/8/26
 #'
 #' Writes results to a .txt file for output, should be used after each hypothesis

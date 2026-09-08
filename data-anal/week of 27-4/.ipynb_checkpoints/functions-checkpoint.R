@@ -378,7 +378,7 @@ prepare_sensitivity_data <- function(df, param_cols, output_cols) {
 ## save once
 # print(ppt, target = "relative path")
 
-# # TODO 12/6/26 no_change_anchor duplicates no_change across TRUE/FALSE for speaking_mode ----
+# # TODO 12/6/26 no_change_anchor duplicates no_change across TRUE/FALSE for speaking_mode
 anchor_baseline_facets <- function(df, condition_col = "speaking_mode", baseline_val = "no_change") {
 
   # check if baseline model_type exists in df
@@ -1005,50 +1005,50 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees =
     ))
 }
 
-
+## DEAD CODE ##
 # CLEAR fit_lm for regression and can be integrated into pcc and prcc, defaults are lists declared in data_processing ####
 # example call for bipol_true regressed onto mae and variance: test <- fit_lm(df_batch, param_cols = param_cols_by_model[["bipolarization_TRUE"]], 
 # output_cols = c("mae", "opinion_variance"))
-fit_lm <- function(df, param_cols, output_cols, standardize = FALSE) {
+# fit_lm <- function(df, param_cols, output_cols, standardize = FALSE) {
   
-  # ensure param_cols passed are numeric
-  df <- df %>%
-    mutate(across(all_of(param_cols), ~ as.numeric(.)))
+#   # ensure param_cols passed are numeric
+#   df <- df %>%
+#     mutate(across(all_of(param_cols), ~ as.numeric(.)))
   
-  # optional standardization (standardize = TRUE)
-  if (standardize) {
-    df <- df %>%
-      mutate(across(all_of(param_cols), ~(. - mean(., na.rm = TRUE)) / sd(., na.rm = TRUE)),
-             across(all_of(output_cols), ~(. - mean(., na.rm = TRUE)) / sd(., na.rm = TRUE))
-    )
-  }
-  # initialize results storage
-  lm_results <- list()
+#   # optional standardization (standardize = TRUE)
+#   if (standardize) {
+#     df <- df %>%
+#       mutate(across(all_of(param_cols), ~(. - mean(., na.rm = TRUE)) / sd(., na.rm = TRUE)),
+#              across(all_of(output_cols), ~(. - mean(., na.rm = TRUE)) / sd(., na.rm = TRUE))
+#     )
+#   }
+#   # initialize results storage
+#   lm_results <- list()
   
-  # loop over outputs for multiple outputs the curly takes care of storage and lm model fit
-  for (var in output_cols) {
-    if (!var %in% colnames(df)) next
+#   # loop over outputs for multiple outputs the curly takes care of storage and lm model fit
+#   for (var in output_cols) {
+#     if (!var %in% colnames(df)) next
   
-  # build formula
-  formula_obj <- as.formula(paste(var, "~", paste(param_cols, collapse = " + ")))
+#   # build formula
+#   formula_obj <- as.formula(paste(var, "~", paste(param_cols, collapse = " + ")))
   
-  # fit formula
-  model <- lm(formula_obj, data = df)
+#   # fit formula
+#   model <- lm(formula_obj, data = df)
   
-  # results store R squared and tidy results
-  lm_results[[var]] <- data.frame(
-    output = var,
-    r_square = summary(model)$r.squared,
-    tidy(model)
-  )
-  }
+#   # results store R squared and tidy results
+#   lm_results[[var]] <- data.frame(
+#     output = var,
+#     r_square = summary(model)$r.squared,
+#     tidy(model)
+#   )
+#   }
   
-  # r bind results
-  lm_results_df <- bind_rows(lm_results, .id = "output")
+#   # r bind results
+#   lm_results_df <- bind_rows(lm_results, .id = "output")
   
-  # return results
-  return(lm_results_df)
-}
+#   # return results
+#   return(lm_results_df)
+# }
                   
 #' Generate GAML Parameter Bound Declarations from Top-Performing Configs 24/7/26 (update to incorporate guards and initialize as characters)
 #' update 6/8/26 added SD parameters so they don't get skipped in generation, header block addition
@@ -1594,10 +1594,12 @@ compute_valence_asymmetry <- function(df) {
     )
 }
 
-#' compute pdp 6/8/26
+#' Compute PDP Objects 6/8/26
 #'
 #' pdp is: for each grid value v of the feature, overwrite that column with 
 #' v across all rows, predict, average.
+#'
+#' @param rf_fit 
 compute_pdp <- function(rf_fit, X, feature, grid_n = 40, max_rows = 2000, trim = 0.025) {
     if (!feature %in% names(X)) stop("feature not in X: ", feature)
 
@@ -1619,11 +1621,25 @@ compute_pdp <- function(rf_fit, X, feature, grid_n = 40, max_rows = 2000, trim =
     data.frame(feature = feature, x = grid, yhat = yhat)
 }
 
-#' pdp for every parameter in every design cell
+#' Compute PDP per Parameter per Design Cell 6/8/26
 #'
 #' rebuilds each cell's X the same way run_sensi_analysis did
 #' column order matches what the forest was trained on. (need two identifiers
 #' lookup_key (model_distinct) for param columns and key (speaking arm) for the fitted model)
+#'
+#' @param df_batch a dataframe consisting of batch level data for an algorithm
+#' @param sensi_obj output of \code{run_sensi_analysis} which is a list containing $rf_mod_list (itself
+#'   a named list of fitted ranger models keyed by `model_distinct_speak_output` and $rf which is the R squared quality table)
+#' @param param_cols_by_model a list object that contains the paramter columns for each model_type
+#'   to be associated with df_batch so that PDP can be computed with the correct parameters
+#' @param 'output' a specification of the output variable that the PDP computation should use to calculate the fit
+#' @param grid_n an object stating the number of evenly spaced values along each parameter's range for which partial dependence is evaluated
+#'
+#' @return a tibble with one row per grid point per parameter per design cell, containing columns:
+#'   feature, x, yhat, key, model_type, use_distinct_agents, speaking_mode, output / empty tibble if no forests are found
+#'
+#' @note key naming must match between \code{run_sensi_analysis} and current function - speak/nospeak not TRUE/FALSE for speaking arm
+#' @note current functio filters `no_change` from cell list since no forest exists for the baseline
 pdp_all_cells <- function(df_batch, sensi_obj, param_cols_by_model,
                           output = "mae", grid_n = 40) {
     out <- list()
@@ -1671,16 +1687,26 @@ pdp_all_cells <- function(df_batch, sensi_obj, param_cols_by_model,
     bind_rows(out)
 }
 
-#' Bounds from pdp
-#' keep region where pdp is within its 'tol' of its own minimum
+#' Bounds Generation from PDP 6/8/26
+#' 
+#' Meant to keep region where pdp is within its 'tol' of its own minimum
 #' this matters because a bare yhat <= threshold filter can return and min and max
 #' spanning a hump between two separate basins
 #'
-#' Function is a complement to param_region_extraction(). Compare the two and use the union 
-#' if they disagree
-#' interpretation: 
-#' flat near 1 means param bearely matters in that cell (forest sees near horizontal surface)
-#' pdp_argmin sitting on either end of searched range is boundary solution
+#' Function is a complement to param_region_extraction(). Compare the two and use the union if they disagree
+#' interpretation: flat near 1 means param bearely matters in that cell (forest sees near horizontal surface)
+#'   pdp_argmin sitting on either end of searched range is boundary solution
+#'
+#' @param pdp_df output from \code{pdp_all_cells} a tibble containing partial dependence per parameter per design cell
+#' @param tol a threshold to determine the range of minimum acceptable values for each parameter
+#'
+#' @return a dataframe that records the partial dependence for each parameter per design cell that is ready to be plotted,
+#'  containing: \code{pdp_min} the minimum pdp value for a parameter (i.e. the best value), \code{pdp_argmin} the x axis (parameter value)
+#'  that minimizes MAE, \code{lo} the starting position of parameter value which is within the tolerance of the minimu, \code{hi} the ending 
+#'  position where the parameter value stays within the range of the minimum, \code{flat} the ratio of the range between starting and ending positions of parameter values
+#'  as a fraction of the total vertical range where the parameters are 'ok' (fraction of searched param range that is good enough)
+#'
+#' @note think of PDP as x (param values) and y (predicted MAE)
 bounds_from_pdp <- function(pdp_df, tol = 0.02) {
   pdp_df %>%
     group_by(key, model_type, use_distinct_agents, speaking_mode, feature) %>%

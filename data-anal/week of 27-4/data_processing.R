@@ -171,6 +171,9 @@ run_configs$ga_val   <- val
 #' processed_ga  <- process_run(run_configs$ga_main)
 #' }
 process_run <- function(config) {
+  # DUCKDB Connection for all files if necessary 3/9/26
+  con <- dbConnect(duckdb())
+    
   # BATCH LEVEL
   # load via load_and_prepare (prepare_data + append_metadata + composition_filter)
   # if LHS and version_scope == "both": load v1 and v2, combine into versions
@@ -224,7 +227,9 @@ process_run <- function(config) {
   }
 
   log_step("Starting Agent Loading Block")
-  df_ag = load_and_prepare(target_agent_path, config, col_names = ag_cols)
+  ag_pull_cols <- c("model_type", "current_condition", "selected_debate_id", "debate_label", "use_distinct_agents", "speaking_mode", "individual_error",
+                 "agent_id", "convergence_cycle", "logged_batch_seed", "opinion", "final_attitude", "initial_opinion", "pro_reduction", "opinion_change")
+  df_ag = load_and_prepare(target_agent_path, config, col_names = ag_cols, pull_cols = ag_pull_cols, con = con)
   
   # INTERACTION LEVEL
   # prepare_interactions + left_join pro_reduction from df_ag
@@ -306,6 +311,10 @@ process_run <- function(config) {
   df_sum_directional_valence <- NULL
   df_valence <- NULL
   df_upset <- NULL
+
+  # GUARD to skip given that we don't pull the full df_ag into memory (change once the chain is optimized) 3/9/26
+  if (ncol(df_ag) >= 51) {
+    
   if (!is.null(df_directional_agents)) {
       log_step("Starting Valence Analysis Chunk: summarized valence for models first")
       df_sum_directional_valence <- summarize_directional_valence(df_directional_agents) # summarize directional valence for models
@@ -362,10 +371,15 @@ process_run <- function(config) {
                   .names = "pro_{.col}"),
            across(starts_with("accuracy_asymmetry_"), ~ .x < 0,
                   .names = "anti_{.col}"))
-}
+  }
+  } else {
+    log_step("Skipping valence chain - reduced column set from duckdb load")
+  }
+
+  
     
   # RETURN LIST with consistent slot names regardless of run_type
-  list(
+  result <- list(
     config                = config,
     df_batch              = df_batch,
     lhs_versions          = if (config$run_type == "LHS" && config$version_scope == "both") lhs_versions else NULL,
@@ -379,7 +393,11 @@ process_run <- function(config) {
     df_valence            = df_valence,
     df_sum_directional_valence = df_sum_directional_valence,
     df_upset              = df_upset
-  ) 
+  )
+
+  # DUCKDB DISCONNECT to avoid leaks 3/9/26
+  dbDisconnect(con)
+  return(result)
 }
 
 # lists declaration for parquet reading and sensitivity analyses

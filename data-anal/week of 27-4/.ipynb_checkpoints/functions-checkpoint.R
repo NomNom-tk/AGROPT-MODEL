@@ -134,6 +134,29 @@ append_metadata <- function(df, config, version = NA) {
     )
 }
 
+# TODO 2/9/26 
+#' meant to set up a duckdb query to select a limited amount of rows from the parquet files
+#' modified 3/9/26 to grep for parquet and if TRUE pull query through pull_cols and parquet_path
+#' if FALSE error and suggest generating a parquet cache before proceeding
+load_via_duckdb <- function(parquet_path, pull_cols, con) {
+
+  # if input is parquet then read parquet
+  if (grepl("\\.parquet$", parquet_path, ignore.case  = TRUE)) {
+    # turn pull_cols into a comma separated string, could use paste with the collapse argument
+    query_cols <- paste(pull_cols, collapse = ",")
+    
+    # sprintf call with two %s placeholders, one for columns string and one for the path
+    sql_query <- sprintf(" SELECT %s FROM read_parquet('%s') WHERE agent_id IS NOT NULL", query_cols, parquet_path)
+    
+    df <- dbGetQuery(con, sql_query)
+
+    return(df)
+  } else { 
+    rlang::abort("No parquet file found, run generate_parquet_cache first")
+  }
+}
+
+
 #' WriteLines for Hypotheses 24/8/26
 #'
 #' Writes results to a .txt file for output, should be used after each hypothesis
@@ -235,24 +258,40 @@ empirical_prep <- function(path) {
 ## append meta data attaches, run type, composition scope and verison columns
 ## aply composition filter to M/H?all filter\
 # returns single clean df
-load_and_prepare <- function(path, config, version = NA, col_names = NULL) {
+load_and_prepare <- function(path, config, version = NA, col_names = NULL, con = NULL, pull_cols = NULL) {
   
   # guard: return NULL if path is NULL or file does not exist
   if (is.null(path) || !file.exists(path)) {
     warning(paste("File read aborted: Path is NULL or doesnt exist at:", path))
     return(NULL)
   }
-  
-  df <- path %>%
-    read_clean(col_names = col_names) %>%
-    apply_batch_mutations() %>%
-    add_design_cell() %>%
-    add_param_set_id() %>%
-    bipol_constraint_filter() %>%
-    append_metadata(config, version = version) %>%
-    apply_composition_filter(config)
-  
-  return(df)
+
+  parquet_version <- sub("\\.csv$", ".parquet", path)
+
+  # basic path or parquet read
+  if (!is.null(con) && !is.null(pull_cols) && file.exists(parquet_version)) {
+    df <- parquet_version %>%
+      load_via_duckdb(pull_cols, con) %>%
+      apply_batch_mutations() %>%
+      add_design_cell() %>%
+      add_param_set_id() %>%
+      bipol_constraint_filter() %>%
+      append_metadata(config, version = version) %>%
+      apply_composition_filter(config)
+
+    return(df)
+  } else {
+    df <- path %>%
+        read_clean(col_names = col_names) %>%
+        apply_batch_mutations() %>%
+        add_design_cell() %>%
+        add_param_set_id() %>%
+        bipol_constraint_filter() %>%
+        append_metadata(config, version = version) %>%
+        apply_composition_filter(config)
+      
+      return(df)  
+  }
 }
 
 # TODO empirical_stats ----

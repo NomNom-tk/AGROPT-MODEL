@@ -146,7 +146,7 @@ load_via_duckdb <- function(parquet_path, pull_cols, con) {
     query_cols <- paste(pull_cols, collapse = ",")
     
     # sprintf call with two %s placeholders, one for columns string and one for the path
-    sql_query <- sprintf(" SELECT %s FROM read_parquet('%s') WHERE agent_id IS NOT NULL", query_cols, parquet_path)
+    sql_query <- sprintf(" SELECT %s FROM read_parquet('%s')", query_cols, parquet_path)
     
     df <- dbGetQuery(con, sql_query)
 

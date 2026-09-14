@@ -178,6 +178,23 @@ run_configs$ga_val       <- val
 process_run <- function(config) {
   # DUCKDB Connection for all files if necessary 3/9/26
   con <- dbConnect(duckdb())
+  use_duckdb_batch <- (config$analysis_scope == "sensitivity" && !is.null(con))
+
+  # Batch and Agent Col declarations for DuckDB 14/9/26
+  ag_pull_cols <- c("model_type", "current_condition", "selected_debate_id", "debate_label", "use_distinct_agents", "speaking_mode", "individual_error",
+                     "agent_id", "convergence_cycle", "logged_batch_seed", "opinion", "final_attitude", "initial_opinion", "pro_reduction", "opinion_change")
+  batch_pull_cols <- c("model_type", "speaking_mode", "use_distinct_agents", "convergence_rate", "confidence_threshold", "repulsion_strength", 
+                       "repulsion_threshold", "convergence_rate_sd", "confidence_threshold_sd", "repulsion_strength_sd", "repulsion_threshold_sd", 
+                       "mae", "convergence_cycle", "opinion_variance", "debate_label", "selected_debate_id", "converged")
+
+  # helper for batch path loading 14/9/26
+  load_batch <- function(path, version) {
+    if (use_duckdb_batch) {
+      load_and_prepare(path, config, version, col_names = batch_cols, pull_cols = batch_pull_cols, con = con)
+    } else {
+      load_and_prepare(path, config, version, col_names = batch_cols)
+    }
+  }
     
   # BATCH LEVEL
   # load via load_and_prepare (prepare_data + append_metadata + composition_filter)
@@ -188,10 +205,17 @@ process_run <- function(config) {
   
   # Batch loading with safety guard
   ## look at path sub-list
+  
   if (config$version_scope == "both") {
     # 1. Extract data frames safely ONLY if paths exist
-    df_v1 <- if(!is.null(config$batch$v1$path)) load_and_prepare(config$batch$v1$path, config, config$batch$v1$version, col_names = batch_cols) else NULL
-    df_v2 <- if(!is.null(config$batch$v2$path)) load_and_prepare(config$batch$v2$path, config, config$batch$v2$version, col_names = batch_cols) else NULL
+    df_v1 <- if(!is.null(config$batch$v1$path)) {
+      load_batch(config$batch$v1$path, config$batch$v1$version)
+    } else NULL
+
+    # df_v2 if it exists
+    df_v2 <- if(!is.null(config$batch$v2$path)) {
+      load_batch(config$batch$v2$path, config$batch$v2$version)
+    } else NULL
     
     # 2. Assign outputs conditionally based on what loaded successfully
     if (!is.null(df_v1) && !is.null(df_v2)) {
@@ -206,7 +230,7 @@ process_run <- function(config) {
     }
     
   } else { # fixed fallback to v1 bug with version_scope == v2 15/7/26
-    target_path    <- if (config$version_scope == "v2" && !is.null(config$batch$v2$path)) {
+    target_path <- if (config$version_scope == "v2" && !is.null(config$batch$v2$path)) {
         config$batch$v2$path
     } else {
         if (config$version_scope == "v2") {
@@ -220,7 +244,7 @@ process_run <- function(config) {
         config$batch$v1$version
     }
     
-    df_batch     <- if (!is.null(target_path)) load_and_prepare(target_path, config, target_version, col_names = batch_cols) else NULL
+    df_batch     <- if (!is.null(target_path)) load_batch(target_path, target_version) else NULL
     lhs_versions <- NULL
   }
   
@@ -232,9 +256,7 @@ process_run <- function(config) {
       target_agent_path = config$agent$v1$path
     }
     
-    log_step("Starting Agent Loading Block")
-    ag_pull_cols <- c("model_type", "current_condition", "selected_debate_id", "debate_label", "use_distinct_agents", "speaking_mode", "individual_error",
-                     "agent_id", "convergence_cycle", "logged_batch_seed", "opinion", "final_attitude", "initial_opinion", "pro_reduction", "opinion_change")
+    log_step("Starting Agent Loading Block via DuckDB")
     df_ag = load_and_prepare(target_agent_path, config, col_names = ag_cols, pull_cols = ag_pull_cols, con = con)
   } else {
     log_step("Skipping agent loading - sensitivity scope")

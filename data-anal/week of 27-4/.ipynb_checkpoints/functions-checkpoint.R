@@ -146,7 +146,7 @@ load_via_duckdb <- function(parquet_path, pull_cols, con) {
     query_cols <- paste(pull_cols, collapse = ",")
     
     # sprintf call with two %s placeholders, one for columns string and one for the path
-    sql_query <- sprintf(" SELECT %s FROM read_parquet('%s') WHERE agent_id IS NOT NULL", query_cols, parquet_path)
+    sql_query <- sprintf(" SELECT %s FROM read_parquet('%s')", query_cols, parquet_path)
     
     df <- dbGetQuery(con, sql_query)
 
@@ -1702,7 +1702,7 @@ pdp_all_cells <- function(df_batch, sensi_obj, param_cols_by_model,
 #'
 #' @return a dataframe that records the partial dependence for each parameter per design cell that is ready to be plotted,
 #'  containing: \code{pdp_min} the minimum pdp value for a parameter (i.e. the best value), \code{pdp_argmin} the x axis (parameter value)
-#'  that minimizes MAE, \code{lo} the starting position of parameter value which is within the tolerance of the minimu, \code{hi} the ending 
+#'  that minimizes MAE, \code{lo} the starting position of parameter value which is within the tolerance of the minimum, \code{hi} the ending 
 #'  position where the parameter value stays within the range of the minimum, \code{flat} the ratio of the range between starting and ending positions of parameter values
 #'  as a fraction of the total vertical range where the parameters are 'ok' (fraction of searched param range that is good enough)
 #'

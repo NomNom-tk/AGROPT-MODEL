@@ -23,13 +23,9 @@
 \usepackage{times}
 \usepackage{geometry}
 \usepackage{titlesec}
-\usepackage[english]{babel}
-
 % ---------------------------------
 % LAYOUT
 % ---------------------------------
-
-
 
 \flushbottom
 

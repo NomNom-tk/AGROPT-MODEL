@@ -3,27 +3,29 @@
 # functions source before proper integration
 source("./functions.R")
 
-# package imports
-#library(rvg)
-#library(officer)
-#library(flextable)
-#library(tidygraph)
-#library(igraph)
-#library(ggraph)
-#library(DT)
+# Core Data Stack
+library(tidyverse)
+library(janitor)
+library(arrow)
+library(DBI)
+library(duckdb)
+library(duckplyr)
+
+# Modelling
 library(lme4)
 library(lmerTest)
-library(janitor)
+library(broom)
+library(performance)
+library(see)
+
+# Sensitivity
+library(sensitivity)
+library(ranger)
+
+# Visualization
 library(patchwork)
 library(plotly)
 library(ComplexUpset)
-library(arrow) # write parquet files to circumvent data sizes 27/7/26
-library(tidyverse)
-library(duckplyr)
-
-# to namespace
-library(broom)
-#library(lm.beta)
 
 # run config declarations
 ## TODO 1/6/26, consider refactoring to different layers, makes run_type agnostic of the rest
@@ -36,54 +38,57 @@ val <- list()
 # ==========================================
 # 2. BUILD THE LHS CONFIGURATION
 # ==========================================
-lhs$run_type          <- "LHS"
-lhs$composition_scope <- "ALL"
-lhs$version_scope     <- "v1"
+lhs$run_type             <- "LHS"
+lhs$composition_scope    <- "ALL"
+lhs$version_scope        <- "v1"
+lhs$analysis_scope       <- "sensitivity"
 
-lhs$batch$v1$path     <- "./data/lhs_batch_summary.csv"
-lhs$batch$v1$version  <- "v1_7_5_100c"
+lhs$batch$v1$path        <- "./data/lhs_batch_summary.csv"
+lhs$batch$v1$version     <- "v1_7_5_100c"
 
-lhs$batch$v2$path     <- NULL
-lhs$batch$v2$version  <- "v2_30-4_dyn"
+lhs$batch$v2$path        <- NULL
+lhs$batch$v2$version     <- "v2_30-4_dyn"
 
-lhs$agent$v1$path     <- "./data/lhs_agent_level_results.csv"
-lhs$agent$v2          <- NULL
+lhs$agent$v1$path        <- "./data/lhs_agent_level_results.csv"
+lhs$agent$v2             <- NULL
 
-lhs$interaction$v1$path <- "./data/lhs_interaction_log.csv"
-lhs$interaction$v2      <- NULL
+lhs$interaction$v1$path  <- "./data/lhs_interaction_log.csv"
+lhs$interaction$v2       <- NULL
 
 # ==========================================
 # 3. BUILD THE GA CONFIGURATION
 # ==========================================
-ga$run_type          <- "GA"
-ga$composition_scope <- "ALL"
-ga$version_scope     <- "v1"
+ga$run_type              <- "GA"
+ga$composition_scope     <- "ALL"
+ga$version_scope         <- "v1"
+ga$analysis_scope        <- "hypotheses"
 
-ga$batch$v1$path     <- "./data/ga_batch_summary.csv"
-ga$batch$v1$version  <- "ga_v1"
+ga$batch$v1$path         <- "./data/ga_batch_summary.csv"
+ga$batch$v1$version      <- "ga_v1"
 
-ga$agent$v1$path     <- "./data/ga_agent_level_results.csv"
-ga$interaction$v1$path <- "./data/ga_interaction_log.csv"
+ga$agent$v1$path         <- "./data/ga_agent_level_results.csv"
+ga$interaction$v1$path   <- "./data/ga_interaction_log.csv"
 
 # ==========================================
 # 4. BUILD THE GA VALIDATION
 # ==========================================
-val$run_type         <- "VAL"
-val$composition_scope <- "ALL"
-val$version_scope    <- "v1"
+val$run_type             <- "VAL"
+val$composition_scope    <- "ALL"
+val$version_scope        <- "v1"
+val$analysis_scope       <- "validation"
 
-val$batch$v1$path    <- "./data/val_batch_summary.csv"
-val$batch$v1$version <- "ga_val_v1"
+val$batch$v1$path        <- "./data/val_batch_summary.csv"
+val$batch$v1$version     <- "ga_val_v1"
 
-val$agent$v1$path     <- "./data/val_agent_level_results.csv"
+val$agent$v1$path        <- "./data/val_agent_level_results.csv"
 val$interactions$v1$path <- "./data/val_interaction_log.csv"
 
 # ==========================================
 # 5. ASSIGN TO MASTER CONTAINER
 # ==========================================
-run_configs$lhs_main <- lhs
-run_configs$ga_main  <- ga
-run_configs$ga_val   <- val
+run_configs$lhs_main     <- lhs
+run_configs$ga_main      <- ga
+run_configs$ga_val       <- val
 
 #' Load and process one simulation run (LHS or GA) into canonical analysis objects 28/5/26
 #' 
@@ -173,6 +178,23 @@ run_configs$ga_val   <- val
 process_run <- function(config) {
   # DUCKDB Connection for all files if necessary 3/9/26
   con <- dbConnect(duckdb())
+  use_duckdb_batch <- (config$analysis_scope == "sensitivity" && !is.null(con))
+
+  # Batch and Agent Col declarations for DuckDB 14/9/26
+  ag_pull_cols <- c("model_type", "current_condition", "selected_debate_id", "debate_label", "use_distinct_agents", "speaking_mode", "individual_error",
+                     "agent_id", "convergence_cycle", "logged_batch_seed", "opinion", "final_attitude", "initial_opinion", "pro_reduction", "opinion_change")
+  batch_pull_cols <- c("model_type", "speaking_mode", "use_distinct_agents", "convergence_rate", "confidence_threshold", "repulsion_strength", 
+                       "repulsion_threshold", "convergence_rate_sd", "confidence_threshold_sd", "repulsion_strength_sd", "repulsion_threshold_sd", 
+                       "mae", "convergence_cycle", "opinion_variance", "debate_label", "selected_debate_id", "converged", "logged_batch_seed", "neutral_zone_width")
+
+  # helper for batch path loading 14/9/26
+  load_batch <- function(path, version) {
+    if (use_duckdb_batch) {
+      load_and_prepare(path, config, version, col_names = batch_cols, pull_cols = batch_pull_cols, con = con)
+    } else {
+      load_and_prepare(path, config, version, col_names = batch_cols)
+    }
+  }
     
   # BATCH LEVEL
   # load via load_and_prepare (prepare_data + append_metadata + composition_filter)
@@ -183,10 +205,17 @@ process_run <- function(config) {
   
   # Batch loading with safety guard
   ## look at path sub-list
+  
   if (config$version_scope == "both") {
     # 1. Extract data frames safely ONLY if paths exist
-    df_v1 <- if(!is.null(config$batch$v1$path)) load_and_prepare(config$batch$v1$path, config, config$batch$v1$version, col_names = batch_cols) else NULL
-    df_v2 <- if(!is.null(config$batch$v2$path)) load_and_prepare(config$batch$v2$path, config, config$batch$v2$version, col_names = batch_cols) else NULL
+    df_v1 <- if(!is.null(config$batch$v1$path)) {
+      load_batch(config$batch$v1$path, config$batch$v1$version)
+    } else NULL
+
+    # df_v2 if it exists
+    df_v2 <- if(!is.null(config$batch$v2$path)) {
+      load_batch(config$batch$v2$path, config$batch$v2$version)
+    } else NULL
     
     # 2. Assign outputs conditionally based on what loaded successfully
     if (!is.null(df_v1) && !is.null(df_v2)) {
@@ -201,7 +230,7 @@ process_run <- function(config) {
     }
     
   } else { # fixed fallback to v1 bug with version_scope == v2 15/7/26
-    target_path    <- if (config$version_scope == "v2" && !is.null(config$batch$v2$path)) {
+    target_path <- if (config$version_scope == "v2" && !is.null(config$batch$v2$path)) {
         config$batch$v2$path
     } else {
         if (config$version_scope == "v2") {
@@ -215,21 +244,25 @@ process_run <- function(config) {
         config$batch$v1$version
     }
     
-    df_batch     <- if (!is.null(target_path)) load_and_prepare(target_path, config, target_version, col_names = batch_cols) else NULL
+    df_batch     <- if (!is.null(target_path)) load_batch(target_path, target_version) else NULL
     lhs_versions <- NULL
   }
   
   # AGent level loading
-  if (config$version_scope == "v2" && !is.null(config$agent$v2$path)) {
-    target_agent_path = config$agent$v2$path
+  if (config$analysis_scope != "sensitivity") {
+    if (config$version_scope == "v2" && !is.null(config$agent$v2$path)) {
+      target_agent_path = config$agent$v2$path
+    } else {
+      target_agent_path = config$agent$v1$path
+    }
+    
+    log_step("Starting Agent Loading Block via DuckDB")
+    df_ag = load_and_prepare(target_agent_path, config, col_names = ag_cols, pull_cols = ag_pull_cols, con = con)
   } else {
-    target_agent_path = config$agent$v1$path
+    log_step("Skipping agent loading - sensitivity scope")
+    df_ag <- NULL
   }
-
-  log_step("Starting Agent Loading Block")
-  ag_pull_cols <- c("model_type", "current_condition", "selected_debate_id", "debate_label", "use_distinct_agents", "speaking_mode", "individual_error",
-                 "agent_id", "convergence_cycle", "logged_batch_seed", "opinion", "final_attitude", "initial_opinion", "pro_reduction", "opinion_change")
-  df_ag = load_and_prepare(target_agent_path, config, col_names = ag_cols, pull_cols = ag_pull_cols, con = con)
+    
   
   # INTERACTION LEVEL
   # prepare_interactions + left_join pro_reduction from df_ag
@@ -302,6 +335,8 @@ process_run <- function(config) {
     df_directional_agents <- prepare_directional(df_ag) # unsummarized directional
     log_step("Starting summarized Directional df")
     df_directional <- summarize_directional(df_directional_agents) # summarized version
+  } else {
+    log_step("Skipping directional dfs, sensitivity scope")
   }
 
   # Valence/Signed error (30/6/26)
@@ -312,68 +347,70 @@ process_run <- function(config) {
   df_valence <- NULL
   df_upset <- NULL
 
-  # GUARD to skip given that we don't pull the full df_ag into memory (change once the chain is optimized) 3/9/26
-  if (ncol(df_ag) >= 51) {
+  if (config$analysis_scope %in% c("validation", "hypotheses")) {
+      # GUARD to skip given that we don't pull the full df_ag into memory (change once the chain is optimized) 3/9/26
+      if (ncol(df_ag) >= 51) {
+        
+      if (!is.null(df_directional_agents)) {
+          log_step("Starting Valence Analysis Chunk: summarized valence for models first")
+          df_sum_directional_valence <- summarize_directional_valence(df_directional_agents) # summarize directional valence for models
+          df_valence <- compute_valence_asymmetry(df_sum_directional_valence) # valence df with additional valence metrics
+      }
     
-  if (!is.null(df_directional_agents)) {
-      log_step("Starting Valence Analysis Chunk: summarized valence for models first")
-      df_sum_directional_valence <- summarize_directional_valence(df_directional_agents) # summarize directional valence for models
-      df_valence <- compute_valence_asymmetry(df_sum_directional_valence) # valence df with additional valence metrics
-  }
-
-  if (!is.null(df_sum_directional_valence)) {
-    log_step("Upset df calculation starting...")
-    df_upset <- df_sum_directional_valence %>% # added 6/7/26 for upset plots
-      group_by(design_cell, selected_debate_id, model_type) %>%
-      summarize(pct_correct_dir = mean(pct_correct_dir), .groups = "drop") %>%
-      pivot_wider(names_from = model_type, values_from = pct_correct_dir)
-
-  # guard ensuring expected target columns exist as numeric vectors if missing from df
-  for (col in c("bipolarization", "consensus", "clustering")) {
-    if (!col %in% colnames(df_upset)) {
-      df_upset[[col]] <- NA_real_
-    }
-  }
-     
-  df_upset <- df_upset %>%
-    mutate(
-        bipol_correct = bipolarization > 0.5,
-        clust_correct = clustering > 0.5,
-        cons_correct = consensus > 0.5) 
-      
-  #guard to safely join df_valence only if it exists and is non empty
-  # update 6/8/26 widen asymmetries per model
-  if (!is.null(df_valence) && nrow(df_valence) > 0) {
-    valence_wide <- df_valence %>%
-    group_by(design_cell, selected_debate_id, model_type) %>%
-    summarize(accuracy_asymmetry = mean(accuracy_asymmetry, na.rm = TRUE),
-              error_asymmetry = mean(error_asymmetry, na.rm = TRUE),
-              .groups = "drop") %>%
-    pivot_wider(names_from = model_type,
-                values_from = c(accuracy_asymmetry, error_asymmetry))
-  stopifnot(!any(duplicated(valence_wide[c("design_cell", "selected_debate_id")]))) # guard
-
-      
-    df_upset <- df_upset %>%
-    left_join(
-        valence_wide,
-        by = c("design_cell", "selected_debate_id")) 
-  } else {
-    df_upset <- df_upset %>%
-      mutate(across(paste0("accuracy_asymmetry_", c("bipolarization","clustering","consensus")),
-                  ~ NA_real_))
-  }
-
-  # compute bias flags safely
-  log_step("Bias flag computation for df_valence starting")
-  df_upset <- df_upset %>%
-    mutate(across(starts_with("accuracy_asymmetry_"), ~ .x > 0,
-                  .names = "pro_{.col}"),
-           across(starts_with("accuracy_asymmetry_"), ~ .x < 0,
-                  .names = "anti_{.col}"))
-  }
-  } else {
-    log_step("Skipping valence chain - reduced column set from duckdb load")
+      if (!is.null(df_sum_directional_valence)) {
+        log_step("Upset df calculation starting...")
+        df_upset <- df_sum_directional_valence %>% # added 6/7/26 for upset plots
+          group_by(design_cell, selected_debate_id, model_type) %>%
+          summarize(pct_correct_dir = mean(pct_correct_dir), .groups = "drop") %>%
+          pivot_wider(names_from = model_type, values_from = pct_correct_dir)
+    
+      # guard ensuring expected target columns exist as numeric vectors if missing from df
+      for (col in c("bipolarization", "consensus", "clustering")) {
+        if (!col %in% colnames(df_upset)) {
+          df_upset[[col]] <- NA_real_
+        }
+      }
+         
+      df_upset <- df_upset %>%
+        mutate(
+            bipol_correct = bipolarization > 0.5,
+            clust_correct = clustering > 0.5,
+            cons_correct = consensus > 0.5) 
+          
+      #guard to safely join df_valence only if it exists and is non empty
+      # update 6/8/26 widen asymmetries per model
+      if (!is.null(df_valence) && nrow(df_valence) > 0) {
+        valence_wide <- df_valence %>%
+        group_by(design_cell, selected_debate_id, model_type) %>%
+        summarize(accuracy_asymmetry = mean(accuracy_asymmetry, na.rm = TRUE),
+                  error_asymmetry = mean(error_asymmetry, na.rm = TRUE),
+                  .groups = "drop") %>%
+        pivot_wider(names_from = model_type,
+                    values_from = c(accuracy_asymmetry, error_asymmetry))
+      stopifnot(!any(duplicated(valence_wide[c("design_cell", "selected_debate_id")]))) # guard
+    
+          
+        df_upset <- df_upset %>%
+        left_join(
+            valence_wide,
+            by = c("design_cell", "selected_debate_id")) 
+      } else {
+        df_upset <- df_upset %>%
+          mutate(across(paste0("accuracy_asymmetry_", c("bipolarization","clustering","consensus")),
+                      ~ NA_real_))
+      }
+    
+      # compute bias flags safely
+      log_step("Bias flag computation for df_valence starting")
+      df_upset <- df_upset %>%
+        mutate(across(starts_with("accuracy_asymmetry_"), ~ .x > 0,
+                      .names = "pro_{.col}"),
+               across(starts_with("accuracy_asymmetry_"), ~ .x < 0,
+                      .names = "anti_{.col}"))
+      }
+      } else {
+        log_step("Skipping valence chain - reduced column set from duckdb load")
+      }
   }
 
   

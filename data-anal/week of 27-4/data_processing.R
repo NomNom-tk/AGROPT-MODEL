@@ -185,7 +185,7 @@ process_run <- function(config) {
                      "agent_id", "convergence_cycle", "logged_batch_seed", "opinion", "final_attitude", "initial_opinion", "pro_reduction", "opinion_change")
   batch_pull_cols <- c("model_type", "speaking_mode", "use_distinct_agents", "convergence_rate", "confidence_threshold", "repulsion_strength", 
                        "repulsion_threshold", "convergence_rate_sd", "confidence_threshold_sd", "repulsion_strength_sd", "repulsion_threshold_sd", 
-                       "mae", "convergence_cycle", "opinion_variance", "debate_label", "selected_debate_id", "converged")
+                       "mae", "convergence_cycle", "opinion_variance", "debate_label", "selected_debate_id", "converged", "logged_batch_seed", "neutral_zone_width")
 
   # helper for batch path loading 14/9/26
   load_batch <- function(path, version) {

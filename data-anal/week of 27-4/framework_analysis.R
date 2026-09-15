@@ -752,9 +752,8 @@ analyze_processed_run <- function(df) {
   conv_diff <- NULL
   convergence_anal <- NULL
   df_conv_debate <- NULL
-    
-  if (analysis_scope == "sensitivity") {  
-      # ANALSCOPE: sensitivity
+      
+      # ANALSCOPE: ALL no guards
       h_vs_m <- df_batch %>%
         group_by(debate_composition, model_type, speaking_mode, use_distinct_agents) %>%
         summarize(mae_mean = mean(mae, na.rm = TRUE), mae_sd = sd(mae, na.rm = TRUE), n = n(), .groups = "drop")
@@ -817,7 +816,6 @@ analyze_processed_run <- function(df) {
           group_by(model_type, current_condition, outcome) %>%
           summarize(n = n(), .groups = "drop")
       }
-  }
   
   # ────────────────────────────────────────────────────────────────────────────
   # 5. NO-CHANGE BASELINE & STOCHASTIC CRUNCH
@@ -825,10 +823,8 @@ analyze_processed_run <- function(df) {
   baseline_comparison <- NULL
   stochasticity_check_1 <- NULL
   heterogeneity_check <- NULL
-    
-  if (analysis_scope == "sensitivity") {  
-      # ANALSCOPE: sensitivity
       
+      # ANALSCOPE: ALL no guards
       df_no_change <- df_batch %>%
         filter(model_type == "no_change")
       
@@ -849,7 +845,6 @@ analyze_processed_run <- function(df) {
       heterogeneity_check <- df_batch %>%
         group_by(model_type, use_distinct_agents) %>%
         summarize(mae_mean = mean(mae), mae_median = median(mae), mae_sd = sd(mae), n = n(), .groups = "drop")
-  }
   
   # ────────────────────────────────────────────────────────────────────────────
   # 6. MODEL COMPARISONS
@@ -859,8 +854,7 @@ analyze_processed_run <- function(df) {
   model_comparison_relative <- NULL
   failures_comp <- NULL
     
-  if (analysis_scope == "sensitivity") {
-      # ANALSCOPE: sensitivity
+      # ANALSCOPE: ALL no guards
       if (!is.null(lhs_versions)) {
         model_comparison_main <- lhs_versions %>%
           group_by(model_type, version, speaking_mode) %>%
@@ -906,7 +900,6 @@ analyze_processed_run <- function(df) {
           TRUE ~ num_clusters - initial_num_clusters)) %>%
           group_by(model_type, selected_debate_id) %>%
           summarize(mean_cluster_change = mean(cluster_change), .groups = "drop")
-  }
 
 # TODO Request GLPK package for RcppParallel for Network analysis
   # # ────────────────────────────────────────────────────────────────────────────

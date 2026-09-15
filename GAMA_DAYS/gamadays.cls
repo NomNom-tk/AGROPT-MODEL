@@ -23,6 +23,7 @@
 \usepackage{times}
 \usepackage{geometry}
 \usepackage{titlesec}
+\usepackage{hyperref}
 % ---------------------------------
 % LAYOUT
 % ---------------------------------

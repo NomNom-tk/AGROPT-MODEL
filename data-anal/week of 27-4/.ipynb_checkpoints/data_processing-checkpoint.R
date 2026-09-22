@@ -47,7 +47,7 @@ lhs$batch$v1$path        <- "./data/lhs_batch_summary.csv"
 lhs$batch$v1$version     <- "v1_7_5_100c"
 
 lhs$batch$v2$path        <- NULL
-lhs$batch$v2$version     <- "v2_30-4_dyn"
+lhs$batch$v2$version     <- ""
 
 lhs$agent$v1$path        <- "./data/lhs_agent_level_results.csv"
 lhs$agent$v2             <- NULL
@@ -315,14 +315,15 @@ process_run <- function(config) {
   #     }
   # }
 
-  # # EMPIRICAL
+  # EMPIRICAL 21/9/26 added back in
   # empirical_prep — same path regardless of run_type
   # canonical output: df_empirical
-  # df_empirical <- NULL
-  # empirical_path <- "./data/data_complete_anonymised.csv"
-  # if (file.exists(empirical_path)) {
-  #   df_empirical <- empirical_prep(empirical_path)
-  # }
+  df_empirical <- NULL
+  
+  empirical_path <- "./data/data_complete_anonymised.csv"
+	  if (file.exists(empirical_path)) {
+		  df_empirical <- empirical_prep(empirical_path)
+  }
   
   # DERIVED (first written 29/4/26)
   # prepare_directional + summarize_directional from df_ag
@@ -424,7 +425,7 @@ process_run <- function(config) {
     df_interactions       = df_interactions,
     df_influence          = df_influence,
     df_susceptibility     = df_susceptibility,
-    # df_empirical          = df_empirical,
+    df_empirical          = df_empirical,
     df_directional        = df_directional,
     df_directional_agents = df_directional_agents,
     df_valence            = df_valence,

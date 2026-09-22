@@ -825,7 +825,6 @@ analyze_processed_run <- function(df) {
   heterogeneity_check <- NULL
       
       # ANALSCOPE: ALL no guards
-      
       df_no_change <- df_batch %>%
         filter(model_type == "no_change")
       

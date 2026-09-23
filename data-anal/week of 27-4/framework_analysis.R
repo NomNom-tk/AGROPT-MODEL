@@ -50,13 +50,15 @@ analyze_processed_run <- function(df) {
   if (!is.null(df_empirical)) {
 
     # Summary stats and long pivot for faceted plot and ABM benchmarks
+	# update 23/9/26 changed empirical_stat_pivot to create a names pattern to properly capture: mean, sd, condition, period for each time
     empirical_stat_check <- empirical_stats(df_empirical)
     
     empirical_stat_pivot <- empirical_stat_check %>%
       pivot_longer(
-        cols = c(mean_change_t0_t1, mean_change_t1_t2, mean_change_t0_t2),
-        names_to = "change_type",
-        values_to = "value"
+        cols = c(mean_change_t0_t1, mean_change_t1_t2, mean_change_t0_t2,
+				sd_change_t0_t1, sd_change_t1_t2, sd_change_t0_t2),
+        names_to = c(".value", "period"),
+        names_pattern = "^(mean|sd)_change_(.+)$"
       )
     
 
@@ -158,6 +160,7 @@ analyze_processed_run <- function(df) {
   sensi_lhs <- list(rf = NULL, rf_mod_list = NULL)
   sensi_v1 <- NULL
   sensi_v2 <- NULL
+  pdp_all <- NULL
 
   # ANALSCOPE: Sensitivity
   if (config$run_type == "LHS" && config$analysis_scope == "sensitivity") {
@@ -170,8 +173,13 @@ analyze_processed_run <- function(df) {
 	  for (full_key in names(sensi_lhs$rf_mod_list)) {
 		 # find which output_col this key ends with
 		matched_output <- output_cols[sapply(output_cols, function(o)endsWith(full_key, o))]
-		# strip the output suffic with its leading underscore to get the lookup key
-		lookup_key <- sub(paste0("_", matched_output, "$"), "", full_key)
+
+		# strip output from: "bipolarization_FALSE_nospeak_mae" to "bipolarization_FALSE_nospeak"
+		after_output <- sub(paste0("_", matched_output, "$"), "", full_key)
+	    # strip the output suffic with its leading underscore to get the lookup key
+		lookup_key <- sub("_[^_]+$", "", after_output)
+		# extract speaking mode for filtering: "nospeak"
+		speak_val <- sub(".*_", "", after_output)
 		features <- param_cols_by_model[[lookup_key]]
 
 		if (is.null(features)) next
@@ -182,10 +190,13 @@ analyze_processed_run <- function(df) {
 		# now parse model_type and distinct from lookup_key
 		model_type_val <- sub("_[^_]+$", "", lookup_key) # eg consensus
 		distinct_val <- sub(".*_", "", lookup_key) # eg TRUE
-
+		# speak filter to add to df_batch_sensi
+		speak_filter <- (speak_val == "speak")
+											 
 		df_piece <- df_batch_sensi %>%
 			filter(model_type == model_type_val,
-				   use_distinct_agents == as.logical(distinct_val))
+				   use_distinct_agents == as.logical(distinct_val),
+				  speaking_mode == speak_filter)
 
 	    X <- df_piece[, intersect(features, colnames(df_piece)), drop = FALSE]
 
@@ -1106,13 +1117,14 @@ analyze_processed_run <- function(df) {
       rf_importance_model_types = function(output_filter = NULL) {
         df <- sensi_lhs$rf
         if (!is.null(output_filter)) df <- df %>% filter(output == output_filter)
-        plot_rf_importance(df)
+        plot_rf_importance_by_cell(df)
       },
       pdp_v1 = function(model_type_val, distinct_val, output, feature_name) {
-        plot_model_pdp(
-          sensi_lhs,
-          df_batch,
-          model_type_val, distinct_val, output, feature_name
+		prefix <- paste0(model_type_val, "_", distinct_val, "_")
+		df <- pdp_all %>%
+		  filter(grepl(prefix, key_feature) & grepl(output, key_feature) & grepl(feature_name, key_feature)) 
+		plot_pdp_grid(
+         df, output_filter = NULL
         )
       }
       #homogeneous_network_plots   = homogeneous_plots_combined, TODO commented out because interactions too long 8/3/26

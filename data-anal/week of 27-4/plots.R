@@ -356,10 +356,10 @@ plot_model_rank_versions <- function(df, color_col = NULL) { # use with main
     p <- p + aes(color = !!color_sym) +
       labs(color = color_col)
   } else {
-    #fallback to default
-    p <- p + geom_point(color = "darkblue", position = position_dodge(width = 0.5), size = 3) +
-      geom_errorbar(aes(ymin = mae_mean - mae_sd, ymax = mae_mean + mae_sd),
-                    color = "darkblue", width = 0.2)
+    # update 23/9/26 fallback to default using aes and scale color manual instead of duplicating geom_point&errorbar
+    p <- p + aes(color = "single") +
+	  scale_color_manual(values = c("single" = "darkblue")) +
+	  theme(legend.position = "none")
     
     message("No variable color (version) column found. Default to darkblue")
   }
@@ -580,21 +580,6 @@ plot_valence_accuracy <- function(df) {
 #'  \item{accuracy_asymmetry}{Numerical. Pct of agents where simulated direction change is in accordance with empirical (for pro_reduction) - those of anti_reduction}
 #'  \item{selected_debate_id}{String. Identifier of current debate for experiment}
 #'  \item{accuracy_asymmetry}{Boolean. Color injection: TRUE when pro_reduction 
-
-# plot_asymmetry_gap <- function(df) {
-#     ggplot(df, aes(x=accuracy_asymmetry, y = selected_debate_id, color = accuracy_asymmetry > 0)) +
-#     geom_point(alpha = 0.3) +
-#     geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
-#     geom_segment(aes(x = 0, xend = accuracy_asymmetry,
-#                      y = selected_debate_id, yend = selected_debate_id), alpha = 0.3) +
-#     facet_wrap(~ model_type) +
-#     scale_color_brewer(palette = "Set1") +
-#     labs(title = "Model Type Asymmetry per debate",
-#          subtitle = "Positive = Pro-reduction bias | Negative = Anti-reduction bias | Dashed line = No asymmetry",
-#          x = "Accuracy Asymmetry (Pro - Anti % Correct Direction)",
-#          y = "Debate ID")
-# }
-
 plot_asymmetry_gap <- function(df) {
     # If the df has multiple replicates per debate, aggregate to a single mean per debate first
     df_plot <- df %>%
@@ -605,7 +590,7 @@ plot_asymmetry_gap <- function(df) {
     geom_point(size = 2.5) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "darkgray", size = 0.8) +
     geom_segment(aes(x = 0, xend = accuracy_asymmetry,
-                     y = selected_debate_id, yend = selected_debate_id), size = 0.6) +
+                     y = selected_debate_id, yend = selected_debate_id), linewidth = 0.6) +
     facet_wrap(~ model_type) +
     scale_color_manual(values = c("TRUE" = "#377eb8", "FALSE" = "#e41a1c"),
                        labels = c("TRUE" = "Pro-Reduction Bias", "FALSE" = "Anti-Reduction Bias")) +
@@ -618,21 +603,6 @@ plot_asymmetry_gap <- function(df) {
     theme(axis.text.y = element_text(size = 6), # shrinks text so large batch debate lists fit cleanly
           panel.spacing = unit(1, "lines"))
 }
-
-#' Scatter Plot of Model Performance Considering Distinct Agents (Optional version aware)
-#'
-#' Creates a flipped coordinate scatter plot with error bars to illustrate the impact of using SDs for each agent across model types
-#' Optionally version aware (through use of \code{facet_wrap})
-#' 
-#' @param df A dataframe (usually \code{model_comparison_detailed}), a version of df_batch
-#' grouped by \{model_type, version, speaking_mode, use_distinct_agents} aand then summarized in terms of mean MAE
-#' \describe{
-#'   \item{reordered model_type, mae_mean}{Numerical. Meant to sort mae_mean by model_type}
-#'   \item{mae_mean}{Numerical. MAE for each model_type}
-#'   \item{version}{Character. Optional only if for different LHS/GA versions add this to speaking_mode and use_distinct_agents with \code{facet_wrap}}
-#' @return a ggplot object with \code{coord_flip()} and \code{geom_errorbar()}
-#' @note see (framework_analysis.R for calls in outputs list) / not used in Rmd.
-
 
 #' Colord Scatter Directional Agents 6/7/26
 #'
@@ -677,46 +647,6 @@ plot_simulated_delta_dist <- function(df) { # use with df_directional_agents
     labs(x = "Simulated Delta (opinion - initial_opinion)",
          y = "Density",
          title = "Distribution of Simulated Opinion Change by Valence")
-}
-
-## Model performance with distinct agents
-# fix version aware and defensive wrap
-
-#' Scatter Plot of Model Performance Considering Distinct Agents (Optional version aware)
-#'
-#' Creates a flipped coordinate scatter plot with error bars to illustrate the impact of using SDs for each agent across model types
-#' Optionally version aware (through use of \code{facet_wrap})
-#' 
-#' @param df A dataframe (usually \code{model_comparison_detailed}), a version of df_batch
-#' grouped by \{model_type, version, speaking_mode, use_distinct_agents} aand then summarized in terms of mean MAE
-#' \describe{
-#'   \item{reordered model_type, mae_mean}{Numerical. Meant to sort mae_mean by model_type}
-#'   \item{mae_mean}{Numerical. MAE for each model_type}
-#'   \item{version}{Character. Optional only if for different LHS/GA versions add this to speaking_mode and use_distinct_agents with \code{facet_wrap}}
-#' @return a ggplot object with \code{coord_flip()} and \code{geom_errorbar()}
-#' @note see (framework_analysis.R for calls in outputs list) / not used in Rmd.
-plot_model_comparison_uncertainty <- function(df) {
-  p <- ggplot(df, aes(x = reorder(model_type, mae_mean), y = mae_mean)) +
-    geom_point(size = 2.5, color = "blue") +
-    geom_errorbar(aes(
-      ymin = mae_mean - mae_sd,
-      ymax = mae_mean + mae_sd
-    ), width = 0.2) +
-    coord_flip() +
-    theme_minimal() +
-    labs(
-      title = "Model Performance with Distinct Agents",
-      subtitle = "Error bars = +- SD",
-      x = "Model Type",
-      y = "Mean MAE"
-    )
-  
-  if ("version" %in% colnames(df)) {
-    p <- p + facet_grid(version ~ speaking_mode + use_distinct_agents)
-  } else {
-    p <- p + facet_wrap(~ speaking_mode + use_distinct_agents)
-  }
-  return(p)
 }
 
 #' RF Importance Across Model Types 6/8/26

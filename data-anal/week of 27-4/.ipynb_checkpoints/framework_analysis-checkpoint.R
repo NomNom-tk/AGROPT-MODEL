@@ -155,7 +155,7 @@ analyze_processed_run <- function(df) {
   pcc_all  <- NULL
   prcc_all <- NULL
   df_version_summary <- NULL
-  sensi_lhs <- NULL
+  sensi_lhs <- list(rf = NULL, rf_mod_list = NULL)
   sensi_v1 <- NULL
   sensi_v2 <- NULL
 
@@ -164,8 +164,40 @@ analyze_processed_run <- function(df) {
     df_batch_sensi <- df_batch |> collect()
     sensi_lhs <- run_sensi_analysis(df_batch_sensi,
                                     param_cols_by_model = param_cols_by_model,
-                                    output_cols = output_cols, num_trees = 500)
-    pcc_lhs  <- sensi_lhs$pcc
+									output_cols = output_cols, num_trees = 500)
+	# RF PDP computations
+	pdp_results <- list()
+	  for (full_key in names(sensi_lhs$rf_mod_list)) {
+		 # find which output_col this key ends with
+		matched_output <- output_cols[sapply(output_cols, function(o)endsWith(full_key, o))]
+		# strip the output suffic with its leading underscore to get the lookup key
+		lookup_key <- sub(paste0("_", matched_output, "$"), "", full_key)
+		features <- param_cols_by_model[[lookup_key]]
+
+		if (is.null(features)) next
+
+		rf_model <- sensi_lhs$rf_mod_list[[full_key]]
+
+		# filter batch data to this model/agent combo
+		# now parse model_type and distinct from lookup_key
+		model_type_val <- sub("_[^_]+$", "", lookup_key) # eg consensus
+		distinct_val <- sub(".*_", "", lookup_key) # eg TRUE
+
+		df_piece <- df_batch_sensi %>%
+			filter(model_type == model_type_val,
+				   use_distinct_agents == as.logical(distinct_val))
+
+	    X <- df_piece[, intersect(features, colnames(df_piece)), drop = FALSE]
+
+	    for (feat in colnames(X)) {
+		    pdp_results[[paste(full_key, feat, sep = "_")]] <- compute_pdp(rf_model, X,
+																		   feat, grid_n = 20)
+		}
+      }
+
+	pdp_all <- bind_rows(pdp_results, .id = "key_feature")
+		
+	pcc_lhs  <- sensi_lhs$pcc
     prcc_lhs <- sensi_lhs$prcc
     rf_lhs <- sensi_lhs$rf
     
@@ -188,14 +220,12 @@ analyze_processed_run <- function(df) {
         pcc_v1   <- sensi_v1$pcc %>% mutate(version = "v1")
         prcc_v1  <- sensi_v1$prcc %>% mutate(version = "v1")
         rf_v1 <- sensi_v1$rf %>% mutate(version = "v1")
-        sensi_v1$rf_mod_list <- sensi_v1$rf_mod_list
       }
       if (nrow(df_lhs_v2) > 0 && !is.null(config$batch$v2$path)) {
         sensi_v2 <- run_sensi_analysis(df_lhs_v2, param_cols_by_model, output_cols, num_trees = 500)
         pcc_v2   <- sensi_v2$pcc %>% mutate(version = "v2")
         prcc_v2  <- sensi_v2$prcc %>% mutate(version = "v2")
         rf_v2 <- sensi_v2$rf %>% mutate(version = "v2")
-        sensi_v2$rf_mod_list <- sensi_v2$rf_mod_list
       }
       
       if (exists("pcc_v1") && exists("pcc_v2"))   pcc_all  <- bind_rows(pcc_v1, pcc_v2)
@@ -209,11 +239,12 @@ analyze_processed_run <- function(df) {
   comparison_clean   <- NULL
   comparison_summary <- NULL
   ols_global_mae     <- NULL
+  ols_model          <- NULL
   mlm_model_h1a      <- NULL # standardized mlm for H1 with empirical data
   mlm_model_h1b_list <- list() # standardized mlm for H1 with simulated data
   abm_mae_debate     <- NULL
-  empirical_beta_val <- NULL
-  beta_distance <- NULL
+  empirical_beta_scalar <- NULL
+  beta_distance      <- NULL
   simulated_betas_raw <- NULL
   # new additions for implemented MLM hypotheses H3 & H5 28/8/26
   mlm_bench_h3       <- NULL
@@ -224,21 +255,7 @@ analyze_processed_run <- function(df) {
   abm_vs_nc          <- NULL
   abm_vs_mlm         <- NULL
   df_h5              <- NULL
-
-  # ────────────────────────────────────────────────────────────────────────────
-  # 3. OLS VS ABM COMPARISON (REQUIRES AGENT POPULATION DATA)
-  # ────────────────────────────────────────────────────────────────────────────
-  comparison_clean    <- NULL
-  comparison_summary  <- NULL
-  ols_global_mae      <- NULL
-  ols_model           <- NULL
-  mlm_model_h1a       <- NULL
-  mlm_model_h1b       <- NULL
-  abm_mae_debate      <- NULL
-  empirical_beta_val  <- NULL
-  beta_distance       <- NULL
-  simulated_betas_raw <- NULL
-  df_ag_deduped       <- NULL
+  df_ag_deduped      <- NULL
 
   # Guard for analysis scope "hypotheses" and "validation"
   if (analysis_scope %in% c("hypotheses", "validation")) {
@@ -257,8 +274,8 @@ analyze_processed_run <- function(df) {
       log_step("OLS vs ABM comparison initial mutation complete, starting df_ag slicing")
 
       # --- DIAGNOSTIC CHECK ---
-      message("\n[DIAGNOSTIC] Starting empirical MLM pipeline...")
-      message(sprintf(" -> Initial df_ag rows: %d", nrow(df_ag)))
+      #message("\n[DIAGNOSTIC] Starting empirical MLM pipeline...")
+      #message(sprintf(" -> Initial df_ag rows: %d", nrow(df_ag)))
 
       if ("current_condition" %in% names(df_ag)) {
         cond_levels <- unique(df_ag$current_condition)
@@ -536,7 +553,7 @@ analyze_processed_run <- function(df) {
 
         # Results log to .txt 24/8/26
         write_result("\n ABM vs No-Change Across Held-out Debates")
-        abm_vs_nc$model_type <- sub("_.*", "", abm_vs_mlm$design_cell)
+        abm_vs_nc$model_type <- sub("_.*", "", abm_vs_nc$design_cell)
         for (mt in unique(abm_vs_nc$model_type)) {
           header <- paste("\n", mt)
           subset <- abm_vs_nc %>% filter(model_type == mt)
@@ -570,7 +587,8 @@ analyze_processed_run <- function(df) {
           collect() %>%
           group_by(model_type) %>%
           summarize(abm_pooled_mae = mean(individual_error),
-                    mlm_pooled_mae = mean(df_empir_test$mlm_error)) %>%
+                    # intentional: every model is compared against the same MAE benchmark (single pooled reference)
+					mlm_pooled_mae = mean(df_empir_test$mlm_error)) %>%
           mutate(difference = abm_pooled_mae - mlm_pooled_mae,
                  h5_supported = abm_pooled_mae < mlm_pooled_mae)
 
@@ -955,7 +973,7 @@ analyze_processed_run <- function(df) {
         message("Notice: GAML GA bounds extraction started")
         lhs_regions <- param_region_extraction(df_batch, percentile = 0.25)
         gaml_ga <- generate_gaml_bounds(lhs_regions$regions)
-        print(head(gaml_ga))
+        #print(head(gaml_ga))
     
         # safe write guard to characters
         if (!is.null(gaml_ga) && length(gaml_ga) > 0) {
@@ -982,7 +1000,7 @@ analyze_processed_run <- function(df) {
     ),
     results = list(
       sensitivity = list(
-        combined = list(pcc = pcc_lhs, prcc = prcc_lhs, rf = sensi_lhs$rf, rf_models = sensi_lhs$rf_mod_list),
+        combined = list(pcc = pcc_lhs, prcc = prcc_lhs, rf = sensi_lhs$rf, rf_models = sensi_lhs$rf_mod_list, pdp_all = pdp_all),
         v1       = if(!is.null(sensi_v1)) list(pcc = sensi_v1$pcc, prcc = sensi_v1$prcc, rf = sensi_v1$rf, rf_models = sensi_v1$rf_mod_list) else NULL,
         v2       = if(!is.null(sensi_v2)) list(pcc = sensi_v2$pcc, prcc = sensi_v2$prcc, rf = sensi_v2$rf, rf_models = sensi_v2$rf_mod_list) else NULL
       ),
@@ -1045,9 +1063,10 @@ analyze_processed_run <- function(df) {
         plot_prcc_heatmap(prcc)},
       pcc_all    = function() plot_pcc_all_heatmap(pcc_all),
       prcc_all   = function() plot_prcc_all_heatmap(prcc_all),
-      abm_vs_ols = function() {
-          comparison_clean <- lhs_outputs$results$comparisons$ols_debate_mae
-          plot_ols_abm_comp(comparison_clean)},
+      # requires the lhs_outputs from a sensitivity_scope run where "sensitivity" is declared
+	  abm_vs_ols = function() {
+          #comparison_clean <- lhs_outputs$results$comparisons$ols_debate_mae
+          plot_ols_abm_comp(analysis_output_package$results$comparisons$ols_debate_mae)},	
       empirical_col   = function() plot_empir_compar(empirical_stat_check),
       empirical_cross = function() plot_empir_cross(empirical_pivot),
 

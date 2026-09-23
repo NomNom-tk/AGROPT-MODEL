@@ -8,7 +8,10 @@
 # Network: build_influence_network, enrich_graph_vertices, filter_top_nodes, filter_edges, build_network_graph
 # Revise: anchor_baseline_facets
 
-## Cleaning
+#---------------------
+# Cleaning
+#---------------------
+
 #' read_clean (created 7/5/26) 
 #' updated 27/7/26 strip stray chars from headers
 #' update 28/7/26 adjusted parquet syntax
@@ -252,8 +255,10 @@ write_result <- function(text, file = "./hypothesis_results.txt", append = TRUE)
     cat(text, "\n", file = file, append = append)
 }
 
-
+#---------------------
 # Metadata & Filtering
+#---------------------
+
 #' append_metadata (created 28/5/26)
 #' 
 #' Provenance travels with dfs, provides objects to call in analysis files and in rmd
@@ -270,6 +275,32 @@ append_metadata <- function(df, config, version = NA) {
       composition_scope = config$composition_scope,
       version = version
     )
+}
+
+#' anchor_baseline_facets (created 12/6/26)
+#'
+#' Duplicates no_change baseline rows across both TRUE/FALSE levels of a
+#' condition column so that faceted plots show the baseline in every panel.
+#'
+#' @param df Dataframe containing a model_type column and the condition column to facet by
+#' @param condition_col Character string naming the column to duplicate across (default "speaking_mode")
+#' @param baseline_val Character string identifying the baseline model_type (default "no_change")
+#'
+#' @return The input dataframe with baseline rows mirrored into both factor levels
+#'   of condition_col, original unassigned baseline rows removed to avoid duplicates.
+anchor_baseline_facets <- function(df, condition_col = "speaking_mode", baseline_val = "no_change") {
+
+  baseline_rows <- df %>%
+    filter(model_type == baseline_val)
+
+  if (nrow(baseline_rows) > 0) {
+    nc_true <- baseline_rows %>% mutate(!!sym(condition_col) := TRUE)
+    nc_false <- baseline_rows %>% mutate(!!sym(condition_col) := FALSE)
+
+    df_clean <- df %>% filter(model_type != baseline_val)
+    df <- bind_rows(df_clean, nc_true, nc_false) %>% distinct()
+  }
+  return(df)
 }
 
 #' add_design_cell (created 6/8/29)
@@ -341,7 +372,7 @@ empirical_prep <- function(path) {
           self_control_cent = self_control - mean(self_control, na.rm = TRUE)) # centered self control for h2
 }
 
-#' Apply Debate Composition Filter Dynamically (created 27/5/26) 
+#' apply_composition_filter (created 27/5/26) 
 #' update 2/6/26 (dynamic column detection and stop condition)
 #'
 #' Filters a data frame by debate composition or debate identifier based on 
@@ -423,6 +454,7 @@ empirical_stats <- function(df) {
     )
 }
 
+#' apply_composition_filter (created approx 6/2026)
 #' Apply Batch Mutations and Type Coercion to Simulation Output
 #' update 6/8/26 added logical_cols coercion and trim to lowercase
 #'
@@ -562,6 +594,7 @@ apply_batch_mutations <- function(df) {
   
 }
 
+#' apply_composition_filter (created approx 5/2026)
 #' Filter Out Bipolarization Rows Violating Neutral Zone Constraint
 #'
 #' Removes simulation rows where \code{model_type == "bipolarization"} and
@@ -616,8 +649,7 @@ bipol_constraint_filter <- function(df, verbose = TRUE) {
   
   # return filtered df
   df <- df %>%
-    filter(!(model_type == "bipolarization" & neutral_zone_width < 0))
-  
+    filter(!(model_type == "bipolarization" & neutral_zone_width < 0))	  
   return(df)
 }
 
@@ -642,7 +674,10 @@ combine_df_versions <- function(dfs, version_names) {
   dplyr::bind_rows(dfs)
 }
 
+#---------------------
 # Sensitivity & Calibration
+#---------------------
+
 #' run_sensi_analysis (created 20/7/26) 
 #' updated on 24/7/26 to compute PCC/PRCC/RF Sensitivity Indices per Model/Agent-Type Combination 
 #' update 6/8/26 corrected key for speaking_mode (true/false) writing to same list element (added to group_by)
@@ -1060,6 +1095,7 @@ param_region_extraction <- function(df, percentile = 0.25,
   
 }
 
+#' generate_gaml_bounds (created approx 6/2026)
 #' Generate GAML Parameter Bound Declarations from Top-Performing Configs 24/7/26 (update to incorporate guards and initialize as characters)
 #' update 6/8/26 added SD parameters so they don't get skipped in generation, header block addition
 #'
@@ -1279,7 +1315,8 @@ compute_pdp <- function(rf_fit, X, feature, grid_n = 40, max_rows = 2000, trim =
     data.frame(feature = feature, x = grid, yhat = yhat)
 }
 
-#' Compute PDP per Parameter per Design Cell 6/8/26
+#' pdp_all_cells (created 6/8/26)
+#' Compute PDP per Parameter per Design Cell
 #'
 #' rebuilds each cell's X the same way run_sensi_analysis did
 #' column order matches what the forest was trained on. (need two identifiers
@@ -1345,7 +1382,7 @@ pdp_all_cells <- function(df_batch, sensi_obj, param_cols_by_model,
     bind_rows(out)
 }
 
-#' Bounds Generation from PDP 6/8/26
+#' bounds_from_pdp Bounds Generation from PDP 6/8/26
 #' 
 #' Meant to keep region where pdp is within its 'tol' of its own minimum
 #' this matters because a bare yhat <= threshold filter can return and min and max
@@ -1386,7 +1423,9 @@ bounds_from_pdp <- function(pdp_df, tol = 0.02) {
     ungroup()
 }
 
-# Interactions:
+#---------------------
+# Interactions
+#---------------------
 # prepare_interactions in revise section
 #' compute_influence_scores (created 27/4/26) 
 #' update 27/7/26 empty df and row guard
@@ -1466,7 +1505,10 @@ compute_susceptibility_scores <- function(df) { # use with df_interactions
     )
 }
 
+#---------------------
 # Directional & Valence
+#---------------------
+
 #' prepare_directional (Agent-Level) (created 29/4/26)
 #' updated 5/8/26 include \code{direction_class} and \code{agent_against_stance}.
 #'
@@ -1576,8 +1618,6 @@ summarize_directional <- function(df) {
 #'     \item{pct_stationary_dir}{Numeric [0,1]. Proportion of agents who did not move \code{direction_class} = "stationary"}
 #'     \item{pct_wrong_dir}{Numeric [0,1]. Proportion of agents moving in the explicit wrong direction (\code{direction_class}).}
 #'   }
-#' 
-#' @export
 summarize_directional_valence <- function(df) {
   df %>%
     mutate(pro_reduction = as.integer(as.character(pro_reduction))) %>% 
@@ -1628,7 +1668,10 @@ compute_valence_asymmetry <- function(df) {
     )
 }
 
+#---------------------
 # Network
+#---------------------
+
 #' build_influence_network (created 6/5/26)
 #' Build Per-Agent Influence Network Metrics (Debate-Level and Aggregate)
 #'
@@ -1953,8 +1996,8 @@ filter_edges <- function(g, threshold) {
   return(g_filtered_edge)
 }
 
-# TODO build_network_graph 15/5/26 update, added arrows, node_text and continuous edges 
 #' build_network_graph (created 15/5/26)
+#' update, added arrows, node_text and continuous edges 
 #' 
 #' Function to render a network graph as a plot object illustrating individual agent
 #' broadcasts across all debates
@@ -1977,8 +2020,11 @@ build_network_graph <- function(g) {
     theme(legend.position = "bottom") +
     theme_graph()
 }
-
+				
+#---------------------
 # Interactions
+#---------------------
+
 #' prepare_interactions (created approx 7/26)
 #' updated on 23/7/26
 #' 
@@ -2032,4 +2078,3 @@ prepare_interactions <- function(path) {
 
 
 
-				

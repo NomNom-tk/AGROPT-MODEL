@@ -201,8 +201,11 @@ analyze_processed_run <- function(df) {
 	    X <- df_piece[, intersect(features, colnames(df_piece)), drop = FALSE]
 
 	    for (feat in colnames(X)) {
-		    pdp_results[[paste(full_key, feat, sep = "_")]] <- compute_pdp(rf_model, X,
-																		   feat, grid_n = 20)
+		    pdp_result <- compute_pdp(rf_model, X, feat, grid_n = 20)
+		    pdp_result$model_type <- model_type_val
+		    pdp_result$distinct <- distinct_val
+		    pdp_result$speaking_mode <- speak_val
+		    pdp_results[[paste(full_key, feat, sep = "_")]] <- pdp_result
 		}
       }
 
@@ -1124,7 +1127,7 @@ analyze_processed_run <- function(df) {
 		df <- pdp_all %>%
 		  filter(grepl(prefix, key_feature) & grepl(output, key_feature) & grepl(feature_name, key_feature)) 
 		plot_pdp_grid(
-         df, output_filter = NULL
+         df, model_filter = NULL
         )
       }
       #homogeneous_network_plots   = homogeneous_plots_combined, TODO commented out because interactions too long 8/3/26

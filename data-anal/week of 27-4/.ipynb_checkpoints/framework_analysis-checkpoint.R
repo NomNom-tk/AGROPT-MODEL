@@ -203,8 +203,9 @@ analyze_processed_run <- function(df) {
 	    for (feat in colnames(X)) {
 		    pdp_result <- compute_pdp(rf_model, X, feat, grid_n = 20)
 		    pdp_result$model_type <- model_type_val
-		    pdp_result$distinct <- distinct_val
-		    pdp_result$speaking_mode <- speak_val
+		    pdp_result$use_distinct_agents <- distinct_val
+			pdp_result$output <- matched_output   
+			pdp_result$speaking_mode <- speak_val
 		    pdp_results[[paste(full_key, feat, sep = "_")]] <- pdp_result
 		}
       }

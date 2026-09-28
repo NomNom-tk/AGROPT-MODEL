@@ -367,7 +367,16 @@ plot_model_rank_versions <- function(df, color_col = NULL) { # use with main
 }
 
 # Debate Composition
-# upgraded with model type (within composition comparison), facet(speaking mode to control for behavioral regime and avoids confounding)
+#' plot_h_m_errors (created mid 5/26)
+#'
+#' update mid 6/26 upgraded with model type (within composition comparison), 
+#' facet(speaking mode to control for behavioral regime and avoids confounding)
+#'
+#' @param df A dataframe containing the columns: debate_composition, mae, model_type, speaking_mode
+#' 
+#' @return a ggplot object illustrating mae prediction error by model_type, faceted by speaking_mode
+#'
+#' @note use with df_batch in LHS \code{analysis_scope} = "LHS", output package ref: lhs_outputs$inputs$raw
 plot_h_m_errors <- function(df) { # use with df lhs / could try with versions and compare
   ggplot(df, aes(x = debate_composition, y = mae, fill = model_type)) +
     geom_boxplot(position = position_dodge(0.8)) +
@@ -380,6 +389,15 @@ plot_h_m_errors <- function(df) { # use with df lhs / could try with versions an
 }
 
 # Convergence Plots
+#' plot_viol_conv_model_type (created mid 5/26)
+#' 
+#' @param df A dataframe containing the columns: model_type, convergence_cycle
+#'  and speaking_mode
+#'
+#' @return A ggplot object, violin plot describing convergence_cycle variation based on model_type
+#'  faceted by speaking_mode to highlight the impact of speaking_mode on debate convergence
+#' 
+#' @note use with df_batch in LHS \code{analysis_scope} = "LHS", output package ref: lhs_outputs$inputs$raw 
 ## Violin for convergence
 plot_viol_conv_model_type <- function(df) {
   ggplot(df, aes(x=model_type, y=convergence_cycle)) +
@@ -454,7 +472,6 @@ plot_tradeoff_raw <- function(df) {
          y = "MAE") +
     theme_bw()
 }
-
 
 
 # Interaction plots
@@ -539,22 +556,21 @@ plot_beta_distance <- function(df_raw, empirical_beta) {
     theme(legend.position = "none")
 }
 
-#' Grouped Bar Chart for Valence modif 6/7/26
+#' Grouped Bar Chart for Valence plot_valence_accuracy (created mid 6/26) 
+#' modified 6/7/26
 #' 
-#' Separates population into anti/pro reduction and illustrates the difference in valence
-#' (accuracy) for each model_type
+#' Separates population into anti/pro reduction and illustrates
+#' directional accuracy (pct_correct_dir) for each model_type.
+#' The 0.5 reference line represents chance-level accuracy.
 #'
-#' @param df Valence dataframe used with \code{df_sum_directional_valence} grouped by
-#' \{model_type, current_condition, selected_debate_id, pro_reduction} and returning
-#' one row per model x current_condition x selected_debate_id x pro_reduction, df contains:
-#' \describe{
-#'   \item{pro_reduction}{Factor. mutated to factor from Logical}
-#'   \item{model_type}{Character. Model type identifier (e.g., consensus, clustering, bipolarization)
-#'   \item{pct_correct_dir}{Numerical. Mean of \{correct_dir} (agents move in direction of empir opinion}
-#'   \item{geom_hline}{Plot Option. Intercept of 0.5 is represents a coin flip in \{pct_correct_dir}
-#' }
-#' @return a ggplot bar chart by model type with \code{geom_line()} (one bar for pro/anti per model)
-#' @note TODO need to integrate into Rmd with valence metrics (new chunk or initial chunk)
+#' @param df Valence summary dataframe. Expected columns: 
+#'   model_type, pro_reduction (factor), pct_correct_dir.
+#'
+#' @return A ggplot grouped bar chart, one bar per pro/anti 
+#'   stance within each model type.
+#'
+#' @note Use with df_sum_directional_valence from
+#'   lhs_outputs$comparisons$sum_dir_valence
 plot_valence_accuracy <- function(df) {
     df %>%
     mutate(pro_reduction = as.factor(pro_reduction)) %>%
@@ -670,9 +686,21 @@ plot_rf_importance_by_cell <- function(rf_df, output_filter = "mae") {
  
 #plot_rf_importance_by_cell(sensi_lhs$rf, "mae")
 
-
-# Free y scale per panel: cells differ in absolute MAE and a shared scale 6/8/26
-# flattens the within-cell structure you are trying to read.
+#' plot_pdp_grid created (6/8/26)
+#'
+#' Displays partial dependence curves for each parameter,
+#' faceted by model_type and feature. Free y-scales per panel
+#' because cells differ in absolute MAE — a shared scale
+#' flattens within-cell structure.
+#'
+#' @param pdp_df PDP dataframe. Expected columns: x, yhat,
+#'   feature, model_type, speaking_mode, use_distinct_agents, output.
+#' @param model_filter Optional. Character string to filter to
+#'   a single model_type (e.g., "bipolarization"). NULL shows all.
+#'
+#' @return A ggplot faceted line plot.
+#'
+#' @note Use with pdp_all from sensitivity analysis.
  
 plot_pdp_grid <- function(pdp_df, model_filter = NULL) {
   d <- if (is.null(model_filter)) pdp_df else filter(pdp_df, model_type == model_filter)

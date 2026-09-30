@@ -50,13 +50,15 @@ analyze_processed_run <- function(df) {
   if (!is.null(df_empirical)) {
 
     # Summary stats and long pivot for faceted plot and ABM benchmarks
+	# update 23/9/26 changed empirical_stat_pivot to create a names pattern to properly capture: mean, sd, condition, period for each time
     empirical_stat_check <- empirical_stats(df_empirical)
     
     empirical_stat_pivot <- empirical_stat_check %>%
       pivot_longer(
-        cols = c(mean_change_t0_t1, mean_change_t1_t2, mean_change_t0_t2),
-        names_to = "change_type",
-        values_to = "value"
+        cols = c(mean_change_t0_t1, mean_change_t1_t2, mean_change_t0_t2,
+				sd_change_t0_t1, sd_change_t1_t2, sd_change_t0_t2),
+        names_to = c(".value", "period"),
+        names_pattern = "^(mean|sd)_change_(.+)$"
       )
     
 
@@ -158,6 +160,7 @@ analyze_processed_run <- function(df) {
   sensi_lhs <- list(rf = NULL, rf_mod_list = NULL)
   sensi_v1 <- NULL
   sensi_v2 <- NULL
+  pdp_all <- NULL
 
   # ANALSCOPE: Sensitivity
   if (config$run_type == "LHS" && config$analysis_scope == "sensitivity") {
@@ -170,8 +173,13 @@ analyze_processed_run <- function(df) {
 	  for (full_key in names(sensi_lhs$rf_mod_list)) {
 		 # find which output_col this key ends with
 		matched_output <- output_cols[sapply(output_cols, function(o)endsWith(full_key, o))]
-		# strip the output suffic with its leading underscore to get the lookup key
-		lookup_key <- sub(paste0("_", matched_output, "$"), "", full_key)
+
+		# strip output from: "bipolarization_FALSE_nospeak_mae" to "bipolarization_FALSE_nospeak"
+		after_output <- sub(paste0("_", matched_output, "$"), "", full_key)
+	    # strip the output suffic with its leading underscore to get the lookup key
+		lookup_key <- sub("_[^_]+$", "", after_output)
+		# extract speaking mode for filtering: "nospeak"
+		speak_val <- sub(".*_", "", after_output)
 		features <- param_cols_by_model[[lookup_key]]
 
 		if (is.null(features)) next
@@ -182,16 +190,23 @@ analyze_processed_run <- function(df) {
 		# now parse model_type and distinct from lookup_key
 		model_type_val <- sub("_[^_]+$", "", lookup_key) # eg consensus
 		distinct_val <- sub(".*_", "", lookup_key) # eg TRUE
-
+		# speak filter to add to df_batch_sensi
+		speak_filter <- (speak_val == "speak")
+											 
 		df_piece <- df_batch_sensi %>%
 			filter(model_type == model_type_val,
-				   use_distinct_agents == as.logical(distinct_val))
+				   use_distinct_agents == as.logical(distinct_val),
+				  speaking_mode == speak_filter)
 
 	    X <- df_piece[, intersect(features, colnames(df_piece)), drop = FALSE]
 
 	    for (feat in colnames(X)) {
-		    pdp_results[[paste(full_key, feat, sep = "_")]] <- compute_pdp(rf_model, X,
-																		   feat, grid_n = 20)
+		    pdp_result <- compute_pdp(rf_model, X, feat, grid_n = 20)
+		    pdp_result$model_type <- model_type_val
+		    pdp_result$use_distinct_agents <- distinct_val
+			pdp_result$output <- matched_output   
+			pdp_result$speaking_mode <- speak_val
+		    pdp_results[[paste(full_key, feat, sep = "_")]] <- pdp_result
 		}
       }
 
@@ -436,7 +451,7 @@ analyze_processed_run <- function(df) {
       } # end hypotheses guard
 
       # ── VALIDATION ONLY: H3 and H5 ─────────────────────────────────────────
-      if (!is.null(df$sim_val) && analysis_scope == "validation") {
+      if (!is.null(df$sim_val)) {
         log_step("H3 benchmark: building test frame from sim_val$df_ag")
 
         # H3 shared set up (base model) 24/8/26
@@ -635,10 +650,16 @@ analyze_processed_run <- function(df) {
         ungroup() %>%
         select(design_cell, param_set_id, mean_mae)
 
-      df_ag_deduped <- df_ag_raw_slice %>%
-        semi_join(best_param_by_cell, by = c("design_cell", "param_set_id")) %>%
-        distinct(agent_id, selected_debate_id, seed, design_cell, .keep_all = TRUE)
+	  # GA exports assign param_set_id = 1 to all agents (single converged solution)
+	  # but batch file retains internal GA generation indices — mismatch breaks semi_join
+	  # LHS needs param_set_id filtering (multiple parameter sets per cell)
+	  # GA does not (one solution per cell) — join on design_cell only
+	  join_cols <- if (config$run_type == "GA") "design_cell" else c("design_cell", "param_set_id")
 
+	  df_ag_deduped <- df_ag_raw_slice %>%
+		  semi_join(best_param_by_cell, by = join_cols) %>%
+		  distinct(agent_id, selected_debate_id, seed, design_cell, .keep_all = TRUE)
+		
       if (!is.null(mlm_model_h1a)) {
         df_t2_preds <- df_empir_long %>%
           filter(Time == "T2") %>%
@@ -817,9 +838,10 @@ analyze_processed_run <- function(df) {
           sd_conv = sd(convergence_cycle),
           sd_mae = sd(mae),
           .groups = "drop"
-        ) %>%
-        { message("DEBUG - df_conv_debate speaking_mode table:"); print(table(.$speaking_mode, useNA = "always")); . } %>%
-        { message("DEBUG - complete cases count:"); print(nrow(na.omit(.))); . }
+        )
+        
+		log_step(paste("df_conv_debate built:", nrow(df_conv_debate), "rows,", 
+					   n_distinct(df_conv_debate$speaking_mode), "speaking_mode levels"))
       
       run_conv_model <- function(df_nodes) {
         lm(mean_mae ~ mean_conv * speaking_mode + model_type, data = df_nodes)
@@ -1031,8 +1053,8 @@ analyze_processed_run <- function(df) {
         directional_agents = df_directional_agents, # unsummarized directional, applies \code{prepare_directional} to df_ag to calculate sign of empirical and simualated direction change among agents that ACTUALLY moved 
         beta_distance = beta_distance, # based on simulated_betas_raw, grouped by model_type, summarizes mean delta compared to empirical beta and calculates zscore
         beta_distance_raw = simulated_betas_raw, # pulls from df_ag, groups by model_type, selected_debate_id and seed, linear regression of pro_reduction on opinion_change and filters by pro_reduction
-        sum_dir_valence = df_sum_directional_valence, # pulls from \code{df_directional_agents}, one row per model x current_condition x selected_debate_id x pro_reduction and returns right and wrong dir/signed error of simul data
-        valence_metrics = df_valence, # applies \code{compute_valence_asymmetry} to sum_dir_valence, wide pivot to calculate error_asymmetery and accuracy_asymmetry
+        sum_dir_valence = df_valence_processed, # summarize_directional_valence output
+        valence_metrics = df_asymmetry_processed, # compute_valence_asymmetry output
         upset_prep = df_upset,
         df_ols_agent_data = df_ag_deduped,
         abm_vs_nc = abm_vs_nc, # table comparing H3 abm results versus no change baseline (sign test and mean differences)
@@ -1042,7 +1064,7 @@ analyze_processed_run <- function(df) {
         composition = h_vs_m, # pulls from df_batch (grouped by debate_composition, model_type, speaking_mode, use_distinct_agents) summarizes mean_mae and SD
         speaking    = speaking_compar, # pulls from df_batch, grouped (speaking_mode, debate_composition, model_type, use_distinct_agents) summarizes mean_mae, SD and normalized convergence
         convergence = convergence_anal, # pulls from df_batch, grouped (model_type, speaking_mode, selected_debate_id) summarizes mean convergence cyle, min, max, SD and normalized
-        stochastic  = stochasticity_check_1, # pulls from df_batch, grouped (model_type, use_distinct_agents, selected_debate_id, seed) summarizes SD mae
+        stochastic  = stochasticity_check_1, # pulls from df_batch, grouped (design_cell, param_set_id, selected_debate_id) summarizes SD mae
         heterogen   = heterogeneity_check # pulls from df_batch, grouped (model_type, use_distinct_agents) summarize mean MAE, median, SD
       ),
       dynamics = list(
@@ -1068,7 +1090,7 @@ analyze_processed_run <- function(df) {
           #comparison_clean <- lhs_outputs$results$comparisons$ols_debate_mae
           plot_ols_abm_comp(analysis_output_package$results$comparisons$ols_debate_mae)},	
       empirical_col   = function() plot_empir_compar(empirical_stat_check),
-      empirical_cross = function() plot_empir_cross(empirical_pivot),
+      empirical_cross = function() plot_empir_cross(empirical_stat_pivot),
 
       # OLS models viz empir and sim
       mlm_h1a_viz = function() check_model(mlm_model_h1a, check = c("linearity", "homogeneity", "vif", "qq", "reqq", "outliers")),
@@ -1100,19 +1122,18 @@ analyze_processed_run <- function(df) {
       simulated_delta_dist = function() plot_simulated_delta_dist(df_directional_agents),
       valence_accuracy = function() plot_valence_accuracy(df_valence_processed),
         
-      beta_distance_vs_empir = function() plot_beta_distance(simulated_betas_raw, empirical_beta_val),
+      beta_distance_vs_empir = function() plot_beta_distance(simulated_betas_raw, empirical_beta_scalar),
 
       # RF visualizations
-      rf_importance_model_types = function(output_filter = NULL) {
-        df <- sensi_lhs$rf
-        if (!is.null(output_filter)) df <- df %>% filter(output == output_filter)
-        plot_rf_importance(df)
-      },
+      rf_importance_model_types = function(output_filter = "mae") {
+	    plot_rf_importance_by_cell(sensi_lhs$rf, output_filter = output_filter)
+	  },
       pdp_v1 = function(model_type_val, distinct_val, output, feature_name) {
-        plot_model_pdp(
-          sensi_lhs,
-          df_batch,
-          model_type_val, distinct_val, output, feature_name
+		prefix <- paste0(model_type_val, "_", distinct_val, "_")
+		df <- pdp_all %>%
+		  filter(grepl(prefix, key_feature) & grepl(output, key_feature) & grepl(feature_name, key_feature)) 
+		plot_pdp_grid(
+         df, model_filter = NULL
         )
       }
       #homogeneous_network_plots   = homogeneous_plots_combined, TODO commented out because interactions too long 8/3/26

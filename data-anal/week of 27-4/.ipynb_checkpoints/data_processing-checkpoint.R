@@ -28,8 +28,6 @@ library(plotly)
 library(ComplexUpset)
 
 # run config declarations
-## TODO 1/6/26, consider refactoring to different layers, makes run_type agnostic of the rest
-## and allows for more variable inputs without breaking downstream analyses
 run_configs <- list()
 lhs <- list()
 ga <- list()
@@ -44,7 +42,7 @@ lhs$version_scope        <- "v1"
 lhs$analysis_scope       <- "sensitivity"
 
 lhs$batch$v1$path        <- "./data/lhs_batch_summary.csv"
-lhs$batch$v1$version     <- "v1_7_5_100c"
+lhs$batch$v1$version     <- "lhs_v1_dynamic_convergence"
 
 lhs$batch$v2$path        <- NULL
 lhs$batch$v2$version     <- ""
@@ -64,7 +62,7 @@ ga$version_scope         <- "v1"
 ga$analysis_scope        <- "hypotheses"
 
 ga$batch$v1$path         <- "./data/ga_batch_summary.csv"
-ga$batch$v1$version      <- "ga_v1"
+ga$batch$v1$version      <- "ga_v1_dynamic_convergence"
 
 ga$agent$v1$path         <- "./data/ga_agent_level_results.csv"
 ga$interaction$v1$path   <- "./data/ga_interaction_log.csv"
@@ -78,7 +76,7 @@ val$version_scope        <- "v1"
 val$analysis_scope       <- "validation"
 
 val$batch$v1$path        <- "./data/val_batch_summary.csv"
-val$batch$v1$version     <- "ga_val_v1"
+val$batch$v1$version     <- "ga_val_v1_dynamic_convergence"
 
 val$agent$v1$path        <- "./data/val_agent_level_results.csv"
 val$interactions$v1$path <- "./data/val_interaction_log.csv"
@@ -349,8 +347,9 @@ process_run <- function(config) {
   df_upset <- NULL
 
   if (config$analysis_scope %in% c("validation", "hypotheses")) {
-      # GUARD to skip given that we don't pull the full df_ag into memory (change once the chain is optimized) 3/9/26
-      if (ncol(df_ag) >= 51) {
+      required_valence_cols <- c("opinion", "initial_opinion", "final_attitude", "pro_reduction")
+	  # GUARD checking whether all of the required columns for downstream analyses are present 3/9/26
+      if (all(required_valence_cols %in% colnames(df_ag))) {
         
       if (!is.null(df_directional_agents)) {
           log_step("Starting Valence Analysis Chunk: summarized valence for models first")

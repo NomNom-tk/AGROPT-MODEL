@@ -277,6 +277,35 @@ append_metadata <- function(df, config, version = NA) {
     )
 }
 
+
+#' map_slots (created 24/09/26)
+#'
+#' Used to document and describe the output package slots and double check whether slots are filled by analysis_scope
+#'
+#' @param x The output of analyze_processed_run for lhs/ga to illustrate the slots that are populated or not
+#' @param prefix Character. Indentation string. Leave as default.
+#' @param max_depth Integer. Maximum recursion depth. Default 3,
+#'   use 4+ for deeply nested slots.
+#' @param depth Integer. Current recursion depth. Leave as default.
+#'
+#' @return Invisible NULL. Output is printed to console. Leave as default.
+map_slots <- function(x, prefix = "", max_depth = 3, depth = 0) {
+  if (depth >= max_depth || !is.list(x) || is.data.frame(x)) {
+    tag <- if (is.null(x)) "[NULL]"
+           else if (is.data.frame(x)) paste0("[df: ", nrow(x), "x", ncol(x), "]")
+           else if (is.function(x)) "[function]"
+           else paste0("[", class(x)[1], "]")
+    cat(prefix, tag, "\n")
+    return(invisible(NULL))
+  }
+  nms <- names(x)
+  if (is.null(nms)) nms <- seq_along(x)
+  for (nm in nms) {
+    cat(prefix, "$", nm, sep = "")
+    map_slots(x[[nm]], prefix = paste0(prefix, "  "), max_depth = max_depth, depth = depth + 1)
+  }
+}
+
 #' anchor_baseline_facets (created 12/6/26)
 #'
 #' Duplicates no_change baseline rows across both TRUE/FALSE levels of a

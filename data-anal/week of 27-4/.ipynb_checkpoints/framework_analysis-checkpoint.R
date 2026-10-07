@@ -1070,7 +1070,7 @@ analyze_processed_run <- function(df) {
       dynamics = list(
         conv_debate = df_conv_debate, # pulls from df_batch, grouped (model_type, selected_debate_id, speaking_mode) summarizes mean convergence cycle, MAE, SD conv and SD MAE
         conv_diff   = conv_diff, # pulls from df_batch, mutates opinion variance < 0.1 for "convergence/bipolarization", grouped (model_type, current_condition, outcome)
-        failures    = failures_comp, # pulls from df_batch, mutates failure = mae > 0.18, grouped (model_type, failures), summarizes mean convergence, pct_hetero in debate composition)
+        failures    = failures_comp, # pulls from df_batch, mutates failure = mae > 0.18, grouped (model_type, failures), summarizes mean convergence, pct_hetero in debate composition
         clusters    = clusters # pulls from df_batch, mutates cluster change (from beginning to end), grouped (model_type, selected_debate_id), summarizes mean_cluster_change
       ),
       regions  = ga_bounds_export

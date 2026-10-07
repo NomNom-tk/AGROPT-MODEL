@@ -119,9 +119,8 @@ plot_empir_compar <- function(df) {
     geom_col() +
     geom_errorbar(aes(ymin = mean_change_t1_t2 - sd_change_t1_t2, 
                   ymax = mean_change_t1_t2 + sd_change_t1_t2)) +
-    geom_hline(yintercept = 0.042, linetype = "dashed") + # TODO check where this number comes from
-    #geom_hline(yintercept = df %>% filter(condition == "Control") %>%
-   #              pull(mean_change_t1_t2), linetype = "dashed") +
+    geom_hline(yintercept = df %>% filter(condition == "Control") %>%
+                 pull(mean_change_t1_t2), linetype = "dashed") +
     theme_minimal() +
     #scale_fill_manual(values = c("t0_t1" = "#2C3E50", "t1_t2" = "#E74C3C")) +
     labs(x = "Condition", y = "Avg Change T1->T2", 
@@ -216,9 +215,9 @@ plot_model_performance_rank_main <- function(df) { # use with model_compar_main
     coord_flip() +
     theme_bw(base_size = 12) +
     scale_x_discrete(drop = FALSE) + # 12/6/26 forces true side to keep no_change as an empty slot
-    labs(title = "Model Performance by Version",
+    labs(title = "Model Performance by Version and Speaking Mode (TRUE/FALSE",
          x = "Model Type",
-         y = "Mean MAE")
+         y = "Mean MAE") 
   
   # dynamic with versions 9/6/26
   if ("version" %in% colnames(df)) {
@@ -673,7 +672,7 @@ plot_dir_by_pro <- function(df) { # use with df_lhs_susceptibility
 #'
 #' @return A ggplot density plot faceted by model_type.
 #'
-#' @note Use with simulated_betas_scalar and empirical_beta_val.
+#' @note Use with simulated_betas_raw and empirical_beta_scalar.
 #'   Output package ref: lhs_outputs$results$comparisons$beta_distance_raw
 plot_beta_distance <- function(df_raw, empirical_beta) {
     ggplot(df_raw, aes(x = std_estimate, fill = model_type)) +

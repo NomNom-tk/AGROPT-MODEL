@@ -215,9 +215,9 @@ plot_model_performance_rank_main <- function(df) { # use with model_compar_main
     coord_flip() +
     theme_bw(base_size = 12) +
     scale_x_discrete(drop = FALSE) + # 12/6/26 forces true side to keep no_change as an empty slot
-    labs(title = "Model Performance by Version",
+    labs(title = "Model Performance by Version and Speaking Mode (TRUE/FALSE",
          x = "Model Type",
-         y = "Mean MAE")
+         y = "Mean MAE") 
   
   # dynamic with versions 9/6/26
   if ("version" %in% colnames(df)) {
@@ -672,7 +672,7 @@ plot_dir_by_pro <- function(df) { # use with df_lhs_susceptibility
 #'
 #' @return A ggplot density plot faceted by model_type.
 #'
-#' @note Use with simulated_betas_scalar and empirical_beta_val.
+#' @note Use with simulated_betas_raw and empirical_beta_scalar.
 #'   Output package ref: lhs_outputs$results$comparisons$beta_distance_raw
 plot_beta_distance <- function(df_raw, empirical_beta) {
     ggplot(df_raw, aes(x = std_estimate, fill = model_type)) +

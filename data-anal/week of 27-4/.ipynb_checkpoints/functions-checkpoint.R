@@ -767,8 +767,7 @@ combine_df_versions <- function(dfs, version_names) {
 #' @seealso \code{plot_pcc_heatmap()}, \code{plot_prcc_heatmap()} for
 #'   visualizing the returned dataframes. \code{PCC} column name confirmed
 #'   here as \code{"original"} extracted from \code{sensitivity::pcc()}.
-run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees = 500, 
-                               max_rows_per_cell = 50000, min_rows = 10) {
+run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees = 500, max_rows_per_cell = 50000, min_rows = 10) {
   
   sensi_split <- df %>%
     filter(model_type != "no_change") %>%
@@ -968,10 +967,7 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees =
 #' @section Warnings: 
 #' prints a warning if specific parameters have too narrow a range for a follow up search, as well as 
 #' a warning in case the parameters violate the neutral zone width cap for bipolarization
-param_region_extraction <- function(df, percentile = 0.25,
-                                    cr_max_cap = NULL,
-                                    rs_max_cap = NULL,
-                                    min_range = 0.05) {
+param_region_extraction <- function(df, percentile = 0.25, cr_max_cap = NULL, rs_max_cap = NULL, min_range = 0.05) {
   
   # remove model_type problem row and bipol constraints
   df <- df %>%

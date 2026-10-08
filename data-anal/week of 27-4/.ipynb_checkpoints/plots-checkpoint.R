@@ -112,7 +112,7 @@ plot_prcc_heatmap <- function(df){
 #'   \item{condition}{Character. Experimental group (among: control, heterogeneous, homogenous)}
 #'   \item{mean_change}{Numerical. Empirical change between T1 (before debate) and T2 (after debate) questionnaires}
 #' }
-#' @return A ggplot2 object with horizontal intercept (empirical beta?)
+#' @return A ggplot2 object with horizontal intercept (empirical beta)
 #' @note see empirical_comparison chunk in Rmd for call.
 plot_empir_compar <- function(df) {
   ggplot(df, aes(x = condition, y = mean_change_t1_t2)) +

@@ -77,7 +77,7 @@ plot_prcc_heatmap <- function(df){
 #'   \item{condition}{Character. Experimental group (among: control, heterogeneous, homogenous)}
 #'   \item{mean_change}{Numerical. Empirical change between T1 (before debate) and T2 (after debate) questionnaires}
 #' }
-#' @return A ggplot2 object with horizontal intercept (empirical beta?)
+#' @return A ggplot2 object with horizontal intercept (empirical beta)
 #' @note see empirical_comparison chunk in Rmd for call.
 plot_empir_compar <- function(df) {
 #' Column Viz for cross-time comparisons
@@ -413,7 +413,7 @@ plot_delta_color_direction_scatter <- function(df) { # use with df_directional_a
 plot_simulated_delta_dist <- function(df) { # use with df_directional_agents
 #' RF Importance Across Model Types 6/8/26
 #' 
-#' Takes the RF output from \code{run_sensi_analysis} and plots the individual va```
+#' Takes the RF output from \code{run_sensi_analysis} and plots the individual var```
 
 ## functions.R
 ```r
@@ -764,7 +764,7 @@ combine_df_versions <- function(dfs, version_names) {
 #' @seealso \code{plot_pcc_heatmap()}, \code{plot_prcc_heatmap()} for
 #'   visualizing the returned dataframes. \code{PCC} column name confirmed
 #'   here as \code{"original"} extracted from \code{sensitivity::pcc()}.
-run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees = 500, 
+run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees = 500, max_rows_per_cell = 50000, min_rows = 10) {
 #' param_region_extraction (created around 8/26)
 #' update 6/8/26 added speaking mode to both group_by calls / added | to range check instead of AND
 #' rewrote bipol_check gap change so that it doesn't error
@@ -787,7 +787,7 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees =
 #' @section Warnings: 
 #' prints a warning if specific parameters have too narrow a range for a follow up search, as well as 
 #' a warning in case the parameters violate the neutral zone width cap for bipolarization
-param_region_extraction <- function(df, percentile = 0.25,
+param_region_extraction <- function(df, percentile = 0.25, cr_max_cap = NULL, rs_max_cap = NULL, min_range = 0.05) {
 #' generate_gaml_bounds (created approx 6/2026)
 #' Generate GAML Parameter Bound Declarations from Top-Performing Configs 24/7/26 (update to incorporate guards and initialize as characters)
 #' update 6/8/26 added SD parameters so they don't get skipped in generation, header block addition
@@ -871,7 +871,7 @@ compute_pdp <- function(rf_fit, X, feature, grid_n = 40, max_rows = 2000, trim =
 #'
 #' @note key naming must match between \code{run_sensi_analysis} and current function - speak/nospeak not TRUE/FALSE for speaking arm
 #' @note current functio filters `no_change` from cell list since no forest exists for the baseline
-pdp_all_cells <- function(df_batch, sensi_obj, param_cols_by_model,
+pdp_all_cells <- function(df_batch, sensi_obj, param_cols_by_model, output = "mae", grid_n = 40) {
 #' bounds_from_pdp Bounds Generation from PDP 6/8/26
 #' 
 #' Meant to keep region where pdp is within its 'tol' of its own minimum
@@ -1104,9 +1104,7 @@ build_influence_network <- function(df, df_attributes) { # use with lhs_interact
 #'   left-joins onto graph nodes by \code{name == agent_id} (after coercing
 #'   \code{agent_id} to character to match vertex name type).
 #'
-#' @seealso \code{build_influence_network()} for the source of \code{g} and
-#'   attribute dataframes; \code{filter_top_nodes()},
-#'   \```
+#' @```
 
 ## framework_analysis.R
 ```r

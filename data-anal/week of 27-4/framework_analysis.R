@@ -1,6 +1,15 @@
 # framework_analysis.R
 # depends on: functions.r, data_processing.r, and plots.R
 
+#' Main Analysis Pipeline
+#'
+#' Orchestrates hypothesis tests (H1-H5), sensitivity analysis,
+#' behavioral extractions, and model comparisons. Returns a 
+#' standardized output package. Use map_slots() to inspect.
+#'
+#' @param df Bundle list with slots: sim_inputs, sim_val (optional), df_empirical.
+#' @return analysis_output_package. See section 9 of this file for slot definitions.
+
 source("./functions.R")
 source("./data_processing.R")
 source("./plots.R")

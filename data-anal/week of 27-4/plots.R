@@ -12,7 +12,7 @@
 #' Multiple versions are present using lhs_outputs$inputs$versions
 #' Dataframe is bound when lhs_outputs is constructed.
 #'
-#' @param pcc_all Dataframe containing at least the following columns:
+#' @param df Dataframe containing at least the following columns:
 #' (see \code{run_sensi_analysis()} for the sensitivity calc function (in functions.R)
 #' \describe{
 #'   \item{parameter}{Character. Input parameter name}
@@ -39,7 +39,7 @@ plot_pcc_all_heatmap <- function(df) {
 #' Intended use with LHS sensitivity analysis and called via lhs_outputs$plots$prcc_all() when
 #' Multiple versions are present using lhs_outputs$inputs$versions
 #' Dataframe is bound when lhs_outputs is constructed.
-#' @param prcc_all Dataframe containing at least the following columns:
+#' @param df Dataframe containing at least the following columns:
 #' (see \code{run_sensi_analysis()} for the sensitivity calc function (in functions.R)
 #' \describe{
 #'   \item{parameter}{Character. Input parameter name}
@@ -63,7 +63,7 @@ plot_prcc_all_heatmap <- function(df) {
 #'
 #' Produces a faceted heatmap of Partial Correlation Coefficients (PCC)
 #' Intended use with LHS sensitivity analysis and called via lhs_outputs$plots$pcc()
-#' @param pcc_lhs Dataframe containing at least the following columns:
+#' @param df Dataframe containing at least the following columns:
 #' (see \code{run_sensi_analysis()} for the sensitivity calc function (in functions.R)
 #' \describe{
 #'   \item{parameter}{Character. Input parameter name}
@@ -85,7 +85,7 @@ plot_pcc_heatmap <- function(df) {
 #'
 #' Produces a faceted heatmap of Partial Rank Correlation Coefficients (PRCC)
 #' Intended use with LHS sensitivity analysis and called via lhs_outputs$plots$prcc()
-#' @param prcc_lhs Dataframe containing at least the following columns:
+#' @param df Dataframe containing at least the following columns:
 #' (see \code{run_sensi_analysis()} for the sensitivity calc function (in functions.R)
 #' \describe{
 #'   \item{parameter}{Character. Input parameter name}
@@ -107,23 +107,22 @@ plot_prcc_heatmap <- function(df){
 #' 
 #' Produces a bar chart for mean opinion change before and after debate
 #' Intended use with empirical data csv to check opinion evolution, called with lhs_outputs$plots$empirical_col()
-#' @param empirical_stat_check Dataframe of empirical debate data processed by empirical_stats() (in functions.R)
+#' @param df Dataframe of empirical debate data processed by empirical_stats() (in functions.R)
 #' \describe{
 #'   \item{condition}{Character. Experimental group (among: control, heterogeneous, homogenous)}
 #'   \item{mean_change}{Numerical. Empirical change between T1 (before debate) and T2 (after debate) questionnaires}
 #' }
-#' @return A ggplot2 object with horizontal intercept (empirical beta?)
+#' @return A ggplot2 object with horizontal intercept (empirical beta)
 #' @note see empirical_comparison chunk in Rmd for call.
 plot_empir_compar <- function(df) {
   ggplot(df, aes(x = condition, y = mean_change_t1_t2)) +
     geom_col() +
     geom_errorbar(aes(ymin = mean_change_t1_t2 - sd_change_t1_t2, 
                   ymax = mean_change_t1_t2 + sd_change_t1_t2)) +
-    geom_hline(yintercept = 0.042, linetype = "dashed") + # TODO check where this number comes from
-    #geom_hline(yintercept = df %>% filter(condition == "Control") %>%
-   #              pull(mean_change_t1_t2), linetype = "dashed") +
+    geom_hline(yintercept = df %>% filter(condition == "Control") %>%
+                 pull(mean_change_t1_t2), linetype = "dashed") +
     theme_minimal() +
-    scale_fill_manual(values = c("t0_t1" = "#2C3E50", "t1_t2" = "#E74C3C")) +
+    #scale_fill_manual(values = c("t0_t1" = "#2C3E50", "t1_t2" = "#E74C3C")) +
     labs(x = "Condition", y = "Avg Change T1->T2", 
          title = "Opinion Change from T1 to T2")
 }
@@ -132,17 +131,22 @@ plot_empir_compar <- function(df) {
 #' 
 #' Produces a column chart to illustrate empirical opinion change across experimental conditions
 #' Intended use with empirical data csv called with lhs_outputs$plots$empirical_cross()
-#' @param empirical_stat_pivot Dataframe (empirical_stat_pivot) pivot of empirical stats() (in functions.R)
+#' @param df Dataframe (empirical_stat_pivot) pivot of empirical stats() (in functions.R), expected columns:
+#'   condition, mean, sd, period.
 #' \describe{
 #'   \item{condition}{Character. Experimental group (among: control, heterogeneous, homogenous)}
-#'   \item{value}{Numerical. Pivoted mean change assigned to value}
-#'   \item{change_type}{Factor. Change for time period (e.g., mean_change_t0_t1)}
+#'   \item{mean}{Numerical. Pivoted mean change assigned to value}
+#'   \item{period}{Factor. Change for time period (e.g., mean_change_t0_t1)}
 #' }
 #' @return A ggplot2 object with opinion change for different timeframes
-#' @note see empirical_comparison chunk in Rmd for call.
+#' @note see empirical_comparison chunk in Rmd for call. Pivot structure updated 23/9/26 — 
+#' columns are mean/sd/period, not value/change_type. See empirical_stat_pivot in framework_analysis.R.
 plot_empir_cross <- function(df) {
-  ggplot(df, aes(x = condition, y = value, fill = change_type)) +
+  ggplot(df, aes(x = condition, y = mean, fill = period)) +
     geom_col(position = "dodge") +
+    geom_errorbar(aes(ymin = mean - sd, 
+                  ymax = mean + sd),
+				 position = position_dodge(0.9), width = 0.2) +
     geom_hline(yintercept = 0) +
     labs(x = "Condition", y = "Average Change",
          title = "Opinion Change Across T0-T1-T2")
@@ -153,14 +157,13 @@ plot_empir_cross <- function(df) {
 #' Produces a scatter plot comparing empirical ABM (between T1 and T2) and simulated MAE
 #' Intended use with empirical and simulated datae (e.g., LHS, GA) to check whether ABM 
 #' improves upon the empirical regression.
-#' @param comparison_clean Dataframe (df that has an inner join between simulation and empirical data by selected_debate_id)
+#' @param df Dataframe (df that has an inner join between simulation and empirical data by selected_debate_id)
 #' \describe{
 #'   \item{ols_mae}{Numerical. Linear regression between initial and final empirical attitudes}
 #'   \item{abm_mae}{Numerical. Mean of simulated MAE for an exploration algorithm}
-#' @note y=x dashed line represents proportion of ABM debates that improves on OLS baseline}
 #' }
 #' @return A ggplot scatter plot comparing in which debates ABM improves over OLS or vice-versa.
-#' @note see directional-accuracy chunk in Rmd for call.
+#' @note y=x dashed line represents proportion of ABM debates that improves on OLS baseline / see directional-accuracy chunk in Rmd for call.
 plot_ols_abm_comp <- function(df) { # use with comparison_clean
   ggplot(df, aes(x=ols_mae, y=abm_mae)) +
     geom_point(alpha = 0.6) +
@@ -212,9 +215,9 @@ plot_model_performance_rank_main <- function(df) { # use with model_compar_main
     coord_flip() +
     theme_bw(base_size = 12) +
     scale_x_discrete(drop = FALSE) + # 12/6/26 forces true side to keep no_change as an empty slot
-    labs(title = "Model Performance by Version",
+    labs(title = "Model Performance by Version and Speaking Mode (TRUE/FALSE",
          x = "Model Type",
-         y = "Mean MAE")
+         y = "Mean MAE") 
   
   # dynamic with versions 9/6/26
   if ("version" %in% colnames(df)) {
@@ -241,6 +244,7 @@ plot_model_performance_rank_main <- function(df) { # use with model_compar_main
 #'   \item{reordered model_type, mae_mean}{Numerical. Meant to sort mae_mean by model_type}
 #'   \item{mae_mean}{Numerical. MAE for each model_type}
 #'   \item{version}{Character. Optional only if for different LHS/GA versions add this to speaking_mode and use_distinct_agents with \code{facet_wrap}}
+#' }
 #' @return a ggplot object with \code{coord_flip()} and \code{geom_errorbar()}
 #' @note see (framework_analysis.R for calls in outputs list) / not used in Rmd.
 plot_model_comparison_uncertainty <- function(df) {
@@ -273,7 +277,7 @@ plot_model_comparison_uncertainty <- function(df) {
 #' Takes the best model (lowest mae and eliminates it from the plot), then displays
 #' how far the rest of the models are from this "best" model
 #'
-#' @param A Dataframe use with \code{model_comparison_relative} which groups model_comparison_main by 
+#' @param df Dataframe use with \code{model_comparison_relative} which groups model_comparison_main by 
 #' speaking mode and then calculates the delta_mae (mae wrt to the "best" model)
 #' \describe{
 #'   \item{reordered model_type and delta_mae}{Numerical. MAE relative to the lowest mae of the model, reordered to display per model_type}
@@ -281,7 +285,6 @@ plot_model_comparison_uncertainty <- function(df) {
 #'   \item{version}{Character. Will facet by version AND speaking_mode if several versions of LHS or GA are present}
 #' }
 #' @return a ggplot object with \code{coord_flip()}
-#' @note not currently used in Rmd.
 plot_model_performance_rank_gap <- function(df) { # use with model_relative
   # standard version with columns that ALWAYS exist
   p <- ggplot(df, aes(x= reorder(model_type, delta_mae), y = delta_mae)) +
@@ -310,15 +313,13 @@ plot_model_performance_rank_gap <- function(df) { # use with model_relative
 #' Defines a grouping variable for color set to different versions if present.
 #' Injects a color (through string conversion to a variable symbol) if the different verisons are available and otherwise collapses to a static "darkblue"
 #' 
-#' @param a Dataframe used with \code{model_comparison_main} which is grouped by \code{model_type} and \code{speaking_mode} AND \code{version} IF present.
-#' @param color Variable Symbol IF different versions are present
+#' @param df Dataframe used with \code{model_comparison_main} which is grouped by \code{model_type} and \code{speaking_mode} AND \code{version} IF present.
+#' @param color_col Variable Symbol IF different versions are present
 #' \describe{
 #'   \item{model_type}{Character. Distinguishes between different models in the experiment}
 #'   \item{mae_mean}{Numerical. Average of MAE for the specific \code{model_type}}
-#'   \item{color_sym}{Character. Assigns a color to different version IF present, otherwise creates error bars based on single version MAE}
 #' }
-#' @return a ggplot object comparing the model performance (mean MAE) across different versions, with different \code{color_sym} based on versions.
-#' @return1 ggplot object with \code{facet_wrap} by speaking_mode Boolean and \code{coord_flip()}.
+#' @return a ggplot object comparing the model performance (mean MAE) across different versions, with different \code{color_sym} based on versions and faceted by speaking_mode.
 #' @note not currently used in Rmd. See (framework_analysis.R for calls).
 plot_model_rank_versions <- function(df, color_col = NULL) { # use with main
   
@@ -354,10 +355,10 @@ plot_model_rank_versions <- function(df, color_col = NULL) { # use with main
     p <- p + aes(color = !!color_sym) +
       labs(color = color_col)
   } else {
-    #fallback to default
-    p <- p + geom_point(color = "darkblue", position = position_dodge(width = 0.5), size = 3) +
-      geom_errorbar(aes(ymin = mae_mean - mae_sd, ymax = mae_mean + mae_sd),
-                    color = "darkblue", width = 0.2)
+    # update 23/9/26 fallback to default using aes and scale color manual instead of duplicating geom_point&errorbar
+    p <- p + aes(color = "single") +
+	  scale_color_manual(values = c("single" = "darkblue")) +
+	  theme(legend.position = "none")
     
     message("No variable color (version) column found. Default to darkblue")
   }
@@ -365,7 +366,16 @@ plot_model_rank_versions <- function(df, color_col = NULL) { # use with main
 }
 
 # Debate Composition
-# upgraded with model type (within composition comparison), facet(speaking mode to control for behavioral regime and avoids confounding)
+#' plot_h_m_errors (created mid 5/26)
+#'
+#' update mid 6/26 upgraded with model type (within composition comparison), 
+#' facet(speaking mode to control for behavioral regime and avoids confounding)
+#'
+#' @param df A dataframe containing the columns: debate_composition, mae, model_type, speaking_mode
+#' 
+#' @return a ggplot object illustrating mae prediction error by model_type, faceted by speaking_mode
+#'
+#' @note use with df_batch in LHS \code{analysis_scope} = "LHS", output package ref: lhs_outputs$inputs$raw
 plot_h_m_errors <- function(df) { # use with df lhs / could try with versions and compare
   ggplot(df, aes(x = debate_composition, y = mae, fill = model_type)) +
     geom_boxplot(position = position_dodge(0.8)) +
@@ -378,6 +388,15 @@ plot_h_m_errors <- function(df) { # use with df lhs / could try with versions an
 }
 
 # Convergence Plots
+#' plot_viol_conv_model_type (created mid 5/26)
+#' 
+#' @param df A dataframe containing the columns: model_type, convergence_cycle
+#'  and speaking_mode
+#'
+#' @return A ggplot object, violin plot describing convergence_cycle variation based on model_type
+#'  faceted by speaking_mode to highlight the impact of speaking_mode on debate convergence
+#' 
+#' @note use with df_batch in LHS \code{analysis_scope} = "LHS", output package ref: lhs_outputs$inputs$raw 
 ## Violin for convergence
 plot_viol_conv_model_type <- function(df) {
   ggplot(df, aes(x=model_type, y=convergence_cycle)) +
@@ -388,7 +407,19 @@ plot_viol_conv_model_type <- function(df) {
     theme_bw()
 }
 
-## Box plot convergence comparison (1) generalized (2) speaking_mode aware
+#' plot_box_conv_compar
+#'
+#' Boxplot comparing convergence rates across model types,
+#' colored by speaking mode. No faceting — both speaking
+#' modes appear side by side within each model_type.
+#'
+#' @param df Dataframe. Expected columns: model_type,
+#'   mean_conv, speaking_mode.
+#'
+#' @return A ggplot boxplot object.
+#'
+#' @note Use with df_conv_debate.
+#'   Output package ref: lhs_outputs$results$dynamics$conv_debate
 plot_box_conv_compar <- function(df) { # use with df_conv_debate
   ggplot(df, aes(x=model_type, y=mean_conv, fill = speaking_mode)) +
     geom_boxplot(position = position_dodge(width = 0.8)) +
@@ -397,6 +428,19 @@ plot_box_conv_compar <- function(df) { # use with df_conv_debate
     theme_bw()
 }
 
+#' plot_box_conv_compar_speak
+#'
+#' Faceted variant of plot_box_conv_compar. Same boxplot
+#' of convergence rates by model type and speaking mode,
+#' but faceted by speaking_mode to separate the two regimes.
+#'
+#' @param df Dataframe. Expected columns: model_type,
+#'   mean_conv, speaking_mode.
+#'
+#' @return A ggplot boxplot object faceted by speaking_mode.
+#'
+#' @note Use with df_conv_debate.
+#'   Output package ref: lhs_outputs$results$dynamics$conv_debate
 plot_box_conv_compar_speak <- function(df) {
   ggplot(df, aes(x=model_type, y=mean_conv, fill = speaking_mode)) +
     geom_boxplot(position = position_dodge(width = 0.8)) +
@@ -406,8 +450,19 @@ plot_box_conv_compar_speak <- function(df) {
     theme_bw()
 }
 
-## Convergence outcome analysis
-### 10/6/26 version guard
+# Convergence outcome analysis
+#' plot_opin_var_versions (created 10/6/26)
+#'
+#' Boxplot of opinion variance by model type. Version-aware:
+#' if a version column exists, fills by version and facets;
+#' otherwise falls back to a single-color boxplot.
+#'
+#' @param df Dataframe. Expected columns: model_type,
+#'   opinion_variance. Optional: version.
+#'
+#' @return A ggplot boxplot object, optionally faceted by version.
+#'
+#' @note Use with df_versions when multiple LHS versions are present.
 plot_opin_var_versions <- function(df) { # use with df_versions
   p <- ggplot(df, aes(x = model_type, y = opinion_variance)) +
     theme_minimal() +
@@ -425,8 +480,20 @@ plot_opin_var_versions <- function(df) { # use with df_versions
   return(p)
 }
 
-## Trade-offs
-# aggregated plot
+# Trade-offs
+#' plot_tradeoff_aggregated
+#'
+#' Scatter plot of the speed-accuracy trade-off at the debate level.
+#' Plots mean convergence cycles against mean MAE with a linear
+#' trend line, colored by speaking mode and faceted by model type.
+#'
+#' @param df Dataframe. Expected columns: mean_conv, mean_mae,
+#'   speaking_mode, model_type.
+#'
+#' @return A ggplot scatter plot with geom_smooth(method = "lm").
+#'
+#' @note Use with df_conv_debate.
+#'   Output package ref: lhs_outputs$results$dynamics$conv_debate
 plot_tradeoff_aggregated <- function(df) {
   ggplot(df, aes(x = mean_conv, y = mean_mae, color = speaking_mode)) +
     geom_point(alpha = 0.7) +
@@ -441,7 +508,19 @@ plot_tradeoff_aggregated <- function(df) {
     theme_bw()
 }
 
-# trade off plot raw
+#' plot_tradeoff_raw
+#'
+#' Raw scatter plot variant of the speed-accuracy trade-off.
+#' Plots individual convergence_cycle against MAE rather than
+#' debate-level aggregates. Higher point density, lower alpha.
+#'
+#' @param df Dataframe. Expected columns: convergence_cycle,
+#'   mae, speaking_mode, model_type.
+#'
+#' @return A ggplot scatter plot with geom_smooth(method = "lm").
+#'
+#' @note Use with df_batch.
+#'   Output package ref: lhs_outputs$inputs$raw
 plot_tradeoff_raw <- function(df) {
   ggplot(df, aes(x = convergence_cycle, y = mae, color = speaking_mode)) +
     geom_point(alpha = 0.3) +
@@ -454,9 +533,20 @@ plot_tradeoff_raw <- function(df) {
 }
 
 
-
 # Interaction plots
-## influence distribution by model type -- density of influence score faceted by model type
+#' plot_influence_by_model
+#'
+#' Violin plot of influence score distribution for each model type.
+#' Intended for interaction-level analysis of how much each speaking
+#' agent shifts others' opinions.
+#'
+#' @param df Dataframe. Expected columns: model_type, influence_score.
+#'
+#' @return A ggplot violin plot.
+#'
+#' @note Use with df_influence.
+#'   Output package ref: lhs_outputs$inputs$influence.
+#'   NULL when interactions are commented out.
 plot_influence_by_model <- function(df) { # use with df_lhs_influence
   ggplot(df, aes(x = model_type, y = influence_score, fill = model_type)) +
     geom_violin() +
@@ -465,8 +555,19 @@ plot_influence_by_model <- function(df) { # use with df_lhs_influence
     labs(x = NULL, y = "Influence Score")
 }
 
-## saturation rate by condition
-## bar chart of pct_saturated form df suscept, group by model type and current condition
+#' plot_satur_by_condition
+#'
+#' Bar chart of mean cognitive saturation rate by experimental
+#' condition, grouped by model type. Aggregates pct_saturated
+#' within model_type and current_condition before plotting.
+#'
+#' @param df Dataframe. Expected columns: model_type,
+#'   current_condition, pct_saturated.
+#'
+#' @return A ggplot grouped bar chart.
+#'
+#' @note Use with df_susceptibility.
+#'   Closure-captured in output package.
 plot_satur_by_condition <- function(df) { # use with df_lhs_susceptibility
   df %>%
     group_by(model_type, current_condition) %>% # gropu/sum to take mean instead of stacking values to 1
@@ -478,8 +579,20 @@ plot_satur_by_condition <- function(df) { # use with df_lhs_susceptibility
       labs(x = "Condition", y = "% saturated")
 }
 
-## plot direcitonal accuracry
-### top right and bottom left are correct direction / top let and bottom right are wrong
+#' plot_directional_accuracy
+#'
+#' Bar chart of directional accuracy (% of agents whose simulated
+#' change matches the sign of empirical change) by condition and
+#' model type. The 0.5 dashed line represents chance-level accuracy.
+#'
+#' @param df Dataframe. Expected columns: current_condition,
+#'   pct_correct_dir, model_type.
+#'
+#' @return A ggplot grouped bar chart with chance baseline.
+#'
+#' @note Use with df_directional.
+#'   Output package ref: lhs_outputs$results$comparisons$directional.
+#'   top right and bottom left are correct direction / top let and bottom right are wrong
 plot_directional_accuracy <- function(df) { # use with df_lhs_directional
   ggplot(df, aes(x = current_condition, y = pct_correct_dir, fill = model_type)) +
     geom_bar(stat = "identity", position = "dodge") +
@@ -489,7 +602,20 @@ plot_directional_accuracy <- function(df) { # use with df_lhs_directional
     labs(x = "Condition", y = "% accurate agents")
 }
 
-## delta scatter to understand in which direction gaents go
+#' plot_delta_direction_scatter
+#'
+#' Scatter plot comparing simulated vs empirical opinion change
+#' per agent, colored by pro_reduction stance. The y=x line
+#' represents perfect prediction. Faceted by model type.
+#' Computes simulated_delta and empirical_delta internally.
+#'
+#' @param df Dataframe. Expected columns: opinion, initial_opinion,
+#'   final_attitude, pro_reduction, model_type.
+#'
+#' @return A ggplot faceted scatter plot.
+#'
+#' @note Use with df_directional_agents.
+#'   Output package ref: lhs_outputs$results$comparisons$directional_agents
 plot_delta_direction_scatter <- function(df) { # use with df_lhs_directional
   df <- df %>%
     mutate(
@@ -507,9 +633,20 @@ plot_delta_direction_scatter <- function(df) { # use with df_lhs_directional
     labs(x = "Simulated Change", y = "Empirical Change")
 }
 
-## wrong direction rate by pro/anti bar chart
-## pct wrong direction from df suscept facet by model type, colored by pro_reduction
-### is overestimation asymmetric between pro and anti agents
+#' plot_dir_by_pro
+#'
+#' Bar chart of wrong-direction rate split by pro/anti stance.
+#' Tests whether overestimation is asymmetric between pro and
+#' anti agents. Aggregates pct_wrong_direction within model_type
+#' and pro_reduction before plotting.
+#'
+#' @param df Dataframe. Expected columns: model_type,
+#'   pro_reduction, pct_wrong_direction.
+#'
+#' @return A ggplot grouped bar chart.
+#'
+#' @note Use with df_susceptibility.
+#'   Closure-captured in output package.
 plot_dir_by_pro <- function(df) { # use with df_lhs_susceptibility
   df %>%
     group_by(model_type, pro_reduction) %>% # 30-4-26 gropu/sum to take mean instead of stacking values to 1
@@ -522,7 +659,21 @@ plot_dir_by_pro <- function(df) { # use with df_lhs_susceptibility
       labs(x = "Model Type", y = "% Wrong Direction", fill = "Position")
 }
 
-# Beta distribution comparison
+#' plot_beta_distance
+#'
+#' Density plot of simulated regression betas by model type,
+#' overlaid with the empirical beta as a dashed vertical line.
+#' Shows how closely each model's simulated pro_reduction effect
+#' matches the empirical relationship.
+#'
+#' @param df_raw Dataframe. Expected columns: std_estimate, model_type.
+#' @param empirical_beta Numeric. The empirical beta value for
+#'   comparison (dashed red line).
+#'
+#' @return A ggplot density plot faceted by model_type.
+#'
+#' @note Use with simulated_betas_raw and empirical_beta_scalar.
+#'   Output package ref: lhs_outputs$results$comparisons$beta_distance_raw
 plot_beta_distance <- function(df_raw, empirical_beta) {
     ggplot(df_raw, aes(x = std_estimate, fill = model_type)) +
     geom_density(alpha = 0.4) +
@@ -537,22 +688,21 @@ plot_beta_distance <- function(df_raw, empirical_beta) {
     theme(legend.position = "none")
 }
 
-#' Grouped Bar Chart for Valence modif 6/7/26
+#' Grouped Bar Chart for Valence plot_valence_accuracy (created mid 6/26) 
+#' modified 6/7/26
 #' 
-#' Separates population into anti/pro reduction and illustrates the difference in valence
-#' (accuracy) for each model_type
+#' Separates population into anti/pro reduction and illustrates
+#' directional accuracy (pct_correct_dir) for each model_type.
+#' The 0.5 reference line represents chance-level accuracy.
 #'
-#' @param df Valence dataframe used with \code{df_sum_directional_valence} grouped by
-#' \{model_type, current_condition, selected_debate_id, pro_reduction} and returning
-#' one row per model x current_condition x selected_debate_id x pro_reduction, df contains:
-#' \describe{
-#'   \item{pro_reduction}{Factor. mutated to factor from Logical}
-#'   \item{model_type}{Character. Model type identifier (e.g., consensus, clustering, bipolarization)
-#'   \item{pct_correct_dir}{Numerical. Mean of \{correct_dir} (agents move in direction of empir opinion}
-#'   \item{geom_hline}{Plot Option. Intercept of 0.5 is represents a coin flip in \{pct_correct_dir}
-#' }
-#' @return a ggplot bar chart by model type with \code{geom_line()} (one bar for pro/anti per model)
-#' @note TODO need to integrate into Rmd with valence metrics (new chunk or initial chunk)
+#' @param df Valence summary dataframe. Expected columns: 
+#'   model_type, pro_reduction (factor), pct_correct_dir.
+#'
+#' @return A ggplot grouped bar chart, one bar per pro/anti 
+#'   stance within each model type.
+#'
+#' @note Use with df_sum_directional_valence from
+#'   lhs_outputs$comparisons$sum_dir_valence
 plot_valence_accuracy <- function(df) {
     df %>%
     mutate(pro_reduction = as.factor(pro_reduction)) %>%
@@ -574,25 +724,15 @@ plot_valence_accuracy <- function(df) {
 #' model_type, current_condition, selected_debate_id, pro_reduction, pct_correct_dir,
 #' pct_wrong_dir, mean_signed_error, pro_signed_error, mean_mae, mean_baseline_mae, n 
 #'
-#' describe{
+#' \describe{
 #'  \item{accuracy_asymmetry}{Numerical. Pct of agents where simulated direction change is in accordance with empirical (for pro_reduction) - those of anti_reduction}
 #'  \item{selected_debate_id}{String. Identifier of current debate for experiment}
-#'  \item{accuracy_asymmetry}{Boolean. Color injection: TRUE when pro_reduction 
-
-# plot_asymmetry_gap <- function(df) {
-#     ggplot(df, aes(x=accuracy_asymmetry, y = selected_debate_id, color = accuracy_asymmetry > 0)) +
-#     geom_point(alpha = 0.3) +
-#     geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
-#     geom_segment(aes(x = 0, xend = accuracy_asymmetry,
-#                      y = selected_debate_id, yend = selected_debate_id), alpha = 0.3) +
-#     facet_wrap(~ model_type) +
-#     scale_color_brewer(palette = "Set1") +
-#     labs(title = "Model Type Asymmetry per debate",
-#          subtitle = "Positive = Pro-reduction bias | Negative = Anti-reduction bias | Dashed line = No asymmetry",
-#          x = "Accuracy Asymmetry (Pro - Anti % Correct Direction)",
-#          y = "Debate ID")
-# }
-
+#' }
+#'
+#' @return ggplot object that illustrates how far off model predictions are by population
+#'
+#' @note Color indicates bias direction: blue (accuracy_asymmetry > 0)
+#'   for pro-reduction bias, red for anti-reduction bias.
 plot_asymmetry_gap <- function(df) {
     # If the df has multiple replicates per debate, aggregate to a single mean per debate first
     df_plot <- df %>%
@@ -603,7 +743,7 @@ plot_asymmetry_gap <- function(df) {
     geom_point(size = 2.5) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "darkgray", size = 0.8) +
     geom_segment(aes(x = 0, xend = accuracy_asymmetry,
-                     y = selected_debate_id, yend = selected_debate_id), size = 0.6) +
+                     y = selected_debate_id, yend = selected_debate_id), linewidth = 0.6) +
     facet_wrap(~ model_type) +
     scale_color_manual(values = c("TRUE" = "#377eb8", "FALSE" = "#e41a1c"),
                        labels = c("TRUE" = "Pro-Reduction Bias", "FALSE" = "Anti-Reduction Bias")) +
@@ -617,25 +757,18 @@ plot_asymmetry_gap <- function(df) {
           panel.spacing = unit(1, "lines"))
 }
 
-#' Scatter Plot of Model Performance Considering Distinct Agents (Optional version aware)
-#'
-#' Creates a flipped coordinate scatter plot with error bars to illustrate the impact of using SDs for each agent across model types
-#' Optionally version aware (through use of \code{facet_wrap})
-#' 
-#' @param df A dataframe (usually \code{model_comparison_detailed}), a version of df_batch
-#' grouped by \{model_type, version, speaking_mode, use_distinct_agents} aand then summarized in terms of mean MAE
-#' \describe{
-#'   \item{reordered model_type, mae_mean}{Numerical. Meant to sort mae_mean by model_type}
-#'   \item{mae_mean}{Numerical. MAE for each model_type}
-#'   \item{version}{Character. Optional only if for different LHS/GA versions add this to speaking_mode and use_distinct_agents with \code{facet_wrap}}
-#' @return a ggplot object with \code{coord_flip()} and \code{geom_errorbar()}
-#' @note see (framework_analysis.R for calls in outputs list) / not used in Rmd.
-
-
 #' Colord Scatter Directional Agents 6/7/26
 #'
 #' Scatter plot to distinguish between pro/anti agents clustering relative to perfect 
 #' model prediction
+#'
+#' @param df Dataframe. Expected columns: opinion, initial_opinion,
+#'   final_attitude, pro_reduction, model_type.
+#'
+#' @return A ggplot faceted scatter plot.
+#'
+#' @note Use with df_directional_agents.
+#'   Output package ref: lhs_outputs$results$comparisons$directional_agents
 plot_delta_color_direction_scatter <- function(df) { # use with df_directional_agents
   df <- df %>%
     mutate(
@@ -660,6 +793,14 @@ plot_delta_color_direction_scatter <- function(df) { # use with df_directional_a
 #' Density plot of simulated variance in opinion change by valence
 #' Illustrates whether the distribution of variance is centered around zero (implies random walk behavior from the model)
 #' for pro and anti agents
+#'
+#' @param df Dataframe. Expected columns: opinion, initial_opinion,
+#'   pro_reduction, model_type.
+#'
+#' @return A ggplot density plot faceted by model_type.
+#'
+#' @note Use with df_directional_agents.
+#'   Output package ref: lhs_outputs$results$comparisons$directional_agents
 plot_simulated_delta_dist <- function(df) { # use with df_directional_agents
   df %>%
     mutate(
@@ -677,52 +818,20 @@ plot_simulated_delta_dist <- function(df) { # use with df_directional_agents
          title = "Distribution of Simulated Opinion Change by Valence")
 }
 
-## Model performance with distinct agents
-# fix version aware and defensive wrap
-
-#' Scatter Plot of Model Performance Considering Distinct Agents (Optional version aware)
-#'
-#' Creates a flipped coordinate scatter plot with error bars to illustrate the impact of using SDs for each agent across model types
-#' Optionally version aware (through use of \code{facet_wrap})
-#' 
-#' @param df A dataframe (usually \code{model_comparison_detailed}), a version of df_batch
-#' grouped by \{model_type, version, speaking_mode, use_distinct_agents} aand then summarized in terms of mean MAE
-#' \describe{
-#'   \item{reordered model_type, mae_mean}{Numerical. Meant to sort mae_mean by model_type}
-#'   \item{mae_mean}{Numerical. MAE for each model_type}
-#'   \item{version}{Character. Optional only if for different LHS/GA versions add this to speaking_mode and use_distinct_agents with \code{facet_wrap}}
-#' @return a ggplot object with \code{coord_flip()} and \code{geom_errorbar()}
-#' @note see (framework_analysis.R for calls in outputs list) / not used in Rmd.
-plot_model_comparison_uncertainty <- function(df) {
-  p <- ggplot(df, aes(x = reorder(model_type, mae_mean), y = mae_mean)) +
-    geom_point(size = 2.5, color = "blue") +
-    geom_errorbar(aes(
-      ymin = mae_mean - mae_sd,
-      ymax = mae_mean + mae_sd
-    ), width = 0.2) +
-    coord_flip() +
-    theme_minimal() +
-    labs(
-      title = "Model Performance with Distinct Agents",
-      subtitle = "Error bars = +- SD",
-      x = "Model Type",
-      y = "Mean MAE"
-    )
-  
-  if ("version" %in% colnames(df)) {
-    p <- p + facet_grid(version ~ speaking_mode + use_distinct_agents)
-  } else {
-    p <- p + facet_wrap(~ speaking_mode + use_distinct_agents)
-  }
-  return(p)
-}
-
 #' RF Importance Across Model Types 6/8/26
 #' 
 #' Takes the RF output from \code{run_sensi_analysis} and plots the individual variable
 #' importance for each model_type
 #'
+#' @param rf_df Dataframe. Expected columns: parameter, importance,
+#'   output, speaking_mode, model_type, use_distinct_agents.
+#' @param output_filter Character. Output variable to filter on.
+#'   Defaults to "mae".
 #'
+#' @return A ggplot grouped bar chart faceted by model_type
+#'   and use_distinct_agents.
+#'
+#' @note Use with sensi_lhs$rf from sensitivity analysis.
 plot_rf_importance_by_cell <- function(rf_df, output_filter = "mae") {
   rf_df %>%
     filter(output == output_filter) %>%
@@ -738,9 +847,21 @@ plot_rf_importance_by_cell <- function(rf_df, output_filter = "mae") {
  
 #plot_rf_importance_by_cell(sensi_lhs$rf, "mae")
 
-
-# Free y scale per panel: cells differ in absolute MAE and a shared scale 6/8/26
-# flattens the within-cell structure you are trying to read.
+#' plot_pdp_grid created (6/8/26)
+#'
+#' Displays partial dependence curves for each parameter,
+#' faceted by model_type and feature. Free y-scales per panel
+#' because cells differ in absolute MAE — a shared scale
+#' flattens within-cell structure.
+#'
+#' @param pdp_df PDP dataframe. Expected columns: x, yhat,
+#'   feature, model_type, speaking_mode, use_distinct_agents, output.
+#' @param model_filter Optional. Character string to filter to
+#'   a single model_type (e.g., "bipolarization"). NULL shows all.
+#'
+#' @return A ggplot faceted line plot.
+#'
+#' @note Use with pdp_all from sensitivity analysis.
  
 plot_pdp_grid <- function(pdp_df, model_filter = NULL) {
   d <- if (is.null(model_filter)) pdp_df else filter(pdp_df, model_type == model_filter)

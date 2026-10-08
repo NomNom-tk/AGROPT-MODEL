@@ -1,0 +1,59 @@
+\documentclass{gamadays}
+\usepackage{hyperref}
+
+% ------------------------------------------
+% TITLE
+% ------------------------------------------
+
+\title{\textbf{SImulating online deBAtes (SIMBA)}}
+
+
+% ------------------------------------------
+% AUTHOR(S)
+% ------------------------------------------
+
+% 1 auteur
+% \author{L. Author \\
+%  Employer, laboratory acronym}
+% \date{email}
+ 
+% plusieurs auteurs 
+\author{A. Gregor Stolte\up{1}, B. Nicolas Darcel\up{1}, C. Patrick Taillandier\up{2}\\[6pt]
+\up{1} AgroParisTech, CRNH-IdF, UMR914 Nutrition Physiology and Ingestive Behavior, Paris, France\\
+\up{2} MIAT, University of Toulouse, INRA, 31320, Castanet-Tolosan, France\\
+...}
+
+\date{Nicolas.darcel@agroparistech.fr}
+
+\begin{document}
+
+\maketitle
+
+
+\begin{keywords}
+Agent-Based Simulation, Food Decision-Making, Social Influence
+\end{keywords}
+
+\begin{abstract}
+The choice of what we eat has profound impacts on our health, the environment and the Greenhouse Gas Emissions. Existing research in this domain has primarily focused on behavioral interventions grounded in social norms and nudges, yielding mixed results. A proposed shift from this is investigating deliberation — a structured process facilitating the exchange of diverse opinions — as a lens through which to understand how individuals' positions on meat consumption evolve through group interaction.\newline
+
+We present SIMBA, an open-source Agent-Based Model developed in GAMA with the goal of better understanding the mechanisms by which individuals influence each other in collective eating settings (e.g., restaurants, university cafeterias). The model was designed to reproduce pre- and post-deliberation attitude shifts observed across 55 online debates (N = 459) from an empirical study on collective eating behavior and red meat consumption reduction (\hyperlink{dheilly}{Dheilly et al., unpublished}). Debates were homogeneous (composed only of anti-reduction agents) or heterogeneous (combination of pro and anti-reduction agents).\newline
+
+SIMBA draws on three established models of social influence (\hyperlink{flache}{Flache et al., 2017}) — consensus, clustering and bipolarization — to recreate individual opinion trajectories observed in the empirical debate context. In the consensus model, the individual agents' opinions gradually converge toward the mean opinion of all agents in the debate. In clustering, agents only influence those with similar enough views and do not interact with those that are too dissimilar. Bipolarization extends clustering where individuals who are too dissimilar push each others' opinions apart. Simulated agents are initialized solely with pre-deliberation attitudes, ensuring that any predictive improvement stems from the interaction dynamics rather than from additional individual-level covariates. \newline
+
+Model calibration was performed on a subset of the debates, with an explicit held-out set reserved for validation. The two-step calibration process used Latin-Hypercube Sampling (200 samples) to explore the parameter space, followed by a Genetic Algorithm optimizing Mean Absolute Error (MAE) relative to empirical attitude shifts to identify final parameter values applied to the held-out debates. \newline
+
+Results indicate that none of the three social influence variants produced significantly lower MAE than a naive no-change baseline or a multilevel linear regression at the individual, debate or global level (p > 0.05). On the global level, simulation predictions differed from the linear model by less than 0.1\% of the full attitude scale, with the linear model falling within the confidence interval of all three variants. Agents in homogeneous debates changed their opinion more on average than those in heterogeneous debates (p < 0.01), though neither composition outperformed the no-change baseline. The Genetic Algorithm converged toward near-zero predicted attitude change rather than learning genuine debate dynamics, suggesting that simple opinion-averaging and bounded-confidence interaction rules are insufficient to capture the deliberative processes observed empirically. 
+\end{abstract}
+
+\begin{additionnalMaterial}
+\href{https://osf.io/nfue6/overview}{OSF Protocol: SImulating online deBAtes (SIMBA)}\newline
+
+\hypertarget{dheilly}{Dheilly et al., 
+	\href{https://osf.io/q57cx/overview?view_only=abb020c0beec41e782f58a911b735e56}{Can deliberative reasoning induce sustainable dietary change? Effects of different deliberative formats on attitudes and meat consumption}. \textit{Communications Sustainability}}\newline
+
+\hypertarget{flache}{Flache, A., Mäs, M., Feliciani, T., Chattoe-Brown, E., Deffuant, G., Huet, S., \& Lorenz, J. (2017). 
+	\href{https://doi.org/10.18564/jasss.3521}{Models of social influence: Towards the next frontiers}. \textit{Journal of Artificial Societies and Social Simulation}, 20(4), 2.}
+\end{additionnalMaterial}
+\end{document}
+

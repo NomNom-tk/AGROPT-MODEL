@@ -1,9 +1,30 @@
-# Functions
-# TO INCLUDE: prepare_sensitivity_data / add_to_ppt / pivot_params
+# Functions. R depends on nothing, feeds into functions.R, data_processing.R, and framework_analysis.R
+# Organised in the following sections: 
+# Cleaning: read_clean, generate_parquet_cache, clean_headers, drop_leaked_headers, load_and_prepare, empirical_prep, log_step, empirical_stats, load_via_duckdb, write_result
+# Metadata & Filtering: append_metadata, apply_composition_filter, apply_batch_mutations, bipol_constraint_filter, combine_df_versions, aggregate_abm_debate
+# Sensitivity & Calibration: run_sensi_analysis, param_region_extraction, generate_gaml_bounds
+# Interactions: prepare_interactions (double check), compute_influence_scores, compute_susceptibility_scores
+# Directional & Valence: prepare_directional, summarize_directional, summarize_directional_valence, compute_valence_asymmetry
+# Network: build_influence_network, enrich_graph_vertices, filter_top_nodes, filter_edges, build_network_graph
+# Revise: anchor_baseline_facets
 
+#---------------------
+# Cleaning
+#---------------------
 
-# CLEAR read_clean to clean colnames before all else 7/5/26 (update 27/7/26 strip stray chars from headers)
-#' update 28/7/26 adjusted parquet syntax----
+#' read_clean (created 7/5/26) 
+#' updated 27/7/26 strip stray chars from headers
+#' update 28/7/26 adjusted parquet syntax
+#' 
+#' Checks whether the data file is a csv or parquet (if csv convert, if parquet read parquet)
+#' 
+#' @param path the path specific to the input data file (csv or parquet)
+#' @param col_names set of colnames to extract from base file (reduces size and memory load)
+#'
+#' @return df A cleaned data frame with column headers, read via duckdb (regardless of csv or parquet read)
+#'
+#' @note col_names is only applied during initial parquet cache generation.
+#'   Subsequent calls use the existing cache regardless of col_names passed.
 read_clean <- function(path, col_names = NULL) {
 
   # if input is parquet then read parquet
@@ -24,57 +45,18 @@ read_clean <- function(path, col_names = NULL) {
   return(clean_headers(df))
 }
 
-#' Timestamp and progress updates 3/8/26
-#'
-#' Used to check execution time for a specific function/chunk
-#' 
-#' 
-log_step <- function(msg) {
-  cat(sprintf("[%s] %s\n", format(Sys.time(), "%H:%M:%S"), msg))
-}
-
-# CHECK clean_headers blanket gsub clean 30/7/26
-#' meant to blanket clean headers and ensure that header conversion is standard
-#' wraps the clean_stray headers inside it before being called in read_clean
-clean_headers <- function(df) {
-  # strip stray quotes, parentehses, and spaces from column headers  
-  names(df) <- gsub("['() ]", "", names(df))
-
-  df <- df |>
-    janitor::clean_names() |>
-    clean_stray_headers()
-
-  return(df)
-}
-
-# TODO and CHECK clean_stray_headers 29/7/26
-clean_stray_headers <- function(df) {
-  if (!inherits(df, "duckplyr_df") && !is.data.frame(df)) return(df)
-
-  # identify anchor/first column if its null or na return base df
-  first_column <- names(df)[1]
-  if (is.null(first_column) | is.na(first_column)) return(df)
-
-  # clean the names for the first col in file
-  clean_col_name <- gsub("[^a-zA-Z0-9_]", "", first_column)
-
-  # ensure lazy duckdb evaluation without copying rows into R RAM
-  df <- df |>
-    dplyr::filter(
-        is.na(.data[[first_column]]) |
-        gsub("[^a-zA-Z0-9_]", "", as.character(.data[[first_column]])) != clean_col_name
-    )
-
-  return(df)
-}
-
-#' Generate Parquet Cache (RUN ONCE) 30/7/26
+#' generate_parquet_cache - RUN ONCE - (created 30/7/26)
 #' update 24/8/26: col_names argument is optional to bypass it for the empirical data
 #'
-#' meant to check whether parquet caches for data files exist and read parquet if they do
-#' if they don't then generate the parquet files to pass to read_clean
-#' attempts to read all headers as strings in utf8 encoding, otherwise reverts back to basic arrow read
-#' takes input col_names to strip all junk headers and replaces them with R - GAMA matched headers from save calls
+#' ingests a csv and checks for junk header rows, removes them and replaces them with \code{col_names}
+#' GAMA matched headers from save calls, then write a parquet cache for the file and returns a char path for downstream cleaning and assembly
+#'
+#' @param path The path of the ingested data file (csv or parquet)
+#' @param col_names Optional argument in case the file is csv (to extract subset of columns from csv and convert to parquet)
+#'
+#' @return parquet_path file path to the generated parquet path (character string)
+#'
+#' @note run once at the beginning of file ingestion, will only remove stray header rows once and replace with col_names input
 generate_parquet_cache <- function(path, col_names = NULL) {
   parquet_path <- sub("\\.csv$", ".parquet", path, ignore.case = TRUE)
 
@@ -106,7 +88,7 @@ generate_parquet_cache <- function(path, col_names = NULL) {
          " - use the field-coutn filter instead of a positional skip")
   }
 
-  message(sprintf(" skipping%d leading header lines", n_skip))
+  message(sprintf(" skipping %d leading header lines", n_skip))
 
   # set up str schema
   str_schema <- arrow::schema(
@@ -123,8 +105,169 @@ generate_parquet_cache <- function(path, col_names = NULL) {
   parquet_path
 }
 
-# TODO and CHECK append_metadata 28/5/26 ----
-## purpose: provenance travels with dfs, provides objects to call in analysis files and in rmd
+# load_and_prepare (created 27/5/26) 
+#' update 6/8/26 added add_design_cell for cleaner df_ag and batch encoding
+#'
+#' Helper function combining smaller cleaning and helper functions to prep file paths into readable dfs for downstream analysis
+#' Initialized by checking for data file path, then given duckdb connection, and \code{pull_cols} to identify columns to pull from main file and the parquet_version, follows a duckdb loading and prep, otherwise follows a basic column replacement using \code{read_clean}
+#'
+#' @param path Parquet or csv path of specified data file
+#' @param config Spec for the data file including analysis_scope, version, run_type, path, composition_scope
+#' @param version Identifier for comparison of different experimental set-ups (denoted by string var)
+#' @param col_names Optional arg when replacing bad headers to match GAMA save list
+#' @param con Connection set up with DuckDB if parquet path exists to reduce file size
+#' @param pull_cols Columns specific to a file, necessary for different \code{analysis_scope} versions
+#'
+#' @return df Single cleaned data frame that has new column headers inserted, has types coerced, NAs checked, an identifier for a set of parameters (add_param_set_id) and type of experiment (from add_design_cell)
+load_and_prepare <- function(path, config, version = NA, col_names = NULL, con = NULL, pull_cols = NULL) {
+  
+  # guard: return NULL if path is NULL or file does not exist
+  if (is.null(path) || !file.exists(path)) {
+    warning(paste("File read aborted: Path is NULL or doesnt exist at:", path))
+    return(NULL)
+  }
+
+  parquet_version <- sub("\\.csv$", ".parquet", path)
+
+  # basic path or parquet read
+  if (!is.null(con) && !is.null(pull_cols) && file.exists(parquet_version)) {
+    df <- load_via_duckdb(parquet_version, pull_cols, con)
+  } else {
+	df <- read_clean(path, col_names = col_names)
+  }
+	
+  df <- df %>%
+	apply_batch_mutations() %>%
+    add_design_cell() %>%
+    add_param_set_id() %>%
+    bipol_constraint_filter() %>%
+    append_metadata(config, version = version) %>%
+    apply_composition_filter(config)
+      
+    return(df)  
+}
+
+# clean_headers blanket gsub clean (created 30/7/26)
+#' 
+#' Meant to blanket clean headers and ensure that header conversion is standard
+#'
+#' @param df Ingested data frame to check for stray chars in column headers
+#'
+#' @return df A dataframe that has been passed through janitor::clean_names (to remove the stray chars)
+#' and has any remaining header issues cleaned with \code{drop_leaked_headers}
+#'
+#' @note this function is always used in conjunction with \code{drop_leaked_headers} to ensure a double check
+#' after the initial headers have been identified
+clean_headers <- function(df) {
+  # strip stray quotes, parentheses, and spaces from column headers  
+  names(df) <- gsub("['() ]", "", names(df))
+
+  df <- df |>
+    janitor::clean_names() |>
+    drop_leaked_headers()
+
+  return(df)
+}
+
+#' drop_leaked_headers (created 29/7/26)
+#'
+#' Filters out rows where column header text appears as data values
+#'
+#' @param df A dataframe for ingestion and secondary pass
+#' 
+#' @return df A dataframe that has had first column checked for stray chars and subsequently removed, lazily loaded in duckdb
+drop_leaked_headers <- function(df) {
+  if (!inherits(df, "duckplyr_df") && !is.data.frame(df)) return(df)
+
+  # identify anchor/first column if its null or na return base df
+  first_column <- names(df)[1]
+  if (is.null(first_column) | is.na(first_column)) return(df)
+
+  # clean the names for the first col in file
+  clean_col_name <- gsub("[^a-zA-Z0-9_]", "", first_column)
+
+  # ensure lazy duckdb evaluation without copying rows into R RAM
+  df <- df |>
+    dplyr::filter(
+        is.na(.data[[first_column]]) |
+        gsub("[^a-zA-Z0-9_]", "", as.character(.data[[first_column]])) != clean_col_name
+    )
+
+  return(df)
+}
+
+#' load_via_duckdb (created 2/9/26)
+#' modified 3/9/26 to grep for parquet and if TRUE pull query through pull_cols and parquet_path
+#' if FALSE error and suggest generating a parquet cache before proceeding
+#' 
+#' Meant to set up a duckdb query to select a limited amount of rows from the parquet files
+#'
+#' @param parquet_path Character string path that links to the ingested data file
+#' @param pull_cols Columns specific to a file, necessary for different \code{analysis_scope} versions
+#' @param con Connection set up with DuckDB if parquet path exists to reduce file size
+#'
+#' @return df Materialised dataframe that uses SQL to select columns from \code{pull_cols} using \code{parquet_path} as the link
+#' @section errors: if it fails return an abort message to generate the parquet cache before attempting
+load_via_duckdb <- function(parquet_path, pull_cols, con) {
+
+  # if input is parquet then read parquet
+  if (grepl("\\.parquet$", parquet_path, ignore.case  = TRUE)) {
+    # turn pull_cols into a comma separated string, could use paste with the collapse argument
+    query_cols <- paste(pull_cols, collapse = ",")
+    
+    # sprintf call with two %s placeholders, one for columns string and one for the path
+    sql_query <- sprintf(" SELECT %s FROM read_parquet('%s')", query_cols, parquet_path)
+    
+    df <- dbGetQuery(con, sql_query)
+
+    return(df)
+  } else { 
+    rlang::abort("No parquet file found, run generate_parquet_cache first")
+  }
+}
+
+#' log_step (created 3/8/26
+#'
+#' Used to check execution time for a specific function/chunk
+#' 
+#' @param msg String value identifying a section of code that requires a timestap for execution time eval
+#'
+#' @note can be used globally across code to evaluate how long a section takes to compute or as a benchmark
+log_step <- function(msg) {
+  cat(sprintf("[%s] %s\n", format(Sys.time(), "%H:%M:%S"), msg))
+}
+
+#' Write_result (created 24/8/26)
+#'
+#' Writes results to a .txt file for output, should be used after each hypothesis
+#'
+#' @param text A text declaration of what should be included in each paste
+#' @param file Output file path to append to 
+#' @param append Boolean that determines whether or not to write to same file where previous write_lines calls were
+#'
+#' @note initialize with a timestamp call
+#' @examples
+#' \dontrun{
+#' write_result(paste("Hypothesis Results —", Sys.time()), append = FALSE)
+#' write_result(paste(rep("=", 60), collapse = ""))
+#' }
+write_result <- function(text, file = "./hypothesis_results.txt", append = TRUE) {
+    cat(text, "\n", file = file, append = append)
+}
+
+#---------------------
+# Metadata & Filtering
+#---------------------
+
+#' append_metadata (created 28/5/26)
+#' 
+#' Provenance travels with dfs, provides objects to call in analysis files and in rmd
+#' 
+#' @param df Dataframe to ingest and to add config columns to
+#' @param config List in file data_processing.R from which to pull the information for mutated cols
+#' @param version Optional arg in case of multiple versions of a data file
+#'
+#' @return Input dataframe with run_type, composition_scope, and version columns appended
 append_metadata <- function(df, config, version = NA) {
   df %>% 
     mutate(
@@ -134,24 +277,131 @@ append_metadata <- function(df, config, version = NA) {
     )
 }
 
-#' WriteLines for Hypotheses 24/8/26
+
+#' map_slots (created 24/09/26)
 #'
-#' Writes results to a .txt file for output, should be used after each hypothesis
+#' Used to document and describe the output package slots and double check whether slots are filled by analysis_scope
 #'
-#' @param text a text declaration of what should be included in each paste
-#' @param file "" denotes the file to append to 
+#' @param x The output of analyze_processed_run for lhs/ga to illustrate the slots that are populated or not
+#' @param prefix Character. Indentation string. Leave as default.
+#' @param max_depth Integer. Maximum recursion depth. Default 3,
+#'   use 4+ for deeply nested slots.
+#' @param depth Integer. Current recursion depth. Leave as default.
 #'
-#' @note initialize with a timestamp call
-#' @examples
-#' \dontrun{
-#' write_result(paste("Hypothesis Results —", Sys.time()), append = FALSE)
-#' write_result(paste(rep("=", 60), collapse = ""))
-#' }
-write_result <- function(text, file = "../hypothesis_results.txt", append = TRUE) {
-    cat(text, "\n", file = file, append = append)
+#' @return Invisible NULL. Output is printed to console. Leave as default.
+map_slots <- function(x, prefix = "", max_depth = 3, depth = 0) {
+  if (depth >= max_depth || !is.list(x) || is.data.frame(x)) {
+    tag <- if (is.null(x)) "[NULL]"
+           else if (is.data.frame(x)) paste0("[df: ", nrow(x), "x", ncol(x), "]")
+           else if (is.function(x)) "[function]"
+           else paste0("[", class(x)[1], "]")
+    cat(prefix, tag, "\n")
+    return(invisible(NULL))
+  }
+  nms <- names(x)
+  if (is.null(nms)) nms <- seq_along(x)
+  for (nm in nms) {
+    cat(prefix, "$", nm, sep = "")
+    map_slots(x[[nm]], prefix = paste0(prefix, "  "), max_depth = max_depth, depth = depth + 1)
+  }
 }
 
-#' Apply Debate Composition Filter Dynamically (created 27/5/26) 
+#' anchor_baseline_facets (created 12/6/26)
+#'
+#' Duplicates no_change baseline rows across both TRUE/FALSE levels of a
+#' condition column so that faceted plots show the baseline in every panel.
+#'
+#' @param df Dataframe containing a model_type column and the condition column to facet by
+#' @param condition_col Character string naming the column to duplicate across (default "speaking_mode")
+#' @param baseline_val Character string identifying the baseline model_type (default "no_change")
+#'
+#' @return The input dataframe with baseline rows mirrored into both factor levels
+#'   of condition_col, original unassigned baseline rows removed to avoid duplicates.
+anchor_baseline_facets <- function(df, condition_col = "speaking_mode", baseline_val = "no_change") {
+
+  baseline_rows <- df %>%
+    filter(model_type == baseline_val)
+
+  if (nrow(baseline_rows) > 0) {
+    nc_true <- baseline_rows %>% mutate(!!sym(condition_col) := TRUE)
+    nc_false <- baseline_rows %>% mutate(!!sym(condition_col) := FALSE)
+
+    df_clean <- df %>% filter(model_type != baseline_val)
+    df <- bind_rows(df_clean, nc_true, nc_false) %>% distinct()
+  }
+  return(df)
+}
+
+#' add_design_cell (created 6/8/29)
+#' 
+#' Encodes model x distinct x speaking independent of current_experiment_id
+#' ensure that we have on design cell per model_type
+#' mutate current_experiment_id to char as an extra label
+#' 
+#' @param df Dataframe for ingestion, usually base df passed from data_processing.R
+#'
+#' @return df Dataframe with mutated design_cell col containing labels for:
+#'   use_distinct_agents and speaking_mode, separated by '_',
+#'   also mutates the current_experiment_id as an extra label (not sure it is used)
+add_design_cell <- function(df) {
+  df <- df %>%
+        mutate(design_cell = paste(model_type,
+                                   ifelse(use_distinct_agents, "dist", "ndist"),
+                                   ifelse(speaking_mode, "speak", "nospeak"),
+                                   sep = "_"))
+  if ("current_experiment_id" %in% colnames(df)) {
+    df <- df %>% mutate(experiment_id_label = as.character(current_experiment_id))
+  }
+  return(df)
+}
+
+#' add_param_set_id (created 6/8/26)
+#' 
+#' Intersects population parameters with names in df, 
+#' allows distinct calls in framework_analysis to call one specific point in parameter space we can identify
+#'
+#' @param df Dataframe for ingestion, usually base df from data_processing.R
+#'
+#' @return Dataframe grouped by parameter columns and an added information column denoting the current group id
+add_param_set_id <- function(df) {
+  pcols <- intersect(c("convergence_rate", "confidence_threshold",
+                       "repulsion_threshold", "repulsion_strength"),
+                     names(df))
+  df %>%
+    group_by(across(all_of(pcols))) %>%
+    mutate(param_set_id = cur_group_id()) %>%
+    ungroup()
+}
+
+#' empirical_prep (created 27/7/26) 
+#' 
+#' Prep function that calls \code{read_clean} and subsequently mutates cols for empirical analysis and 
+#' downstream comparisons
+#'
+#' @param path Character path for the empirical data file
+#'
+#' @return A dataframe using the empirical csv/parquet as a baseline with additional mutated columns
+#' representing the baseline opinion change for each agent in each debate
+#'
+#' @note Prior check to ensure that the naming convention matches downstream calls
+empirical_prep <- function(path) {
+  read_clean(path) %>%
+    mutate(index_t0_check = ((db_factor1t0 + db_factor2t0) / 2) - ((db_factor3t0 + db_factor4t0 + db_factor5t0) / 3),
+          composition = substr(id_group_all, 1, 1),
+          change_t0_t1 = (db_index_t1 - db_index_t0) / 12,
+          change_t1_t2 = (db_index_t2 - db_index_t1) / 12,
+          change_t0_t2 = (db_index_t2 - db_index_t0) / 12,
+          opinion_t1 = (db_index_t1 + 6) / 12,
+          opinion_t0 = (db_index_t0 + 6) / 12,
+          opinion_t2 = (db_index_t2 + 6) / 12,
+          abs_change_t1_t2 = abs(change_t1_t2),
+          opinion_strength = abs(db_index_t1) / 12, # strength is initial opinion folded at zero because that is neutral on the scale
+          opinion_strength_cent = opinion_strength - mean(opinion_strength, na.rm = TRUE), # added for colinearity problem in h2
+          perceived_norm_cent = perceived_norms - mean(perceived_norms, na.rm = TRUE), # centered perceived norms for h2
+          self_control_cent = self_control - mean(self_control, na.rm = TRUE)) # centered self control for h2
+}
+
+#' apply_composition_filter (created 27/5/26) 
 #' update 2/6/26 (dynamic column detection and stop condition)
 #'
 #' Filters a data frame by debate composition or debate identifier based on 
@@ -211,51 +461,14 @@ apply_composition_filter <- function(df, config) {
   
   return(df)
 }
-# TODO empirical_prep 27/7/26 (checked var names to match read_clean formatting) ----
-empirical_prep <- function(path) {
-  read_clean(path) %>%
-    mutate(index_t0_check = ((db_factor1t0 + db_factor2t0) / 2) - ((db_factor3t0 + db_factor4t0 + db_factor5t0) / 3),
-          composition = substr(id_group_all, 1, 1),
-          change_t0_t1 = (db_index_t1 - db_index_t0) / 12,
-          change_t1_t2 = (db_index_t2 - db_index_t1) / 12,
-          change_t0_t2 = (db_index_t2 - db_index_t0) / 12,
-          opinion_t1 = (db_index_t1 + 6) / 12,
-          opinion_t0 = (db_index_t0 + 6) / 12,
-          opinion_t2 = (db_index_t2 = 6) / 12,
-          abs_change_t1_t2 = abs(change_t1_t2),
-          opinion_strength = abs(db_index_t1) / 12, # strength is initial opinion folded at zero because that is neutral on the scale
-          opinion_strength_cent = opinion_strength - mean(opinion_strength, na.rm = TRUE), # added for colinearity problem in h2
-          perceived_norm_cent = perceived_norms - mean(perceived_norms, na.rm = TRUE), # centered perceived norms for h2
-          self_control_cent = self_control - mean(self_control, na.rm = TRUE)) # centered self control for h2
-}
 
-# load and prepare 27/5/26 ----/
-#' update 6/8/26 added add_design_cell for cleaner df_ag and batch encoding
-## prepare data handling using read_clean, batch mutations, bipol_contraints
-## append meta data attaches, run type, composition scope and verison columns
-## aply composition filter to M/H?all filter\
-# returns single clean df
-load_and_prepare <- function(path, config, version = NA, col_names = NULL) {
-  
-  # guard: return NULL if path is NULL or file does not exist
-  if (is.null(path) || !file.exists(path)) {
-    warning(paste("File read aborted: Path is NULL or doesnt exist at:", path))
-    return(NULL)
-  }
-  
-  df <- path %>%
-    read_clean(col_names = col_names) %>%
-    apply_batch_mutations() %>%
-    add_design_cell() %>%
-    add_param_set_id() %>%
-    bipol_constraint_filter() %>%
-    append_metadata(config, version = version) %>%
-    apply_composition_filter(config)
-  
-  return(df)
-}
-
-# TODO empirical_stats ----
+#' empirical_stats (created 27/7/26)
+#' 
+#' Function that summarizes the mean opinion change by condition and follows naming convention that downstream requires in framework_analysis.R
+#' 
+#' @param df Dataframe for ingestion and column mutation
+#'
+#' @return A dataframe with mean attitude change across T0-T2 for graphical illustration
 empirical_stats <- function(df) {
   df <- df %>%
     group_by(condition) %>%
@@ -269,311 +482,8 @@ empirical_stats <- function(df) {
       n = n()
     )
 }
-# CLEAR BUT TEST AGAIN pivot_params ####
-pivot_params <- function(df) {
-  df %>%
-    mutate(
-      confidence_threshold = ifelse(model_type == "consensus", NA, confidence_threshold),
-      repulsion_threshold = ifelse(model_type %in% c("consensus", "clustering"), NA, repulsion_threshold),
-      repulsion_strength = ifelse(model_type %in% c("consensus", "clustering"), NA, repulsion_strength)
-    ) %>%
-    pivot_longer(
-      cols = c(convergence_rate, confidence_threshold,
-               repulsion_strength, repulsion_threshold),
-      names_to = "parameter",
-      values_to = "value"
-    ) %>%
-    filter(!is.na(value))
-  
-  return(df)
-}
 
-# TODO prepare sensitivity data (need to change or remove // sensitivity analyses no longe ruse this)
-prepare_sensitivity_data <- function(df, param_cols, output_cols) {
-  df %>%
-    mutate(across(all_of(param_cols), ~(. - mean(., na.rm = TRUE)) / sd(., na.rm = TRUE)),
-           across(all_of(output_cols), ~ (. - mean(., na.rm = TRUE)) / sd(., na.rm = TRUE)))
-}
-
-# # CLEAR data loading prepare_data ----
-# prepare_data <- function(path, version) {
-#   read_clean(path) %>%
-#     apply_batch_mutations() %>%
-#     bipol_constraint_filter() %>%
-#     mutate(version = version)
-# }
-
-# # TODO-test saving logic add_to_ppt ####
-# add_to_ppt <- function(ppt, content, title, type = "table") {
-#   ppt <- add_slide(ppt, lyaout = "Title and Content", master = "Office Theme")
-#   ppt <- ph_with(ppt, value = tile, location = ph_location_type(type = "title"))
-  
-#   if (type == "table") {
-#     # data frame or tidy regression output
-#     ft <- flextable(content) %>%
-#       theme_vanilla() %>%
-#       autofit()
-#     ppt <- ph_with(ppt, value = ft, location = ph_location_type(type = "body"))
-#   } else if (type == "regression") {
-#     ft <- tidy(content, conf.int = TRUE) %>%
-#       mutate(across(where(is.numeric), ~round(., 3))) %>%
-#       flextable() %>%
-#       theme_vanilla() %>%
-#       autofit()
-#     ppt <- ph_with(ppt, value = ft, location = ph_location_type(type = "body"))
-#   } else if (type == "plot") {
-#     ## ggplot object
-#     ppt <- ph_with(ppt,
-#                    value = dml(ggobj = content),
-#                    location = ph_location(width = 8, height = 5,
-#                                           left = 1, top = 1.5))
-#   }
-#   return(ppt)
-# }
-
-## use
-## ppt <- read_pptx()
-## add table example: 
-## ppt <- add_to_ppt(ppt, model_comparison, "Model Comparison), type = "table)
-## ppt <- add_to_ppt(ppt, boss_table, "Summary Results", type = "table)
-## save once
-# print(ppt, target = "relative path")
-
-# # TODO 12/6/26 no_change_anchor duplicates no_change across TRUE/FALSE for speaking_mode ----
-anchor_baseline_facets <- function(df, condition_col = "speaking_mode", baseline_val = "no_change") {
-
-  # check if baseline model_type exists in df
-  baseline_rows <- df %>%
-    filter(model_type == baseline_val)
-
-  if (nrow(baseline_rows) > 0) {
-    # dynamically create explicit TRUE and FALSE data structures
-    nc_true <- baseline_rows %>% mutate(!!sym(condition_col) := TRUE)
-    nc_false <- baseline_rows %>% mutate(!!sym(condition_col) := FALSE)
-
-    # Strip original unassigned baseline and bind explicit mirrored copies
-    df_clean <- df %>% filter(model_type != baseline_val)
-    df <- bind_rows(df_clean, nc_true, nc_false) %>% distinct()
-    }
-  return(df)
-}
-
-# # CLEAR prepare_interactions for df_interactions ----
-# prepare_interactions <- function(path) {
-#   read_csv(path, skip = 1) %>% # temp fix using skip lines and no read_clean 7/5/26
-#     mutate(
-#       selected_debate_id = as.character(selected_debate_id),
-#       seed = as.character(seed),
-#       use_distinct_agents = case_when(
-#         use_distinct_agents == "true" ~ TRUE,
-#         use_distinct_agents == "false" ~ FALSE,
-#       ),
-#       agent_is_saturated = as.logical(agent_is_saturated),
-#       agent_wrong_direction = as.logical(agent_wrong_direction)
-#     ) %>%
-#     filter(speaking_mode == TRUE)
-# }
-
-#' Prepare and Clean Interaction Logs updated on 23/7/26
-#' 
-#' Reads interaction-level output CSV files from GAMA simulations, enforces standard
-#' schema types, and filters for active speaking events. Automatically handles 
-#' empty logs (e.g., non-speaking model runs) and missing headers without crashing.
-#' 
-#' @param path String. File path to the interaction log CSV file.
-#' 
-#' @details 
-#' The function performs early-exit checks if the CSV file contains zero data rows 
-#' (common when evaluating models without speech/dialogue mechanics). It coerces 
-#' \code{selected_debate_id} and \code{seed} to character vectors, converts logical 
-#' flags, ensures \code{delta}, \code{initial_opinion}, \code{opinion}, \code{final_attitude} are numerical 
-#' and conditionally filters for \code{speaking_mode == TRUE} if 
-#' the column is present.
-#' 
-#' @return A cleaned \code{tbl_df} (tibble) with validated column types and 
-#'   filtered interaction records. Returns an empty (0-row) data frame with its 
-#'   original structure if no interactions are present in the input file.
-#' 
-#' @export
-prepare_interactions <- function(path) {
-
-  df <- read_clean(path) # removed path due to deletion of first commented header 24/7/26
-
-  # nrow guard fix for lazy count 29/7/26
-  n_rows <- df %>% summarise(n = n()) %>% pull(n)
-  
-  # Guard: Return early if file is empty (e.g., non-speaking model run)
-  if (n_rows == 0) {
-    message("Notice: Interaction log at '", path, "' contains 0 rows. Skipping.")
-    return(df)
-  }
-  
-  df <- df %>%
-    mutate(
-      selected_debate_id    = as.character(selected_debate_id),
-      seed                  = as.character(logged_batch_seed),
-
-      # ensure delta and opinion are numeric cols
-      across(any_of(c("delta", "initial_opinion", "opinion", "final_attitude")), as.numeric),
-
-      # convert logical flags  
-      across(any_of(c("speaking_mode", "use_distinct_agents", "agent_is_saturated", "agent_wrong_direction")), as.logical)
-    ) %>%
-    filter(speaking_mode %in% TRUE)
-  
-  return(df)
-}
-
-# TODO compute_influence_scores 27/4/26 (update 27/7/26 empty df and row guard) ----
-compute_influence_scores <- function(df) { # use with df_interactions, establish broadcasts and influence
-  # guard for empyt data set and warning
-
-  if (is.null(df)) {
-    message("Notice: Passed NULL to compute_influence_scores(). Returning NULL.")
-    return(NULL)
-  }
-    
-  # nrows extra lazy guard before eval 29/7/26
-  n_rows <- df %>% summarise(n = n()) %>% pull(n)
-    
-  if (n_rows == 0) {
-    message("Notice: Dataset passed to compute_influence_scores is empty. Returning NULL.")
-    return(NULL)
-  }
-    
-  df %>%
-    group_by(model_type, current_condition, selected_debate_id, sender_id) %>%
-    summarize(
-      influence_score = mean(abs(delta)),
-      n_broadcasts = n(),
-      .groups = "drop"
-    )
-}
-
-#' Compute Receiver Susceptibility Scores 27/4/26 (updated 23/7/26 to include guard for the first row)
-#' 
-#' Aggregates interaction-level dialogue data to compute mean susceptibility 
-#' metrics per agent across debate conditions. Calculates total exposure counts, 
-#' average shift magnitudes (\code{delta}), and saturation rates.
-#' 
-#' @param df Data frame or tibble. The cleaned interaction data log (typically 
-#'   produced by \code{prepare_interactions}).
-#' 
-#' @details 
-#' Includes an early-exit check for empty data sets (\code{nrow(df) == 0}) to prevent 
-#' non-numeric evaluation errors on \code{abs(delta)} when processing baseline 
-#' or non-speaking model runs.
-#' 
-#' @return A summarized \code{tbl_df} with receiver-level susceptibility metrics, 
-#'   or \code{NULL} if the input data frame contains zero observations.
-#' 
-#' @export
-compute_susceptibility_scores <- function(df) { # use with df_interactions
-  # guard for empyt data set and warning
-
-  if (is.null(df)) {
-    message("Notice: Passed NULL to compute_susceptibility_scores(). Returning NULL.")
-    return(NULL)
-  }
-    
-  # nrows extra lazy guard before eval 29/7/26
-  n_rows <- df %>% summarise(n = n()) %>% pull(n)
-    
-  if (n_rows == 0) {
-    message("Notice: Dataset passed to compute_susceptibility_scores is empty. Returning NULL.")
-    return(NULL)
-  }
-    
-  df %>%
-    group_by(model_type, current_condition, selected_debate_id, receiver_id, pro_reduction) %>%
-    summarize(
-      susceptibility_score = mean(abs(delta)),
-      n_exposures = n(),
-      pct_saturated = mean(agent_is_saturated),
-      pct_wrong_direction = mean(agent_wrong_direction),
-      .groups = "drop"
-    )
-}
-
-#' Add design Cell Helper 6/8/29
-#' 
-#' Encodes model x distinct x speaking independent of current_experiment_id
-#' ensure that we have on design cell per model_type
-#' mutate current_experiment_id to char as an extra label
-add_design_cell <- function(df) {
-  df <- df %>%
-        mutate(design_cell = paste(model_type,
-                                   ifelse(use_distinct_agents, "dist", "ndist"),
-                                   ifelse(speaking_mode, "speak", "nospeak"),
-                                   sep = "_"))
-  if ("current_experiment_id" %in% colnames(df)) {
-    df <- df %>% mutate(experiment_id_label = as.character(current_experiment_id))
-  }
-  return(df)
-}
-
-#' Param set id creation 6/8/26
-#' intersects population parameters with names in df 
-#' allows distinct calls in framework_analysis to call one specific point in parameter space we can identify
-add_param_set_id <- function(df) {
-  pcols <- intersect(c("convergence_rate", "confidence_threshold",
-                       "repulsion_threshold", "repulsion_strength"),
-                     names(df))
-  df %>%
-    group_by(across(all_of(pcols))) %>%
-    mutate(param_set_id = cur_group_id()) %>%
-    ungroup()
-}
-               
-# CLEAR combine_df_versions ----
-# allows combination of different versions of tests for comparison e.g., convergence_threshold
-combine_df_versions <- function(dfs, version_names) {
-  
-  stopifnot(length(dfs) == length(version_names))
-  
-  dfs <- lapply(seq_along(dfs), function(i) {
-    df <- dfs[[i]]
-    df$version <- version_names[i]
-    df
-  })
-  
-  dplyr::bind_rows(dfs)
-}
-
-# DEADCODE / remove once pipeline finished 22/7/26
-# # CLEAR compute_ols_baseline ----
-# compute_ols_baseline <- function(df_ag) {
-#   model <- lm(final_attitude ~ initial_opinion, data = df_ag)
-  
-#   # predictions
-#   preds <- predict(model, newdata = df_ag)
-  
-#   # attach error
-#   df_ag_ols <- df_ag %>%
-#     mutate(
-#       ols_pred = preds,
-#       ols_error = abs(final_attitude - ols_pred)
-#     )
-  
-#   # global performance metric to compare to abm
-#   ols_mae_global <- mean(df_ag_ols$ols_error, na.rm = TRUE)
-  
-#   list(model = model,
-#        data = df_ag_ols,
-#        ols_mae = ols_mae_global)
-# }
-# TODO aggregae_abm_debate ----
-aggregate_abm_debate <- function(df, mae_col = "mae") {
-  df %>%
-    group_by(selected_debate_id, debate_label) %>%
-    summarize(
-      abm_mae = mean(.data[[mae_col]], na.rm = TRUE),
-      r_runs = n(),
-      .groups = "drop"
-    )
-}
-
-
+#' apply_composition_filter (created approx 6/2026)
 #' Apply Batch Mutations and Type Coercion to Simulation Output
 #' update 6/8/26 added logical_cols coercion and trim to lowercase
 #'
@@ -617,6 +527,10 @@ apply_batch_mutations <- function(df) {
   
   df <- df %>%
     filter(model_type != "model_type")
+
+  # collect once to materialize into local RAM before any coercions or mutations
+  df <- collect(df)
+  message("lazy data frame collected and pulled into R memory, starting col coercion and NA diagnostics")
   
   # columns to mutate to numeric
   conv_cols <- c(# existing batch-level
@@ -651,18 +565,14 @@ apply_batch_mutations <- function(df) {
     message("no missing required columns, proceeding with mutations")
   }
   
-  
   # mutation for char and logical columns to numeric for future analysis
   df <- df %>%
     mutate(across(all_of(existing_conv_cols), as.numeric)) %>%
     mutate(
-      # for wilcox tests with speaking mode, wrap as logical
-      #speaking_mode = case_when(speaking_mode == "true" ~ TRUE,
-      #                          speaking_mode == "false" ~ FALSE),
-      #use_distinct_agents = case_when(use_distinct_agents == "true" ~ TRUE,
-      #                                use_distinct_agents == "false" ~ FALSE),
       normalised_convergence = convergence_cycle / 100, # divided by 100 to normalize, updated to 100 6/5/26
     )
+
+  log_step("Char and Logical Col coercion finished, starting NA diagnostics...")
   
   # guards for string tags matching if columns exist 2/6/26
   if ("debate_label" %in% colnames(df)) {
@@ -688,10 +598,6 @@ apply_batch_mutations <- function(df) {
       mutate(across(all_of(logical_cols),
                     ~ as.logical(tolower(trimws(as.character(.))))))
   }
-
-  # collect once to materialize into local RAM before diagnostics
-  df <- collect(df)
-  message("lazy data frame collected and pulled into R memory, starting NA diagnostics")
   
   # count NAs // recheck logic
   na_check <- colSums(is.na(df))
@@ -717,7 +623,92 @@ apply_batch_mutations <- function(df) {
   
 }
 
-#' Compute PCC/PRCC/RF Sensitivity Indices per Model/Agent-Type Combination (updated on 24/7/26)
+#' apply_composition_filter (created approx 5/2026)
+#' Filter Out Bipolarization Rows Violating Neutral Zone Constraint
+#'
+#' Removes simulation rows where \code{model_type == "bipolarization"} and
+#' \code{neutral_zone_width < 0}, which represents a structurally invalid
+#' configuration (the two opinion poles have crossed/overlapped rather than
+#' maintaining a separating neutral zone). Also normalizes a legacy
+#' \code{debate} column name to \code{selected_debate_id} if present.
+#'
+#' @param df A dataframe of simulation results. Expected to contain
+#'   \code{model_type} and \code{neutral_zone_width} for the filter to apply;
+#'   if either is missing, the function is a no-op (returns \code{df} unchanged).
+#' @param verbose Logical. If \code{TRUE} (default), prints a message
+#'   reporting the number of violating rows removed, or confirms none found.
+#'
+#' @return The filtered dataframe, with bipolarization rows where
+#'   \code{neutral_zone_width < 0} removed. All other rows (including all
+#'   non-bipolarization rows) are retained unchanged.
+#'
+#' @note Renames \code{debate} -> \code{selected_debate_id} if \code{debate}
+#'   exists in \code{df}, for consistency with the rest of the pipeline's
+#'   join key naming.
+#'
+#' @section Side effects:
+#'   Emits a \code{message()} when \code{verbose = TRUE}: either reporting
+#'   violation count or confirming a clean dataset.
+bipol_constraint_filter <- function(df, verbose = TRUE) {
+  # check and reconvert any naming problems
+  if ("debate" %in% names(df)) {
+    df <- df %>% rename(selected_debate_id = debate)
+  }
+  
+  # guard rail for df_ag - neutral_zone_width
+  if (!"model_type" %in% colnames(df) || !"neutral_zone_width" %in% colnames(df)) {
+    if (verbose) {
+      message("Skipping neutral zone validation: columns not in dataset")
+    }
+    return(df)
+  }
+  
+  violations <- df %>%
+    filter(model_type == "bipolarization",
+           neutral_zone_width < 0)
+  
+  n_violations <- nrow(violations)
+  
+  # verbose output if there are violations
+  if (verbose && n_violations > 0) {
+    message(paste("Removed bipolarization rows where there are neutral zone violations", n_violations))
+  } else if (verbose) {
+    message(paste("No violations found, good on ya ;-+"))
+  }
+  
+  # return filtered df
+  df <- df %>%
+    filter(!(model_type == "bipolarization" & neutral_zone_width < 0))	  
+  return(df)
+}
+
+#' combine_df_versions (created around 5/26)
+#'
+#' allows combination of different versions of tests for comparison e.g., convergence_threshold
+#'
+#' @param dfs Multiple dataframes in case of multiple versions of an experiment run
+#' @param version_names String declaration of the various versions of the experiment data file
+#'
+#' @return A dataframe with the multiple versions combined for cross comparison in sensitivity analyses
+combine_df_versions <- function(dfs, version_names) {
+  
+  stopifnot(length(dfs) == length(version_names))
+  
+  dfs <- lapply(seq_along(dfs), function(i) {
+    df <- dfs[[i]]
+    df$version <- version_names[i]
+    df
+  })
+  
+  dplyr::bind_rows(dfs)
+}
+
+#---------------------
+# Sensitivity & Calibration
+#---------------------
+
+#' run_sensi_analysis (created 20/7/26) 
+#' updated on 24/7/26 to compute PCC/PRCC/RF Sensitivity Indices per Model/Agent-Type Combination 
 #' update 6/8/26 corrected key for speaking_mode (true/false) writing to same list element (added to group_by)
 #' correction: two identifiers, lookup key (from param_cols_by_model) and key (result storage)
 #'
@@ -740,6 +731,8 @@ apply_batch_mutations <- function(df) {
 #'   higher number: yields more stable and reproducible feature importance scores,
 #'   and Rsquared estimates but increases computation time linearly
 #'   lower number: faster execution for rapid testing but importance rankings have more noise
+#' @param max_rows_per_cell Maximum number of rows to ingest for RF analysis to limit rows in RAM
+#' @param min_rows Minimum number of rows required to start the RF tree construction
 #'
 #' @return A named list with three elements:
 #'   \describe{
@@ -764,12 +757,7 @@ apply_batch_mutations <- function(df) {
 #'
 #'   Random forest permutation importance is computed across single and multi-parameter cases
 #'   using \code{ranger::ranger()}, returns out-of-bag feature importance and overall
-#'   variance explained (\eqn{R^2}).
-#'
-#'   Skips (via \code{next}: keys not found in \code{param_cols_by_model};
-#'   param sets that don't intersect with \code{df_piece} columns;
-#'   outputs missing from \code{df_piece}; outputs with zero variance (constant value)
-#'   since correlation requires variance in both X and Y.
+#'   variance explained (\eqn{R^2}). Skip condition is the same as above for PCC/PRCC
 #'
 #' @section Side effects:
 #'   Prints debug output to console: current key, available
@@ -779,8 +767,7 @@ apply_batch_mutations <- function(df) {
 #' @seealso \code{plot_pcc_heatmap()}, \code{plot_prcc_heatmap()} for
 #'   visualizing the returned dataframes. \code{PCC} column name confirmed
 #'   here as \code{"original"} extracted from \code{sensitivity::pcc()}.
-run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees = 500, 
-                               max_rows_per_cell = 50000, min_rows = 10) {
+run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees = 500, max_rows_per_cell = 50000, min_rows = 10) {
   
   sensi_split <- df %>%
     filter(model_type != "no_change") %>%
@@ -836,12 +823,6 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees =
     
     #print(key)
     #print(param_cols)
-    
-    # check if keys are null or not
-    if (is.null(param_cols)) {
-      print(paste("Skipping key:", key))
-      next
-    }
     
     # Loop over output columns
     for (output in output_cols) {
@@ -939,7 +920,7 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees =
       key = rep(key, length(imp_scores)),
       model_type = rep(model_type_val, length(imp_scores)),
       use_distinct_agents = rep(distinct_val, length(imp_scores)),
-      speaking_mode = rep(distinct_val, length(imp_scores)),
+      speaking_mode = rep(speak_val, length(imp_scores)),
       output = rep(output, length(imp_scores)),
       parameter = names(imp_scores),
       importance = as.numeric(imp_scores),
@@ -964,285 +945,31 @@ run_sensi_analysis <- function(df, param_cols_by_model, output_cols, num_trees =
     ))
 }
 
-
-# CLEAR fit_lm for regression and can be integrated into pcc and prcc, defaults are lists declared in data_processing ####
-# example call for bipol_true regressed onto mae and variance: test <- fit_lm(df_batch, param_cols = param_cols_by_model[["bipolarization_TRUE"]], 
-# output_cols = c("mae", "opinion_variance"))
-fit_lm <- function(df, param_cols, output_cols, standardize = FALSE) {
-  
-  # ensure param_cols passed are numeric
-  df <- df %>%
-    mutate(across(all_of(param_cols), ~ as.numeric(.)))
-  
-  # optional standardization (standardize = TRUE)
-  if (standardize) {
-    df <- df %>%
-      mutate(across(all_of(param_cols), ~(. - mean(., na.rm = TRUE)) / sd(., na.rm = TRUE)),
-             across(all_of(output_cols), ~(. - mean(., na.rm = TRUE)) / sd(., na.rm = TRUE))
-    )
-  }
-  # initialize results storage
-  lm_results <- list()
-  
-  # loop over outputs for multiple outputs the curly takes care of storage and lm model fit
-  for (var in output_cols) {
-    if (!var %in% colnames(df)) next
-  
-  # build formula
-  formula_obj <- as.formula(paste(var, "~", paste(param_cols, collapse = " + ")))
-  
-  # fit formula
-  model <- lm(formula_obj, data = df)
-  
-  # results store R squared and tidy results
-  lm_results[[var]] <- data.frame(
-    output = var,
-    r_square = summary(model)$r.squared,
-    tidy(model)
-  )
-  }
-  
-  # r bind results
-  lm_results_df <- bind_rows(lm_results, .id = "output")
-  
-  # return results
-  return(lm_results_df)
-}
-                  
-#' Generate GAML Parameter Bound Declarations from Top-Performing Configs 24/7/26 (update to incorporate guards and initialize as characters)
-#' update 6/8/26 added SD parameters so they don't get skipped in generation, header block addition
-#'
-#' Translates a dataframe of best-performing parameter ranges (one row per
-#' model_type / use_distinct_agents combination) into GAML \code{parameter}
-#' declaration strings, ready to paste into a GAMA experiment block to
-#' constrain a follow-up GA or LHS run. Zero-width ranges (min == max) are
-#' symmetrically expanded by \code{buffer} to avoid a degenerate search space.
-#'
-#' @param df A dataframe, typically the GAML Boundary Layer output (top 25%
-#'   performing LHS configs), with one row per model_type/use_distinct_agents
-#'   combination. Required columns: \code{model_type}, \code{use_distinct_agents},
-#'   \code{best_mae}, \code{n}, \code{cr_min}, \code{cr_max}, \code{ct_min},
-#'   \code{ct_max}, \code{rs_min}, \code{rs_max}, \code{rt_min}, \code{rt_max}.
-#'   For rows where \code{use_distinct_agents == TRUE}, also requires the
-#'   \code{_sd} variants of all the above (e.g. \code{cr_min_sd}).
-#'
-#' @return A character vector of GAML source lines — a header comment per
-#'   row (model type, distinct agents flag, best MAE, n) followed by one
-#'   \code{parameter "..." var: ... min: ... max: ...;} line per parameter
-#'   that passes its inclusion guard. Intended to be written to a \code{.gaml}
-#'   file or pasted directly into an experiment block.
-#'
-#' @param buffer Numeric. Amount (in parameter units) to expand a zero-width
-#'   range symmetrically around its value. Default \code{0.05}.
-#'
-#' @details
-#'   \code{convergence_rate} is always included. \code{confidence_threshold}
-#'   is included only if \code{ct_min} is non-NA, finite, and \code{ct_max > 0.01}
-#'   (guards against near-zero/irrelevant ranges for e.g. consensus, where
-#'   confidence_threshold doesn't structurally apply). \code{repulsion_strength}
-#'   and \code{repulsion_threshold} are included together under the same guard
-#'   on \code{rs_min}/\code{rs_max} (relevant only to bipolarization). SD
-#'   variants of all parameters are included only when
-#'   \code{use_distinct_agents == TRUE}, under the same respective guards.
-#'
-#' @note Internal helper \code{expand_range(min_val, max_val, buffer)}
-#'   returns \code{c(NA, NA)}-safe passthrough if either bound is NA;
-#'   otherwise expands symmetrically only when \code{min_val == max_val}.
-#'
-#' @seealso \code{lhs-boundary-layer} / \code{gaml-boundaries} chunk in Rmd
-#'   for the upstream construction of \code{df} and downstream usage of
-#'   the returned GAML lines.
-generate_gaml_bounds <- function(df, buffer = 0.05) {
-
-  # guard agianst null/empty dataframe
-  if (is.null(df) || nrow(df) == 0) {
-    warning("Input df to generate_gaml_bounds is empty. Returning empty comment line.")
-    return("// WARNING: No valid parameter regions found in upstream LHS evaluation.")
-  }
-  
-  # Helper function: expands zero-width ranges
-  expand_range <- function(min_val, max_val, buffer) {
-    if (is.na(min_val) || is.na(max_val)) return(c(min_val, max_val))
-    if (min_val == max_val) {
-      # expand symmetrically around the original value
-      min_val <- min_val - buffer
-      max_val <- max_val + buffer
-    }
-    return(c(min_val, max_val))
-  }
-  
-  output_lines <- character(0) # explicit character type initialization
-  
-  for (i in seq_len(nrow(df))) {
-    row <- df[i, ]
-    
-    # Header comment for reference
-    header <- paste0(
-      "\n// ", row$model_type, 
-      " | distinct: ", row$use_distinct_agents,
-      " | speaking: ", if ("speaking_mode" %in% names(row)) row$speaking_mode else "NA",
-      " | best_mae: ", round(row$best_mae, 4),
-      " | n: ", row$n
-    )
-    output_lines <- c(output_lines, header)
-    
-    # Convergence Rate
-    cr_range <- expand_range(row$cr_min, row$cr_max, buffer)
-    output_lines <- c(output_lines, paste0(
-      'parameter "Convergence Rate" var: convergence_rate',
-      " min: ", round(cr_range[1], 3),
-      " max: ", round(cr_range[2], 3), ";"
-    ))
-    
-    # Confidence Threshold
-    if (!is.na(row$ct_min) & !is.infinite(row$ct_min) & row$ct_max > 0.01) {
-      ct_range <- expand_range(row$ct_min, row$ct_max, buffer)
-      output_lines <- c(output_lines, paste0(
-        'parameter "Confidence Threshold" var: confidence_threshold',
-        " min: ", round(ct_range[1], 3),
-        " max: ", round(ct_range[2], 3), ";"
-      ))
-    }
-    
-    # Repulsion Strength & Threshold
-    if (!is.na(row$rs_min) & !is.infinite(row$rs_min) & row$rs_max > 0.01) {
-      rs_range <- expand_range(row$rs_min, row$rs_max, buffer)
-      rt_range <- expand_range(row$rt_min, row$rt_max, buffer)
-      
-      output_lines <- c(output_lines, paste0(
-        'parameter "Repulsion Strength" var: repulsion_strength',
-        " min: ", round(rs_range[1], 3),
-        " max: ", round(rs_range[2], 3), ";"
-      ))
-      output_lines <- c(output_lines, paste0(
-        'parameter "Repulsion Threshold" var: repulsion_threshold',
-        " min: ", round(rt_range[1], 3),
-        " max: ", round(rt_range[2], 3), ";"
-      ))
-    }
-    
-    # SD parameters — only for distinct agents corrected row$use_distinct_agents
-    if (isTRUE(as.logical(tolower(as.character(row$use_distinct_agents))))) {
-      cr_sd_range <- expand_range(row$cr_min_sd, row$cr_max_sd, buffer)
-      output_lines <- c(output_lines, paste0(
-        'parameter "SD Convergence Rate" var: convergence_rate_sd',
-        " min: ", round(cr_sd_range[1], 3),
-        " max: ", round(cr_sd_range[2], 3), ";"
-      ))
-      
-      if (!is.na(row$ct_min_sd) & !is.infinite(row$ct_min_sd) & row$ct_max_sd > 0.01) {
-        ct_sd_range <- expand_range(row$ct_min_sd, row$ct_max_sd, buffer)
-        output_lines <- c(output_lines, paste0(
-          'parameter "SD Confidence Threshold" var: confidence_threshold_sd',
-          " min: ", round(ct_sd_range[1], 3),
-          " max: ", round(ct_sd_range[2], 3), ";"
-        ))
-      }
-      
-      if (!is.na(row$rs_min_sd) & !is.infinite(row$rs_min_sd) & row$rs_max_sd > 0.01) {
-        rs_sd_range <- expand_range(row$rs_min_sd, row$rs_max_sd, buffer)
-        rt_sd_range <- expand_range(row$rt_min_sd, row$rt_max_sd, buffer)
-        
-        output_lines <- c(output_lines, paste0(
-          'parameter "SD Repulsion Strength" var: repulsion_strength_sd',
-          " min: ", round(rs_sd_range[1], 3),
-          " max: ", round(rs_sd_range[2], 3), ";"
-        ))
-        output_lines <- c(output_lines, paste0(
-          'parameter "SD Repulsion Threshold" var: repulsion_threshold_sd',
-          " min: ", round(rt_sd_range[1], 3),
-          " max: ", round(rt_sd_range[2], 3), ";"
-        ))
-      }
-    }
-  }
-  
-  return(output_lines)
-}
-                  
-#' Filter Out Bipolarization Rows Violating Neutral Zone Constraint
-#'
-#' Removes simulation rows where \code{model_type == "bipolarization"} and
-#' \code{neutral_zone_width < 0}, which represents a structurally invalid
-#' configuration (the two opinion poles have crossed/overlapped rather than
-#' maintaining a separating neutral zone). Also normalizes a legacy
-#' \code{debate} column name to \code{selected_debate_id} if present.
-#'
-#' @param df A dataframe of simulation results. Expected to contain
-#'   \code{model_type} and \code{neutral_zone_width} for the filter to apply;
-#'   if either is missing, the function is a no-op (returns \code{df} unchanged).
-#' @param verbose Logical. If \code{TRUE} (default), prints a message
-#'   reporting the number of violating rows removed, or confirms none found.
-#'
-#' @return The filtered dataframe, with bipolarization rows where
-#'   \code{neutral_zone_width < 0} removed. All other rows (including all
-#'   non-bipolarization rows) are retained unchanged.
-#'
-#' @note Renames \code{debate} -> \code{selected_debate_id} if \code{debate}
-#'   exists in \code{df}, for consistency with the rest of the pipeline's
-#'   join key naming.
-#'
-#' @section Side effects:
-#'   Emits a \code{message()} when \code{verbose = TRUE}: either reporting
-#'   violation count or confirming a clean dataset.
-#'
-#' @section Known issue:
-#'   Lines 26-30 (the standalone \code{df \%>\% filter(...)} block without
-#'   reassignment) execute but discard their result — only the subsequent
-#'   reassigned \code{df <- df \%>\% filter(...)} actually takes effect. The
-#'   earlier block is dead code and can be removed.
-bipol_constraint_filter <- function(df, verbose = TRUE) {
-  # check and reconvert any naming problems
-  if ("debate" %in% names(df)) {
-    df <- df %>% rename(selected_debate_id = debate)
-  }
-  
-  # guard rail for df_ag - neutral_zone_width
-  if (!"model_type" %in% colnames(df) || !"neutral_zone_width" %in% colnames(df)) {
-    if (verbose) {
-      message("Skipping neutral zone validation: columns not in dataset")
-    }
-    return(df)
-  }
-  
-  violations <- df %>%
-    filter(model_type == "bipolarization",
-           neutral_zone_width < 0)
-  
-  n_violations <- nrow(violations)
-  
-  # verbose output if there are violations
-  if (verbose && n_violations > 0) {
-    message(paste(n_violations,
-                  "Removed bipolarization rows where there are neutral zone violations", unique(n_violations)))
-  } else if (verbose) {
-    message(paste("No violations found, good on ya ;-+"))
-  }
-  
-  # only apply to bipolarization rows
-  #df %>%
-  #  filter(
-  #    model_type != "bipolarization" |
-  #      (model_type == "bipolarization" & neutral_zone_width >= 0)
-  #  )
-  
-  # return filtered df
-  df <- df %>%
-    filter(!(model_type == "bipolarization" & neutral_zone_width < 0))
-  
-  return(df)
-}
-
-# CLEAR param_region_extraction ####
-#' update 6/8/26
-#' added speaking mode to both group_by calls / added | to range check instead of AND
+#' param_region_extraction (created around 8/26)
+#' update 6/8/26 added speaking mode to both group_by calls / added | to range check instead of AND
 #' rewrote bipol_check gap change so that it doesn't error
-param_region_extraction <- function(df, percentile = 0.25,
-                                    cr_max_cap = NULL,
-                                    rs_max_cap = NULL,
-                                    min_range = 0.05) {
+#'
+#' Function excludes any \code{model_type} that is no change and enforces positive neutral zone width for bipolarization
+#' Subsequently, filter the df for the \code{percentile} value en keeps the rows with an mae value of the top 25% percent, then summarizes each parameter with a min/max arg and applies a cap if necessary (using \code{cr_max_cap} and \code{rs_max_cap}
+#' Finally, zeroes out parameters not used in the model_type, defines the columns that need clamping, performs a range check to ensure that params can be evaluted in a subsequent parameter exploration run
+#'
+#' @param df Dataframe for ingestion
+#' @param percentile Percent of top performing runs (minimum MAE) to keep for the region extraction
+#' @param cr_max_cap Optional maximum value of convergence rate to apply to region extraction
+#' @param rs_max_cap Optional maximum value of repulsion strength to apply to region extraction
+#' @param min_range The minimum amount of distance that params needs to have to be accepted and treated in the function
+#'
+#' @return list of multiple vars for param value selection
+#' \describe regions Identifies the amount of regions that are retained for future parameter exploration runs
+#' \describe range_check Boolean to evaluate whether the parameters passed through this function have enough of a buffer to be explored in a subsequent parameter region exploration
+#' \describe bipol_check Boolean to evaluate whether the parameters considered do not cause a negative neutral zone
+#'
+#' @section Warnings: 
+#' prints a warning if specific parameters have too narrow a range for a follow up search, as well as 
+#' a warning in case the parameters violate the neutral zone width cap for bipolarization
+param_region_extraction <- function(df, percentile = 0.25, cr_max_cap = NULL, rs_max_cap = NULL, min_range = 0.05) {
   
-  # remove model_type problem row and bipol)constraints
+  # remove model_type problem row and bipol constraints
   df <- df %>%
     filter(
       # exclude missing or bad header rows 24/7/26
@@ -1393,7 +1120,420 @@ param_region_extraction <- function(df, percentile = 0.25,
   
 }
 
-#' Prepare Directional Opinion Alignment Data (Agent-Level) (created 29/4/26)
+#' generate_gaml_bounds (created approx 6/2026)
+#' Generate GAML Parameter Bound Declarations from Top-Performing Configs 24/7/26 (update to incorporate guards and initialize as characters)
+#' update 6/8/26 added SD parameters so they don't get skipped in generation, header block addition
+#'
+#' Translates a dataframe of best-performing parameter ranges (one row per
+#' model_type / use_distinct_agents combination) into GAML \code{parameter}
+#' declaration strings, ready to paste into a GAMA experiment block to
+#' constrain a follow-up GA or LHS run. Zero-width ranges (min == max) are
+#' symmetrically expanded by \code{buffer} to avoid a degenerate search space.
+#'
+#' @param df A dataframe, typically the GAML Boundary Layer output (top 25%
+#'   performing LHS configs), with one row per model_type/use_distinct_agents
+#'   combination. Required columns: \code{model_type}, \code{use_distinct_agents},
+#'   \code{best_mae}, \code{n}, \code{cr_min}, \code{cr_max}, \code{ct_min},
+#'   \code{ct_max}, \code{rs_min}, \code{rs_max}, \code{rt_min}, \code{rt_max}.
+#'   For rows where \code{use_distinct_agents == TRUE}, also requires the
+#'   \code{_sd} variants of all the above (e.g. \code{cr_min_sd}).
+#'
+#' @return A character vector of GAML source lines — a header comment per
+#'   row (model type, distinct agents flag, best MAE, n) followed by one
+#'   \code{parameter "..." var: ... min: ... max: ...;} line per parameter
+#'   that passes its inclusion guard. Intended to be written to a \code{.gaml}
+#'   file or pasted directly into an experiment block.
+#'
+#' @param buffer Numeric. Amount (in parameter units) to expand a zero-width
+#'   range symmetrically around its value. Default \code{0.05}.
+#'
+#' @details
+#'   \code{convergence_rate} is always included. \code{confidence_threshold}
+#'   is included only if \code{ct_min} is non-NA, finite, and \code{ct_max > 0.01}
+#'   (guards against near-zero/irrelevant ranges for e.g. consensus, where
+#'   confidence_threshold doesn't structurally apply). \code{repulsion_strength}
+#'   and \code{repulsion_threshold} are included together under the same guard
+#'   on \code{rs_min}/\code{rs_max} (relevant only to bipolarization). SD
+#'   variants of all parameters are included only when
+#'   \code{use_distinct_agents == TRUE}, under the same respective guards.
+#'
+#' @note Internal helper \code{expand_range(min_val, max_val, buffer)}
+#'   returns \code{c(NA, NA)}-safe passthrough if either bound is NA;
+#'   otherwise expands symmetrically only when \code{min_val == max_val}.
+#'
+#' @seealso \code{lhs-boundary-layer} / \code{gaml-boundaries} chunk in Rmd
+#'   for the upstream construction of \code{df} and downstream usage of
+#'   the returned GAML lines.
+generate_gaml_bounds <- function(df, buffer = 0.05) {
+
+  # guard agianst null/empty dataframe
+  if (is.null(df) || nrow(df) == 0) {
+    warning("Input df to generate_gaml_bounds is empty. Returning empty comment line.")
+    return("// WARNING: No valid parameter regions found in upstream LHS evaluation.")
+  }
+  
+  # Helper function: expands zero-width ranges
+  expand_range <- function(min_val, max_val, buffer) {
+    if (is.na(min_val) || is.na(max_val)) return(c(min_val, max_val))
+    if (min_val == max_val) {
+      # expand symmetrically around the original value
+      min_val <- min_val - buffer
+      max_val <- max_val + buffer
+    }
+    return(c(min_val, max_val))
+  }
+  
+  output_lines <- character(0) # explicit character type initialization
+  
+  for (i in seq_len(nrow(df))) {
+    row <- df[i, ]
+    
+    # Header comment for reference
+    header <- paste0(
+      "\n// ", row$model_type, 
+      " | distinct: ", row$use_distinct_agents,
+      " | speaking: ", if ("speaking_mode" %in% names(row)) row$speaking_mode else "NA",
+      " | best_mae: ", round(row$best_mae, 4),
+      " | n: ", row$n
+    )
+    output_lines <- c(output_lines, header)
+    
+    # Convergence Rate
+    cr_range <- expand_range(row$cr_min, row$cr_max, buffer)
+    output_lines <- c(output_lines, paste0(
+      'parameter "Convergence Rate" var: convergence_rate',
+      " min: ", round(cr_range[1], 3),
+      " max: ", round(cr_range[2], 3), ";"
+    ))
+    
+    # Confidence Threshold
+    if (!is.na(row$ct_min) & !is.infinite(row$ct_min) & row$ct_max > 0.01) {
+      ct_range <- expand_range(row$ct_min, row$ct_max, buffer)
+      output_lines <- c(output_lines, paste0(
+        'parameter "Confidence Threshold" var: confidence_threshold',
+        " min: ", round(ct_range[1], 3),
+        " max: ", round(ct_range[2], 3), ";"
+      ))
+    }
+    
+    # Repulsion Strength & Threshold
+    if (!is.na(row$rs_min) & !is.infinite(row$rs_min) & row$rs_max > 0.01) {
+      rs_range <- expand_range(row$rs_min, row$rs_max, buffer)
+      rt_range <- expand_range(row$rt_min, row$rt_max, buffer)
+      
+      output_lines <- c(output_lines, paste0(
+        'parameter "Repulsion Strength" var: repulsion_strength',
+        " min: ", round(rs_range[1], 3),
+        " max: ", round(rs_range[2], 3), ";"
+      ))
+      output_lines <- c(output_lines, paste0(
+        'parameter "Repulsion Threshold" var: repulsion_threshold',
+        " min: ", round(rt_range[1], 3),
+        " max: ", round(rt_range[2], 3), ";"
+      ))
+    }
+    
+    # SD parameters — only for distinct agents corrected row$use_distinct_agents
+    if (isTRUE(as.logical(tolower(as.character(row$use_distinct_agents))))) {
+      cr_sd_range <- expand_range(row$cr_min_sd, row$cr_max_sd, buffer)
+      output_lines <- c(output_lines, paste0(
+        'parameter "SD Convergence Rate" var: convergence_rate_sd',
+        " min: ", round(cr_sd_range[1], 3),
+        " max: ", round(cr_sd_range[2], 3), ";"
+      ))
+      
+      if (!is.na(row$ct_min_sd) & !is.infinite(row$ct_min_sd) & row$ct_max_sd > 0.01) {
+        ct_sd_range <- expand_range(row$ct_min_sd, row$ct_max_sd, buffer)
+        output_lines <- c(output_lines, paste0(
+          'parameter "SD Confidence Threshold" var: confidence_threshold_sd',
+          " min: ", round(ct_sd_range[1], 3),
+          " max: ", round(ct_sd_range[2], 3), ";"
+        ))
+      }
+      
+      if (!is.na(row$rs_min_sd) & !is.infinite(row$rs_min_sd) & row$rs_max_sd > 0.01) {
+        rs_sd_range <- expand_range(row$rs_min_sd, row$rs_max_sd, buffer)
+        rt_sd_range <- expand_range(row$rt_min_sd, row$rt_max_sd, buffer)
+        
+        output_lines <- c(output_lines, paste0(
+          'parameter "SD Repulsion Strength" var: repulsion_strength_sd',
+          " min: ", round(rs_sd_range[1], 3),
+          " max: ", round(rs_sd_range[2], 3), ";"
+        ))
+        output_lines <- c(output_lines, paste0(
+          'parameter "SD Repulsion Threshold" var: repulsion_threshold_sd',
+          " min: ", round(rt_sd_range[1], 3),
+          " max: ", round(rt_sd_range[2], 3), ";"
+        ))
+      }
+    }
+  }
+
+  log_step("Finished GA bounds creation")
+  return(output_lines)
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# Partial Dependence Profiles (PDP)
+#
+# PCC/PRCC tell us the direction and strength of each parameter's
+# linear (or monotonic) relationship with the output. RF importance
+# tells us how much each parameter matters overall. Neither tells us
+# the *shape* of the relationship — whether MAE drops steeply then
+# plateaus, or curves, or has a basin.
+#
+# PDP fills that gap. For a single parameter, it asks: "If I forced
+# this parameter to a specific value across all debates and all other
+# parameter combinations, what would the average MAE be?" Repeat that
+# across 40 evenly spaced values and you get a curve showing how the
+# output responds to that parameter in isolation, marginalised over
+# everything else.
+#
+# compute_pdp() does this for one parameter in one design cell.
+# pdp_all_cells() loops over every cell × parameter combination,
+# matching each to its trained RF model from run_sensi_analysis().
+#
+# Key interpretation rules:
+#   - Flat curve = parameter has no marginal effect on MAE
+#   - Monotonic slope = directional effect (e.g. lower convergence_rate
+#     always reduces MAE — the boundary solution at 0.005)
+#   - Basin/plateau = there's an optimal region, not just a direction
+#   - PDP amplitude (max yhat - min yhat) quantifies practical effect
+#     size — compare against between-debate MAE SD to judge relevance
+# ─────────────────────────────────────────────────────────────────────
+
+#' compute_pdp (created 6/8/26)
+#'
+#' pdp is: for each grid value v of the feature, overwrite that column with 
+#' v across all rows, predict, average.
+#' Function computes the partial dependence profile of a single parameter on model output 
+#' It thus marginalises over all other parameters by fixing the target feature at each
+#' grid value, predicting with the fitted RF model, and averaging predictions
+#' 
+#' @param rf_fit a fitted ranger model object from \code{run_sensi_analysis$rf_mod_list}
+#' @param X Dataframe of predictor columsn matching the training data for \code{rf_fit}
+#' @param feature Character string naming the column in X to compute PDP for
+#' @param grid_n Number of evenly spaced values to evaluate across the feature range
+#' @param max_rows Maximum number of rows to subsample from X for speed (PDP averages
+#' averages so 2k is sufficient)
+#' @param trim Quantile trim proportion to exclude extreme tails from the grid range
+#'
+#' @return A dataframe with columns: feature, x (grid values), yhat (mean predicted value)
+compute_pdp <- function(rf_fit, X, feature, grid_n = 40, max_rows = 2000, trim = 0.025) {
+    if (!feature %in% names(X)) stop("feature not in X: ", feature)
+
+    # subsample of total rows for speed, PDP in an average, taking 2k rows is fine
+    if (nrow(X) > max_rows) X <- X[sample.int(nrow(X), max_rows), , drop = FALSE]
+
+    # added lo and hi to trim the grid to interior quantiles
+    lo <- quantile(X[[feature]], trim, na.rm = TRUE)
+    hi <- quantile(X[[feature]], 1 - trim, na.rm = TRUE)
+    
+    grid <- seq(lo, hi, length.out = grid_n)
+
+    yhat <- vapply(grid, function(v) {
+      Xg <- X
+      Xg[[feature]] <- v
+      mean(predict(rf_fit, data = Xg)$predictions, na.rm = TRUE)
+    }, numeric(1))
+
+    data.frame(feature = feature, x = grid, yhat = yhat)
+}
+
+#' pdp_all_cells (created 6/8/26)
+#' Compute PDP per Parameter per Design Cell
+#'
+#' rebuilds each cell's X the same way run_sensi_analysis did
+#' column order matches what the forest was trained on. (need two identifiers
+#' lookup_key (model_distinct) for param columns and key (speaking arm) for the fitted model)
+#'
+#' @param df_batch A dataframe consisting of batch level data for an algorithm
+#' @param sensi_obj Output of \code{run_sensi_analysis} which is a list containing $rf_mod_list (itself
+#'   a named list of fitted ranger models keyed by `model_distinct_speak_output` and $rf which is the R squared quality table)
+#' @param param_cols_by_model A list object that contains the paramter columns for each model_type
+#'   to be associated with df_batch so that PDP can be computed with the correct parameters
+#' @param output A specification of the output variable that the PDP computation should use to calculate the fit
+#' @param grid_n An object stating the number of evenly spaced values along each parameter's range for which partial dependence is evaluated
+#'
+#' @return a tibble with one row per grid point per parameter per design cell, containing columns:
+#'   feature, x, yhat, key, model_type, use_distinct_agents, speaking_mode, output / empty tibble if no forests are found
+#'
+#' @note key naming must match between \code{run_sensi_analysis} and current function - speak/nospeak not TRUE/FALSE for speaking arm
+#' @note current functio filters `no_change` from cell list since no forest exists for the baseline
+pdp_all_cells <- function(df_batch, sensi_obj, param_cols_by_model, output = "mae", grid_n = 40) {
+    out <- list()
+
+    cells <- df_batch %>%
+      filter(model_type != "no_change") %>%
+      distinct(model_type, use_distinct_agents, speaking_mode)
+
+    for (i in seq_len(nrow(cells))) {
+      mt <- cells$model_type[i]
+      dv <- isTRUE(cells$use_distinct_agents[i])
+      sv <- isTRUE(cells$speaking_mode[i])
+
+      lookup_key <- paste(mt, ifelse(dv, "TRUE", "FALSE"), sep = "_")
+      key <- paste(mt, ifelse(dv, "TRUE", "FALSE"),
+                   ifelse(sv, "speak", "nospeak"), sep = "_")
+      rf_key <- paste(key, output, sep = "_")
+
+      rf_fit <- sensi_obj$rf_mod_list[[rf_key]]
+      if (is.null(rf_fit)) {
+        message("no forest for ", rf_key, " - skipping")
+        next
+      }
+
+      param_cols <- intersect(param_cols_by_model[[lookup_key]], names(df_batch))
+      if (length(param_cols) == 0) next
+
+      X <- df_batch %>%
+        filter(model_type == mt,
+               use_distinct_agents == dv,
+               speaking_mode == sv) %>%
+        select(all_of(param_cols)) %>%
+        mutate(across(everything(), as.numeric)) %>%
+        as.data.frame()
+      X <- X[complete.cases(X), , drop = FALSE]
+      if (nrow(X) < 10) next
+
+      for (f in param_cols) {
+        out[[paste(key, f, sep = "__")]] <- compute_pdp(rf_fit, X, f, grid_n) %>%
+          mutate(key = key, model_type = mt,
+                 use_distinct_agents = dv, speaking_mode = sv, output = output)
+      }
+    }
+
+    bind_rows(out)
+}
+
+#' bounds_from_pdp Bounds Generation from PDP 6/8/26
+#' 
+#' Meant to keep region where pdp is within its 'tol' of its own minimum
+#' this matters because a bare yhat <= threshold filter can return and min and max
+#' spanning a hump between two separate basins
+#'
+#' Function is a complement to param_region_extraction(). Compare the two and use the union if they disagree
+#' interpretation: flat near 1 means param bearely matters in that cell (forest sees near horizontal surface)
+#'   pdp_argmin sitting on either end of searched range is boundary solution
+#'
+#' @param pdp_df output from \code{pdp_all_cells} a tibble containing partial dependence per parameter per design cell
+#' @param tol a threshold to determine the range of minimum acceptable values for each parameter
+#'
+#' @return a dataframe that records the partial dependence for each parameter per design cell that is ready to be plotted,
+#'  containing: \code{pdp_min} the minimum pdp value for a parameter (i.e. the best value), \code{pdp_argmin} the x axis (parameter value)
+#'  that minimizes MAE, \code{lo} the starting position of parameter value which is within the tolerance of the minimum, \code{hi} the ending 
+#'  position where the parameter value stays within the range of the minimum, \code{flat} the ratio of the range between starting and ending positions of parameter values
+#'  as a fraction of the total vertical range where the parameters are 'ok' (fraction of searched param range that is good enough)
+#'
+#' @note think of PDP as x (param values) and y (predicted MAE)
+bounds_from_pdp <- function(pdp_df, tol = 0.02) {
+  pdp_df %>%
+    group_by(key, model_type, use_distinct_agents, speaking_mode, feature) %>%
+    group_modify(~ {
+      d <- .x[order(.x$x), ]
+      thr <- min(d$yhat) + tol * diff(range(d$yhat))
+      ok <- d$yhat <= thr
+      # longest contiguous TRUE run containing the argmin
+      r <- rle(ok)
+      ends <- cumsum(r$lengths); starts <- ends - r$lengths + 1
+      amin <- which.min(d$yhat)
+      j <- which(r$values & starts <= amin & ends >= amin)[1]
+      data.frame(pdp_min = min(d$yhat),
+                 pdp_argmin = d$x[amin],
+                 lo = d$x[starts[j]],
+                 hi = d$x[ends[j]],
+                 flat = (d$x[ends[j]] - d$x[starts[j]]) / diff(range(d$x)))
+    }) %>%
+    ungroup()
+}
+
+#---------------------
+# Interactions
+#---------------------
+# prepare_interactions in revise section
+#' compute_influence_scores (created 27/4/26) 
+#' update 27/7/26 empty df and row guard
+#'
+#' @param df Dataframe for ingestion
+#'
+#' @return Dataframe grouped by model_type, current_condition, selected_debate_id, and sender_id that summarizes
+#' the influence that one agent had on another in one particular debate, and the amount of broadcasts they had to other agents
+#'
+#' @note used with \code{df_interactions} to establish broadcasts and influence
+compute_influence_scores <- function(df) {
+  # guard for empyt data set and warning
+
+  if (is.null(df)) {
+    message("Notice: Passed NULL to compute_influence_scores(). Returning NULL.")
+    return(NULL)
+  }
+    
+  # nrows extra lazy guard before eval 29/7/26
+  n_rows <- df %>% summarise(n = n()) %>% pull(n)
+    
+  if (n_rows == 0) {
+    message("Notice: Dataset passed to compute_influence_scores is empty. Returning NULL.")
+    return(NULL)
+  }
+    
+  df %>%
+    group_by(model_type, current_condition, selected_debate_id, sender_id) %>%
+    summarize(
+      influence_score = mean(abs(delta)),
+      n_broadcasts = n(),
+      .groups = "drop"
+    )
+}
+
+#' compute_susceptibility_scores (for receivers) (created 27/4/26) 
+#' updated 23/7/26 to include guard for the first row
+#' 
+#' Aggregates interaction-level dialogue data to compute mean susceptibility 
+#' metrics per agent across debate conditions. Calculates total exposure counts, 
+#' average shift magnitudes (\code{delta}), and saturation rates.
+#' 
+#' @param df Data frame or tibble. The cleaned interaction data log (typically 
+#'   produced by \code{prepare_interactions}).
+#' 
+#' @details 
+#' Includes an early-exit check for empty data sets (\code{nrow(df) == 0}) to prevent 
+#' non-numeric evaluation errors on \code{abs(delta)} when processing baseline 
+#' or non-speaking model runs.
+#' 
+#' @return A summarized \code{tbl_df} with receiver-level susceptibility metrics, 
+#'   or \code{NULL} if the input data frame contains zero observations.
+#'   Will also return NULL for NULL input (in case of design_cells with no speaking_mode so df_interactions does not exist)
+compute_susceptibility_scores <- function(df) { # use with df_interactions
+  # guard for empty data set and warning
+  if (is.null(df)) {
+    message("Notice: Passed NULL to compute_susceptibility_scores(). Returning NULL.")
+    return(NULL)
+  }
+    
+  # nrows extra lazy guard before eval 29/7/26
+  n_rows <- df %>% summarise(n = n()) %>% pull(n)
+    
+  if (n_rows == 0) {
+    message("Notice: Dataset passed to compute_susceptibility_scores is empty. Returning NULL.")
+    return(NULL)
+  }
+    
+  df %>%
+    group_by(model_type, current_condition, selected_debate_id, receiver_id, pro_reduction) %>%
+    summarize(
+      susceptibility_score = mean(abs(delta)),
+      n_exposures = n(),
+      pct_saturated = mean(agent_is_saturated),
+      pct_wrong_direction = mean(agent_wrong_direction),
+      .groups = "drop"
+    )
+}
+
+#---------------------
+# Directional & Valence
+#---------------------
+
+#' prepare_directional (Agent-Level) (created 29/4/26)
 #' updated 5/8/26 include \code{direction_class} and \code{agent_against_stance}.
 #'
 #' Processes agent-level aggregated data (`df_ag`) to compute direction-of-change 
@@ -1442,8 +1582,9 @@ prepare_directional <- function(df) { # use with df_ag
     filter(empirical_moved) 
 }
 
-#' Aggregate Directional Opinion Performance Metrics by Debate (created sometime in 7/26)
+#' summarize_directional (created sometime in 7/26)
 #' updated 5/8/26 clarification of direction_class and mutations
+#' Aggregate Directional Opinion Performance Metrics by Debate
 #'
 #' Collapses agent-level directional observations (\code{df_directional_agents}) 
 #' into debate-level summary statistics, calculating directional accuracy, error 
@@ -1480,7 +1621,7 @@ summarize_directional <- function(df) {
     )
 }
 
-#' Summarize Directional Accuracy by Valence Split 1/7/26
+#' summarize_directional_valence (created 1/7/26)
 #' 
 #' Extension of summarize_directional() with a pro_reduction split./ update 23/7 to take into account homogeneous debates where all agents are pro_reduciton == 0
 #' removes pro_signed error as it is irrelevant
@@ -1490,7 +1631,7 @@ summarize_directional <- function(df) {
 #' @param df Agent-level dataframe (e.g., df_directional_agents) containing:
 #'   \code{model_type}, \code{current_condition}, \code{selected_debate_id},
 #'   \code{pro_reduction}, \code{correct_dir}, \code{direction_class},
-#'   \code{opinion}, \code{final_attitude}, and \code{initial_opinion}.
+#'   \code{opinion}, \code{final_attitude}, and \code{initial_opinion}, \code{design_cell}
 #'
 #' @return A summarized data frame in long format with one row per 
 #'   \code{model_type} x \code{current_condition} x \code{selected_debate_id} x \code{pro_reduction}.
@@ -1498,11 +1639,9 @@ summarize_directional <- function(df) {
 #'   \code{mean_signed_error}, \code{mean_mae}, \code{mean_baseline_mae}, and \code{n}.
 #'   \describe{
 #'     \item{pct_correct_dir}{Numeric [0,1]. Proportion of agents moving in the correct empirical direction based on \code{direction_class}.}
-#'     \item{pct_stationary_dir}{Numeric [0,1]. Proportion of agents who did not move \code{direction_class} = 0}
+#'     \item{pct_stationary_dir}{Numeric [0,1]. Proportion of agents who did not move \code{direction_class} = "stationary"}
 #'     \item{pct_wrong_dir}{Numeric [0,1]. Proportion of agents moving in the explicit wrong direction (\code{direction_class}).}
 #'   }
-#' 
-#' @export
 summarize_directional_valence <- function(df) {
   df %>%
     mutate(pro_reduction = as.integer(as.character(pro_reduction))) %>% 
@@ -1519,7 +1658,8 @@ summarize_directional_valence <- function(df) {
     )
 }
 
-#' Compute Valence Asymmetry Across Debates 1/7/26 (update 23/7/26 to be comprehensive for homogeneous debates as well)
+#' compute_valence_asymmetry (created 1/7/26) 
+#' update 23/7/26 to be comprehensive for homogeneous debates as well
 #' 
 #' Takes the output of \code{summarize_directional_valence()} and pivots it wide 
 #' to compute accuracy and error asymmetry between pro (1) and anti (0) groups.
@@ -1529,7 +1669,7 @@ summarize_directional_valence <- function(df) {
 #' @param df Aggregated agent-level dataframe from \code{summarize_directional_valence()} 
 #'   containing: \code{model_type}, \code{current_condition}, \code{selected_debate_id}, 
 #'   \code{pro_reduction}, \code{pct_correct_dir}, \code{pct_wrong_dir}, 
-#'   \code{mean_signed_error}, \code{mean_mae}, \code{mean_baseline_mae}, and \code{n}.
+#'   \code{mean_signed_error}, \code{mean_mae}, \code{mean_baseline_mae}, and \code{n}, \code{design_cell}.
 #' 
 #' @return A dataframe in wide format with one row per debate x model x condition. 
 #'   Contains separate columns for pro (\code{_1}) and anti (\code{_0}) metrics, 
@@ -1552,115 +1692,12 @@ compute_valence_asymmetry <- function(df) {
     )
 }
 
-#' compute pdp 6/8/26
-#'
-#' pdp is: for each grid value v of the feature, overwrite that column with 
-#' v across all rows, predict, average.
-compute_pdp <- function(rf_fit, X, feature, grid_n = 40, max_rows = 2000, trim = 0.025) {
-    if (!feature %in% names(X)) stop("feature not in X: ", feature)
+#---------------------
+# Network
+#---------------------
 
-    # subsample of total rows for speed, PDP in an average, taking 2k rows is fine
-    if (nrow(X) > max_rows) X <- X[sample.int(nrow(X), max_rows), , drop = FALSE]
-
-    # added lo and hi to trim the grid to interior quantiles
-    lo <- quantile(X[[feature]], trim, na.rm = TRUE)
-    hi <- quantile(X[[feature]], 1 - trim, na.rm = TRUE)
-    
-    grid <- seq(lo, hi, length.out = grid_n)
-
-    yhat <- vapply(grid, function(v) {
-      Xg <- X
-      Xg[[feature]] <- v
-      mean(predict(rf_fit, data = Xg)$predictions, na.rm = TRUE)
-    }, numeric(1))
-
-    data.frame(feature = feature, x = grid, yhat = yhat)
-}
-
-#' pdp for every parameter in every design cell
-#'
-#' rebuilds each cell's X the same way run_sensi_analysis did
-#' column order matches what the forest was trained on. (need two identifiers
-#' lookup_key (model_distinct) for param columns and key (speaking arm) for the fitted model)
-pdp_all_cells <- function(df_batch, sensi_obj, param_cols_by_model,
-                          output = "mae", grid_n = 40) {
-    out <- list()
-
-    cells <- df_batch %>%
-      filter(model_type != "no_change") %>%
-      distinct(model_type, use_distinct_agents, speaking_mode)
-
-    for (i in seq_len(nrow(cells))) {
-      mt <- cells$model_type[i]
-      dv <- isTRUE(cells$use_distinct_agents[i])
-      sv <- isTRUE(cells$speaking_mode[i])
-
-      lookup_key <- paste(mt, ifelse(dv, "TRUE", "FALSE"), sep = "_")
-      key <- paste(mt, ifelse(dv, "TRUE", "FALSE"),
-                   ifelse(sv, "speak", "nospeak"), sep = "_")
-      rf_key <- paste(key, output, sep = "_")
-
-      rf_fit <- sensi_obj$rf_mod_list[[rf_key]]
-      if (is.null(rf_fit)) {
-        message("no forest for ", rf_key, " - skipping")
-        next
-      }
-
-      param_cols <- intersect(param_cols_by_model[[lookup_key]], names(df_batch))
-      if (length(param_cols) == 0) next
-
-      X <- df_batch %>%
-        filter(model_type == mt,
-               use_distinct_agents == dv,
-               speaking_mode == sv) %>%
-        select(all_of(param_cols)) %>%
-        mutate(across(everything(), as.numeric)) %>%
-        as.data.frame()
-      X <- X[complete.cases(X), , drop = FALSE]
-      if (nrow(X) < 10) next
-
-      for (f in param_cols) {
-        out[[paste(key, f, sep = "__")]] <- compute_pdp(rf_fit, X, f, grid_n) %>%
-          mutate(key = key, model_type = mt,
-                 use_distinct_agents = dv, speaking_mode = sv, output = output)
-      }
-    }
-
-    bind_rows(out)
-}
-
-#' Bounds from pdp
-#' keep region where pdp is within its 'tol' of its own minimum
-#' this matters because a bare yhat <= threshold filter can return and min and max
-#' spanning a hump between two separate basins
-#'
-#' Function is a complement to param_region_extraction(). Compare the two and use the union 
-#' if they disagree
-#' interpretation: 
-#' flat near 1 means param bearely matters in that cell (forest sees near horizontal surface)
-#' pdp_argmin sitting on either end of searched range is boundary solution
-bounds_from_pdp <- function(pdp_df, tol = 0.02) {
-  pdp_df %>%
-    group_by(key, model_type, use_distinct_agents, speaking_mode, feature) %>%
-    group_modify(~ {
-      d <- .x[order(.x$x), ]
-      thr <- min(d$yhat) + tol * diff(range(d$yhat))
-      ok <- d$yhat <= thr
-      # longest contiguous TRUE run containing the argmin
-      r <- rle(ok)
-      ends <- cumsum(r$lengths); starts <- ends - r$lengths + 1
-      amin <- which.min(d$yhat)
-      j <- which(r$values & starts <= amin & ends >= amin)[1]
-      data.frame(pdp_min = min(d$yhat),
-                 pdp_argmin = d$x[amin],
-                 lo = d$x[starts[j]],
-                 hi = d$x[ends[j]],
-                 flat = (d$x[ends[j]] - d$x[starts[j]]) / diff(range(d$x)))
-    }) %>%
-    ungroup()
-}
-
-#' Build Per-Agent Influence Network Metrics (Debate-Level and Aggregate) 6/5/26
+#' build_influence_network (created 6/5/26)
+#' Build Per-Agent Influence Network Metrics (Debate-Level and Aggregate)
 #'
 #' Constructs directed, weighted interaction graphs from agent-to-agent
 #' influence data, computing centrality metrics at two granularities:
@@ -1832,8 +1869,7 @@ build_influence_network <- function(df, df_attributes) { # use with lhs_interact
   }) %>%
     bind_rows()
   
-  # agent_static_attributes, filter raw attributes / one row per agent, per debate
-  ## 5/6/26
+  # agent_static_attributes, filter raw attributes / one row per agent, per debate (5/6/26)
   agent_static_attributes <- df_attributes %>%
     select(agent_id, selected_debate_id, current_condition, pro_reduction, agent_is_saturated) %>%
     group_by(agent_id, selected_debate_id) %>%
@@ -1848,8 +1884,6 @@ build_influence_network <- function(df, df_attributes) { # use with lhs_interact
   combined <- left_join(node_metrics %>% mutate(agent_id = as.character(agent_id)), # test to check coercion
                         agent_static_attributes,
                         by = c("agent_id", "selected_debate_id"))
-  print(colnames(combined))
-  print(nrow(combined))
   
   # table summary per debate
   per_debate_summary <- combined %>%
@@ -1893,7 +1927,7 @@ build_influence_network <- function(df, df_attributes) { # use with lhs_interact
   
 }
 
-#' Attach Static Agent Attributes to Graph Vertices 7/5/26
+#' enrich_graph_vertices (created 7/5/26)
 #'
 #' Joins a dataframe of agent attributes onto the vertices of an existing
 #' \code{igraph} object, matching on agent ID, and removes duplicate vertex
@@ -1932,7 +1966,8 @@ enrich_graph_vertices <- function(g, df) {
   return(g_enriched)
 }
 
-#' Filter Graph to Top-N Nodes by Out-Strength 13/5/26
+#' filter_top_nodes (created 13/5/26)
+#' Filter Graph to Top-N Nodes by Out-Strength
 #'
 #' Reduces a graph to its \code{top_n} most influential nodes, ranked by
 #' \code{out_strength} (total weighted outgoing influence).
@@ -1958,7 +1993,8 @@ filter_top_nodes <- function(g, top_n) {
   return(g_filtered)
 }
 
-#' Filter Graph Edges Below a Weight Threshold 15/5/26
+#' filter_edges (created 15/5/26)
+#' Filter Graph Edges Below a Weight Threshold
 #'
 #' Removes edges with \code{edge_weight} at or below \code{threshold}, then
 #' removes any resulting isolated nodes (nodes with no remaining edges).
@@ -1984,7 +2020,18 @@ filter_edges <- function(g, threshold) {
   return(g_filtered_edge)
 }
 
-# TODO build_network_graph 15/5/26 update, added arrows, node_text and continuous edges ----
+#' build_network_graph (created 15/5/26)
+#' update, added arrows, node_text and continuous edges 
+#' 
+#' Function to render a network graph as a plot object illustrating individual agent
+#' broadcasts across all debates
+#'
+#' @param g A tbl_graph object with node attributes out_strength, 
+#'   pro_reduction, agent_is_saturated and edge attribute edge_weight.
+#'   Typically output of enrich_graph_vertices() passed through filter_edges().
+#'
+#' @return A ggraph object illustrating individual agent influences and broadcasts for each debate
+#' across model_type
 build_network_graph <- function(g) {
   ggraph(g, layout = "nicely") + # test with star instead of fr or even stress
     geom_edge_link(aes(width = edge_weight),
@@ -1997,3 +2044,61 @@ build_network_graph <- function(g) {
     theme(legend.position = "bottom") +
     theme_graph()
 }
+				
+#---------------------
+# Interactions
+#---------------------
+
+#' prepare_interactions (created approx 7/26)
+#' updated on 23/7/26
+#' 
+#' Reads interaction-level output CSV files from GAMA simulations, enforces standard
+#' schema types, and filters for active speaking events. Automatically handles 
+#' empty logs (e.g., non-speaking model runs) and missing headers without crashing.
+#' 
+#' @param path String. File path to the interaction log CSV file.
+#' 
+#' @details 
+#' The function performs early-exit checks if the CSV file contains zero data rows 
+#' (common when evaluating models without speech/dialogue mechanics). It coerces 
+#' \code{selected_debate_id} and \code{seed} to character vectors, converts logical 
+#' flags, ensures \code{delta}, \code{initial_opinion}, \code{opinion}, \code{final_attitude} are numerical 
+#' and conditionally filters for \code{speaking_mode == TRUE} if 
+#' the column is present.
+#' 
+#' @return A cleaned \code{tbl_df} (tibble) with validated column types and 
+#'   filtered interaction records. Returns an empty (0-row) data frame with its 
+#'   original structure if no interactions are present in the input file.
+#' 
+#' @export
+prepare_interactions <- function(path) {
+
+  df <- read_clean(path) # removed path due to deletion of first commented header 24/7/26
+
+  # nrow guard fix for lazy count 29/7/26
+  n_rows <- df %>% summarise(n = n()) %>% pull(n)
+  
+  # Guard: Return early if file is empty (e.g., non-speaking model run)
+  if (n_rows == 0) {
+    message("Notice: Interaction log at '", path, "' contains 0 rows. Skipping.")
+    return(df)
+  }
+  
+  df <- df %>%
+    mutate(
+      selected_debate_id    = as.character(selected_debate_id),
+      seed                  = as.character(logged_batch_seed),
+
+      # ensure delta and opinion are numeric cols
+      across(any_of(c("delta", "initial_opinion", "opinion", "final_attitude")), as.numeric),
+
+      # convert logical flags  
+      across(any_of(c("speaking_mode", "use_distinct_agents", "agent_is_saturated", "agent_wrong_direction")), as.logical)
+    ) %>%
+    filter(speaking_mode %in% TRUE)
+  
+  return(df)
+}
+
+
+

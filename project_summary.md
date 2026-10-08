@@ -44,8 +44,8 @@ Only the bipolarization model follows the empirical pattern (identified in H4a).
 For all models the pooled MLM MAE is within the CI range of the pooled ABM MAE, thus we cannot distinguish the ABM from the MLM. *NOT SUPPORTED*
 
 ### RQ1
-Can be read from the Hypotheses Notebook. Too many results to present here. 
-
+See the RQ1 seciton of the hypothesis notebook for full plots and tables. 
+Top level: convergence_rate and confidence_threshold are the dominant parameters across all models (PCC/PRCC/RF). Convergence cycles cluster near the minimum (11 cycles) for GA for most parameter combinations. Stochastic variance is near-zero under fixed seeds.
 
 ## 3. How to run the pipeline
 - Config setup: The basic principle behind the R analysis code is that the user runs the GAMA experiments and in accordance with the parameters chosen in the `Parameters.gaml` file they subsequently adjust the R config contained in `data_processing.R`. From GAMA the most important items to extract are: `run_type` (LHS, GA, VAL), `composition_scope` (ALL, M, H - denoting the type of debates that have been simulate), `version_scope` (these can be arbitrary names such as "v1", "v1-26/03/2026-fixed cycles", etc), and `analysis_scope` (among: hypotheses, validation, sensitivity which thereafter affects what kinds of output slots are available to view). The analysis scope is particularly important given that one would not run a PCC/PRCC analysis on a GA (this would most likely be run on an LHS model exploration). 
@@ -54,6 +54,13 @@ Can be read from the Hypotheses Notebook. Too many results to present here.
 - One final note on the pipeline runs, it is useful to make use of the map_slots function (located in `functions.R`) to double check which slots in the output package located in `framework_analysis.R` have been populated. This will give you a clear idea of what is accessible under which analysis_scope and double check that everything has compiled correctly.
 - Bundle construction: when running GA with validation, pass both train and val results in a single bundle (as shown in the `Hypotheses.ipynb` file). The validation block triggers on the presence of sim_val in the bundle, not on analysis_scope.
 - Note: GA agent exports set param_set_id = 1 for all agents while batch files retain internal generation indices. The semi_join in framework_analysis.R handles this by joining on design cell only for GA runs.
+
+### GAMA Side
+For the gama experiment launch (taking as an example an LHS run) please refer the experiment entitled `batch_exp_exh-20_3.gaml`. In each init section you will see a series of toggles that reference the `Parameters.gaml` file from which you can set defaults when running and testing in GUI and subsequently before launching the experiments file using [python3 experiment_file.py] double check and or modify the parameters that have been set. I have not made a dedicated manual to launch the GAMA side experiments but the ODD should serve as a baseline for launching. If there are any doubts, this repository has all of the existing code that was used to generate the simulated data (github.com/NomNom-tk/AGROPT-MODEL/tree/main).   
+
+
+
+
 
 Example:
 ```r
@@ -131,7 +138,7 @@ Behavioral and dynamics slots populate under all scopes.
 - Argumentation dynamics (Phase 2, Dung-style)
 - keep_seed: false rerun for stochastic analysis (currently being run, if still in this doc when reading, it has not been completed)
 - Upset plot pipeline completion
-- Network analysis (pending GLPK/RcppParallel)
+- Network analysis (pending GLPK/RcppParallel) / Code in R files that is not used is specifically for this purpose (e.g., in data_processing.R the section with the title `# Interaction Level` or in functions.R `Interactions` or `Network`)
 
 ## Note on stochastic reruns
 LHS rerun with keep_seed: false (5 repeats) completed and available 

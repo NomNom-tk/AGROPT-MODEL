@@ -1,6 +1,5 @@
 # Data Dictionary
 
-
 ## plots.R
 ```r
 #' Visualize combined PCC for combined versions (e.g., v1, v2, etc)
@@ -413,7 +412,36 @@ plot_delta_color_direction_scatter <- function(df) { # use with df_directional_a
 plot_simulated_delta_dist <- function(df) { # use with df_directional_agents
 #' RF Importance Across Model Types 6/8/26
 #' 
-#' Takes the RF output from \code{run_sensi_analysis} and plots the individual var```
+#' Takes the RF output from \code{run_sensi_analysis} and plots the individual variable
+#' importance for each model_type
+#'
+#' @param rf_df Dataframe. Expected columns: parameter, importance,
+#'   output, speaking_mode, model_type, use_distinct_agents.
+#' @param output_filter Character. Output variable to filter on.
+#'   Defaults to "mae".
+#'
+#' @return A ggplot grouped bar chart faceted by model_type
+#'   and use_distinct_agents.
+#'
+#' @note Use with sensi_lhs$rf from sensitivity analysis.
+plot_rf_importance_by_cell <- function(rf_df, output_filter = "mae") {
+#' plot_pdp_grid created (6/8/26)
+#'
+#' Displays partial dependence curves for each parameter,
+#' faceted by model_type and feature. Free y-scales per panel
+#' because cells differ in absolute MAE — a shared scale
+#' flattens within-cell structure.
+#'
+#' @param pdp_df PDP dataframe. Expected columns: x, yhat,
+#'   feature, model_type, speaking_mode, use_distinct_agents, output.
+#' @param model_filter Optional. Character string to filter to
+#'   a single model_type (e.g., "bipolarization"). NULL shows all.
+#'
+#' @return A ggplot faceted line plot.
+#'
+#' @note Use with pdp_all from sensitivity analysis.
+plot_pdp_grid <- function(pdp_df, model_filter = NULL) {
+```
 
 ## functions.R
 ```r
@@ -1104,10 +1132,95 @@ build_influence_network <- function(df, df_attributes) { # use with lhs_interact
 #'   left-joins onto graph nodes by \code{name == agent_id} (after coercing
 #'   \code{agent_id} to character to match vertex name type).
 #'
-#' @```
+#' @seealso \code{build_influence_network()} for the source of \code{g} and
+#'   attribute dataframes; \code{filter_top_nodes()},
+#'   \code{filter_edges()} for further graph processing.
+enrich_graph_vertices <- function(g, df) {
+#' filter_top_nodes (created 13/5/26)
+#' Filter Graph to Top-N Nodes by Out-Strength
+#'
+#' Reduces a graph to its \code{top_n} most influential nodes, ranked by
+#' \code{out_strength} (total weighted outgoing influence).
+#'
+#' @param g An \code{igraph} or \code{tbl_graph} object whose nodes have an
+#'   \code{out_strength} attribute (e.g. from \code{build_influence_network()}
+#'   or \code{enrich_graph_vertices()}).
+#' @param top_n Integer. Number of top nodes to retain.
+#'
+#' @return A \code{tbl_graph} object containing only the top \code{top_n}
+#'   nodes by \code{out_strength} (edges not incident to retained nodes are
+#'   implicitly dropped by tidygraph's node filtering).
+#'
+#' @seealso \code{filter_edges()} for the edge-weight equivalent;
+#'   \code{enrich_graph_vertices()} for attaching \code{out_strength} prior
+#'   to filtering.                
+filter_top_nodes <- function(g, top_n) {
+#' filter_edges (created 15/5/26)
+#' Filter Graph Edges Below a Weight Threshold
+#'
+#' Removes edges with \code{edge_weight} at or below \code{threshold}, then
+#' removes any resulting isolated nodes (nodes with no remaining edges).
+#'
+#' @param g An \code{igraph} or \code{tbl_graph} object whose edges have an
+#'   \code{edge_weight} attribute.
+#' @param threshold Numeric. Minimum edge weight to retain (exclusive —
+#'   edges with \code{edge_weight <= threshold} are dropped).
+#'
+#' @return A \code{tbl_graph} object with low-weight edges and any newly
+#'   isolated nodes removed.
+#'
+#' @seealso \code{filter_top_nodes()} for the node-count equivalent;
+#'   typically applied after \code{enrich_graph_vertices()}.
+filter_edges <- function(g, threshold) {
+#' build_network_graph (created 15/5/26)
+#' update, added arrows, node_text and continuous edges 
+#' 
+#' Function to render a network graph as a plot object illustrating individual agent
+#' broadcasts across all debates
+#'
+#' @param g A tbl_graph object with node attributes out_strength, 
+#'   pro_reduction, agent_is_saturated and edge attribute edge_weight.
+#'   Typically output of enrich_graph_vertices() passed through filter_edges().
+#'
+#' @return A ggraph object illustrating individual agent influences and broadcasts for each debate
+#' across model_type
+build_network_graph <- function(g) {
+#' prepare_interactions (created approx 7/26)
+#' updated on 23/7/26
+#' 
+#' Reads interaction-level output CSV files from GAMA simulations, enforces standard
+#' schema types, and filters for active speaking events. Automatically handles 
+#' empty logs (e.g., non-speaking model runs) and missing headers without crashing.
+#' 
+#' @param path String. File path to the interaction log CSV file.
+#' 
+#' @details 
+#' The function performs early-exit checks if the CSV file contains zero data rows 
+#' (common when evaluating models without speech/dialogue mechanics). It coerces 
+#' \code{selected_debate_id} and \code{seed} to character vectors, converts logical 
+#' flags, ensures \code{delta}, \code{initial_opinion}, \code{opinion}, \code{final_attitude} are numerical 
+#' and conditionally filters for \code{speaking_mode == TRUE} if 
+#' the column is present.
+#' 
+#' @return A cleaned \code{tbl_df} (tibble) with validated column types and 
+#'   filtered interaction records. Returns an empty (0-row) data frame with its 
+#'   original structure if no interactions are present in the input file.
+#' 
+#' @export
+prepare_interactions <- function(path) {
+```
 
 ## framework_analysis.R
 ```r
+#' Main Analysis Pipeline
+#'
+#' Orchestrates hypothesis tests (H1-H5), sensitivity analysis,
+#' behavioral extractions, and model comparisons. Returns a 
+#' standardized output package. Use map_slots() to inspect.
+#'
+#' @param df Bundle list with slots: sim_inputs, sim_val (optional), df_empirical.
+#' @return analysis_output_package. See section 9 of this file for slot definitions.
+analyze_processed_run <- function(df) {
 ```
 
 ## data_processing.R
@@ -1180,4 +1293,23 @@ build_influence_network <- function(df, df_attributes) { # use with lhs_interact
 #' \code{df_empirical} is intentionally NOT included in the return list —
 #' the empirical-loading block above is commented out. ownstream,
 #' \code{framework_analysis.R} derives \code{df_ag_deduped} from this
-#' object specifically to fit \co```
+#' object specifically to fit \code{ols_model_h1}/\code{ols_model_h2}
+#' without pseudoreplication.
+#'
+#' Batch-level and agent-level loading now share the same fallback rule
+#' when \code{version_scope == "v2"} (fixed 13/7/26 — previously batch-level
+#' had no fallback at all and would return \code{NULL} outright, while
+#' agent-level silently fell back to v1; batch-level now mirrors
+#' agent-level's behavior): if \code{v2$path} is \code{NULL}, both fall
+#' back to the corresponding \code{v1} path/version, and a \code{message()}
+#' is emitted so a genuine v2-path misconfiguration doesn't silently
+#' masquerade as a successful v2 run.
+#'
+#' @examples
+#' \dontrun{
+#' processed_lhs <- process_run(run_configs$lhs_main)
+#' processed_ga  <- process_run(run_configs$ga_main)
+#' }
+process_run <- function(config) {
+```
+

@@ -59,9 +59,6 @@ Top level: convergence_rate and confidence_threshold are the dominant parameters
 For the gama experiment launch (taking as an example an LHS run) please refer the experiment entitled `batch_exp_exh-20_3.gaml`. In each init section you will see a series of toggles that reference the `Parameters.gaml` file from which you can set defaults when running and testing in GUI and subsequently before launching the experiments file using [python3 experiment_file.py] double check and or modify the parameters that have been set. I have not made a dedicated manual to launch the GAMA side experiments but the ODD should serve as a baseline for launching. If there are any doubts, this repository has all of the existing code that was used to generate the simulated data (github.com/NomNom-tk/AGROPT-MODEL/tree/main).   
 
 
-
-
-
 Example:
 ```r
 ga_bundle <- list(
@@ -136,12 +133,6 @@ Behavioral and dynamics slots populate under all scopes.
 
 ## 5. What's next
 - Argumentation dynamics (Phase 2, Dung-style)
-- keep_seed: false rerun for stochastic analysis (currently being run, if still in this doc when reading, it has not been completed)
+- keep_seed: false rerun for stochastic analysis (Needs a rerun with keep seed: false so that repetitions have multiple seeds)
 - Upset plot pipeline completion
 - Network analysis (pending GLPK/RcppParallel) / Code in R files that is not used is specifically for this purpose (e.g., in data_processing.R the section with the title `# Interaction Level` or in functions.R `Interactions` or `Network`)
-
-## Note on stochastic reruns
-LHS rerun with keep_seed: false (5 repeats) completed and available 
-on the server. Parquet conversion and recompile pending. GA and 
-validation reruns with keep_seed: false have not been started.
-Current hypothesis results use fixed-seed data.
